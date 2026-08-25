@@ -1,6 +1,8 @@
 # Plan 1 — build `aboard` from the `board` spike
 
-Status: decided 2026-08-25 with the human (16 questions asked, all answered). This is the
+Status: decided 2026-08-25 with the human (16 questions asked, all answered). Phases A–D landed as
+commits 9f0c7af, c192fb8, a83c107, a350127, e5c698b, 0b508d8. Paused before Phase E (the finishing
+pass) at the human's request — resume from `development/handoffs/handoff-phase-e-finish.md`. This is the
 brief every implementing session works from. Where it says DECIDED, do not relitigate.
 
 **Phase A–C landed** as the three bisectable commits decision 2 asked for:
@@ -76,7 +78,7 @@ The spike is read-only for this plan except `_output/` is not touched either.
    check the spike for the exact minimal document `board.html` accepts), creates
    `.aboard/run/`, prints the gitignore line; `--gitignore` appends `.aboard/` to the
    project's `.gitignore` if absent; `--example` seeds from the embedded example board
-   (`testdata/example-board/aboard.json`, converted from the spike). Refuses to overwrite an
+   (`pkg/aboard/example/aboard.json (embedded; //go:embed cannot reach testdata/)`, converted from the spike). Refuses to overwrite an
    existing state file. `serve` refuses to start without a state file and says to run `init`.
 10. **Recipes.** Frontmatter: `name` (required, must equal the file stem), `description`
     (required), `when_to_use` (required), `tags: [..]` (optional), `requires: {min_schema: N}`
@@ -107,7 +109,7 @@ The spike is read-only for this plan except `_output/` is not touched either.
     ledger and "nothing is open" are dropped to git history. `docs/reference/cli.md` is
     generated from the cobra tree (`make docs-cli`).
 15. **The repo gitignores `.aboard/`.** The spike's example tabs become
-    `testdata/example-board/aboard.json` (bridge names rewritten, asset paths adjusted),
+    `pkg/aboard/example/aboard.json (embedded; //go:embed cannot reach testdata/)` (bridge names rewritten, asset paths adjusted),
     used by tests and by `aboard init --example`.
 16. **VS Code extension: handoff only.** `aboard_vscode/docs/handoff.md` rewritten for the
     new names plus a README pointing at it. The three aboard-side prerequisites
@@ -151,7 +153,7 @@ aboard/
   development/planning/plan-1_port-from-spike.md   (this file)
   development/handoffs/*.md          the updated handoffs
   test/smoke.sh test/shot.sh         local browser suite
-  testdata/example-board/aboard.json
+  pkg/aboard/example/aboard.json (embedded; //go:embed cannot reach testdata/)
   testdata/recipes/{_apex/aboard/recipes,_aboard/recipes,.aboard/recipes}/…   precedence fixtures
   .bingo/ Makefile .golangci.yaml .goreleaser.yaml .github/workflows/{ci,release}.yml
   .gitignore .gitattributes .pre-commit-config.yaml .markdownlint.yaml .markdownlintignore .prettierrc.yaml .prettierignore
