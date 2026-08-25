@@ -1,0 +1,84 @@
+{
+  "type": "kanban",
+  "label": "Kanban",
+  "blurb": "The same nodes grouped by status. Drag between columns.",
+  "since": 1,
+  "init": {
+    "nodes": [],
+    "columns": [
+      "todo",
+      "doing",
+      "done"
+    ]
+  },
+  "state": {
+    "nodes": {
+      "type": "array",
+      "doc": "same shape as dag"
+    },
+    "columns": {
+      "type": "array",
+      "doc": "the columns, in order; any names, any count"
+    },
+    "readOnly": {
+      "type": "boolean",
+      "doc": "agent-owned: every editing affordance is REMOVED, not disabled"
+    },
+    "heartbeat": {
+      "type": "object",
+      "doc": "{by, at, phase: working|idle, note} — who is minding this tab, with age decay"
+    }
+  },
+  "controls": [
+    {
+      "id": "add",
+      "label": "Add node",
+      "doc": "Add a card to the first column."
+    },
+    {
+      "id": "move-up",
+      "label": "▲",
+      "title": "move up",
+      "doc": "Reorder a card up within its column."
+    },
+    {
+      "id": "move-down",
+      "label": "▼",
+      "title": "move down",
+      "doc": "Reorder a card down within its column."
+    },
+    {
+      "id": "delete",
+      "label": "✕",
+      "title": "delete (children move up a level)",
+      "doc": "Delete a card; its children reparent to its parent."
+    }
+  ],
+  "gestures": [
+    "drag a card between columns",
+    "click a title to rename",
+    "right-click for id, link, markdown, subtree"
+  ],
+  "keys": [
+    [
+      "j / k",
+      "move the selection down / up"
+    ],
+    [
+      "h / l",
+      "move the selected card left / right"
+    ],
+    [
+      "J / K",
+      "reorder within the column"
+    ],
+    [
+      "Enter",
+      "rename the selected card"
+    ]
+  ],
+  "notes": [
+    "Pair with a `dag` tab whose `stateFrom` points here to get both readings of one dataset.",
+    "A readOnly kanban still shows titles, notes, id chips and counts — only the controls go."
+  ]
+}

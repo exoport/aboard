@@ -1,0 +1,41 @@
+{
+  "type": "trace",
+  "label": "Trace",
+  "blurb": "Who wrote what, when — one lane per actor, read from the journal.",
+  "since": 1,
+  "init": {
+    "limit": 200
+  },
+  "state": {
+    "limit": {
+      "type": "number",
+      "doc": "how many journal entries to read"
+    },
+    "height": {
+      "type": "string",
+      "doc": "any CSS length"
+    }
+  },
+  "controls": [
+    {
+      "id": "reload",
+      "label": "Reload",
+      "doc": "Re-read the journal."
+    },
+    {
+      "id": "actor",
+      "label": "",
+      "doc": "Filter one actor’s lane in or out."
+    },
+    {
+      "id": "event",
+      "label": "",
+      "doc": "Select one write to see which tabs it changed."
+    }
+  ],
+  "gestures": [],
+  "keys": [],
+  "notes": [
+    "Reads /journal, not board.json, so the history is not something an agent can quietly rewrite."
+  ]
+}

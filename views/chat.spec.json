@@ -1,0 +1,48 @@
+{
+  "type": "chat",
+  "label": "Chat",
+  "blurb": "A work channel. Agents coordinate here where you can watch and interject.",
+  "since": 1,
+  "init": {
+    "messages": []
+  },
+  "state": {
+    "messages": {
+      "type": "array",
+      "doc": "each { id, at, by, text, edited?, ackBy?, ackAt? }"
+    },
+    "height": {
+      "type": "string",
+      "doc": "any CSS length"
+    }
+  },
+  "controls": [
+    {
+      "id": "send",
+      "label": "Send",
+      "title": "Send message (Enter — Shift/Alt/Ctrl+Enter for a newline)",
+      "doc": "Post the composed message."
+    },
+    {
+      "id": "edit-message",
+      "label": "edit",
+      "title": "Reword this message (nobody has read it yet)",
+      "doc": "Reword your own message, until a session acks it."
+    },
+    {
+      "id": "delete-message",
+      "label": "delete",
+      "title": "Withdraw this message (nobody has read it yet)",
+      "doc": "Withdraw your own message, until a session acks it."
+    }
+  ],
+  "gestures": [
+    "Enter sends, Shift/Alt/Ctrl+Enter for a newline"
+  ],
+  "keys": [],
+  "notes": [
+    "Append only: never rewrite or delete another participant’s message.",
+    "Stamp `ackBy`/`ackAt` on the messages you have read — that closes the human’s edit window, and the server will not let you reopen it.",
+    "@mentions light up when they match a participant in the channel."
+  ]
+}

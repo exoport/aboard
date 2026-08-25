@@ -1,0 +1,61 @@
+{
+  "type": "gate",
+  "label": "Gate",
+  "blurb": "An approval queue: allow, deny, or edit-then-allow, each with a reason.",
+  "since": 1,
+  "init": {
+    "pending": [],
+    "decided": []
+  },
+  "state": {
+    "pending": {
+      "type": "array",
+      "doc": "each { id, title, detail?, command?, risk?: low|medium|high, by? }"
+    },
+    "decided": {
+      "type": "array",
+      "doc": "each { id, title, verdict: allow|deny|edit, reason?, reasonAddedAt?, editedTo?, at, by, ask, undone?, undoneAt? }"
+    }
+  },
+  "controls": [
+    {
+      "id": "allow",
+      "label": "Allow",
+      "doc": "Approve the request. Nothing executes — the agent that asked reads the verdict."
+    },
+    {
+      "id": "deny",
+      "label": "Deny",
+      "doc": "Refuse the request."
+    },
+    {
+      "id": "edit",
+      "label": "Edit",
+      "title": "Change it before allowing it",
+      "doc": "Change the command, then allow the edited version."
+    },
+    {
+      "id": "reason",
+      "label": "add why",
+      "title": "Say why, now or whenever you are asked. It will be marked as written after the fact.",
+      "doc": "Add or change the reason on a decided row; it is stamped as written late."
+    },
+    {
+      "id": "undo",
+      "label": "undo",
+      "title": "Put this back in the queue. The agent may already have acted on it.",
+      "doc": "Reverse a verdict. The reversal stays on the record."
+    }
+  ],
+  "gestures": [
+    "a reason is optional but it is what the agent learns from",
+    "nothing here executes — the agent that asked reads your verdict"
+  ],
+  "keys": [],
+  "notes": [
+    "Nothing here executes — a verdict is a record the asking agent reads.",
+    "Pair with `./board -wait -for \"answer <tabId>\"` or a stale queue lets the human believe they gated something that already ran.",
+    "`ask` preserves the original request so an undo can restore it faithfully.",
+    "A reason can be added after the verdict; `reasonAddedAt` marks it as reconstructed rather than recorded."
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "type": "markup",
+  "label": "Markup",
+  "blurb": "An image with a drawing layer. Point at part of a screenshot.",
+  "since": 1,
+  "init": {
+    "layout": "stacked",
+    "images": []
+  },
+  "state": {
+    "layout": {
+      "type": "string",
+      "doc": "\"side-by-side\" or \"stacked\""
+    },
+    "images": {
+      "type": "array",
+      "doc": "each { id, src, caption, annotatable, regions[], strokes[] }"
+    }
+  },
+  "colors": [
+    "mark",
+    "accent",
+    "focus",
+    "agent",
+    "danger"
+  ],
+  "controls": [
+    {
+      "id": "region",
+      "label": "▭ Region",
+      "title": "Region tool — drag on an image to draw a rectangle",
+      "doc": "Draw rectangles."
+    },
+    {
+      "id": "ellipse",
+      "label": "◯ Ellipse",
+      "title": "Ellipse tool — drag on an image to draw an ellipse",
+      "doc": "Draw ellipses."
+    },
+    {
+      "id": "pen",
+      "label": "✎ Pen",
+      "title": "Pen tool — drag on an image to draw a freehand stroke",
+      "doc": "Draw freehand strokes."
+    },
+    {
+      "id": "move",
+      "label": "✋ Move",
+      "title": "Move tool — drag an existing mark to reposition it",
+      "doc": "Reposition an existing mark."
+    },
+    {
+      "id": "resize",
+      "label": "⛶ Resize",
+      "title": "Resize tool — drag the handles on a selected rectangle or ellipse",
+      "doc": "Resize a selected rectangle or ellipse."
+    },
+    {
+      "id": "swatch",
+      "label": "",
+      "title": "Colour",
+      "doc": "Pick the colour new marks are drawn in."
+    },
+    {
+      "id": "bulk-colour",
+      "label": "Colour ▾",
+      "title": "Set the colour of many marks at once",
+      "doc": "Recolour many marks at once."
+    },
+    {
+      "id": "delete-mark",
+      "label": "✕",
+      "title": "Delete this mark",
+      "doc": "Delete one mark."
+    },
+    {
+      "id": "rename-image",
+      "label": "Rename",
+      "title": "Give this image a name you can refer to",
+      "doc": "Name an image so it can be referred to."
+    },
+    {
+      "id": "hide-marks",
+      "label": "👁 Hide marks",
+      "title": "Hide the drawn marks to see the plain image",
+      "doc": "Hide the marks to see the plain image."
+    },
+    {
+      "id": "clear-marks",
+      "label": "Clear marks",
+      "title": "Delete every region and stroke on this image",
+      "doc": "Delete every mark on one image."
+    },
+    {
+      "id": "remove-image",
+      "label": "Remove image",
+      "title": "Take this image off the tab, with its marks",
+      "doc": "Take an image off the tab, with its marks."
+    }
+  ],
+  "gestures": [
+    "paste (Ctrl+V) or drop an image to add one",
+    "note each mark",
+    "hover a truncated image name in the marks list to see it in full",
+    "right-click a mark row to copy its id, a link to it, or it as markdown",
+    "each mark is badged on the image with its id, so the image, the list and a sentence all use one identifier"
+  ],
+  "keys": [],
+  "notes": [
+    "Coordinates are normalized 0..1 against each image’s own box, never pixels.",
+    "Marks are numbered continuously across the tab, so a number names one mark.",
+    "`color` is a token NAME from `colors` above, never a hex. An unrecognised one draws nothing at all, so `-apply` warns about it.",
+    "`strokes[].points` is one \"x,y x,y\" string.",
+    "Put agent-supplied images in assets/; pasted ones land in uploads/."
+  ]
+}

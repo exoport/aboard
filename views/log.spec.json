@@ -1,0 +1,51 @@
+{
+  "type": "log",
+  "label": "Log",
+  "blurb": "Output you can watch. Lines live in a sidecar file, fed by ./board -log <id>.",
+  "since": 1,
+  "init": {
+    "source": "",
+    "tail": 400,
+    "follow": true
+  },
+  "state": {
+    "source": {
+      "type": "string",
+      "doc": "the log id — usually this tab's own id"
+    },
+    "tail": {
+      "type": "number",
+      "doc": "how many lines to show (default 400)"
+    },
+    "follow": {
+      "type": "boolean",
+      "doc": "start pinned to the newest line"
+    },
+    "height": {
+      "type": "string",
+      "doc": "any CSS length"
+    }
+  },
+  "controls": [
+    {
+      "id": "follow",
+      "label": "Follow",
+      "title": "Pin to the newest line",
+      "doc": "Pin the view to the newest line, or stop pinning."
+    },
+    {
+      "id": "copy",
+      "label": "Copy",
+      "doc": "Copy the visible lines."
+    }
+  ],
+  "gestures": [
+    "scroll up to stop following, scroll to the bottom to resume",
+    "type in the filter to narrow"
+  ],
+  "keys": [],
+  "notes": [
+    "The lines are NOT in board.json: `<cmd> 2>&1 | ./board -log <id>`.",
+    "Polled every 2s only while the tab is on screen."
+  ]
+}

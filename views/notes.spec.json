@@ -1,0 +1,45 @@
+{
+  "type": "notes",
+  "label": "Notes",
+  "blurb": "Free text. The escape hatch for anything the other types do not fit.",
+  "since": 1,
+  "init": {
+    "text": ""
+  },
+  "state": {
+    "text": {
+      "type": "string",
+      "doc": "the note"
+    },
+    "markdown": {
+      "type": "boolean",
+      "doc": "render it, with a Read/Edit toggle"
+    }
+  },
+  "controls": [
+    {
+      "id": "reload",
+      "label": "Reload text",
+      "doc": "Re-read the note after an external change."
+    },
+    {
+      "id": "copy",
+      "label": "Copy all",
+      "doc": "Copy the whole note."
+    },
+    {
+      "id": "mode",
+      "label": "Edit",
+      "title": "Edit the markdown source",
+      "doc": "Toggle between the rendered note and its source. Only when `markdown` is on."
+    }
+  ],
+  "gestures": [
+    "type freely",
+    "Tab indents (Escape then Tab to leave)"
+  ],
+  "keys": [],
+  "notes": [
+    "The markdown subset: headings, lists, code, quotes, rules, links, emphasis."
+  ]
+}

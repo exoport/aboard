@@ -1,0 +1,20 @@
+# Build output. Anchored with a leading slash: a bare "board" pattern also
+# matches any DIRECTORY named board, which silently excluded
+# .claude/skills/board/ — the whole skill — from the repo.
+/board
+/dist/
+
+# Screenshots from test/shot.sh
+/.shots/
+
+# Running-instance record (port, pid) — machine-specific
+/.board/
+
+# A named board's own state file (see ./restart.sh -name)
+/board.*.json
+
+# Images the human pasted or dropped onto a markup tab (upload.go)
+/uploads/
+
+# live state: a board is that project's conversation, never committed (spike exception does not apply)
+/board.json

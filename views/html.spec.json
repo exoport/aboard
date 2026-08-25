@@ -1,0 +1,48 @@
+{
+  "type": "html",
+  "label": "HTML",
+  "blurb": "Arbitrary HTML/CSS/JS in a sandboxed frame — a bespoke widget. No network access.",
+  "since": 1,
+  "init": {
+    "html": "<h2>New widget</h2>",
+    "data": {}
+  },
+  "state": {
+    "html": {
+      "type": "string",
+      "doc": "the document body"
+    },
+    "data": {
+      "type": "object",
+      "doc": "persisted by board.set()"
+    },
+    "height": {
+      "type": "string",
+      "doc": "any CSS length"
+    }
+  },
+  "controls": [
+    {
+      "id": "reload",
+      "label": "Reload",
+      "title": "Reload the frame from the stored HTML",
+      "doc": "Reload the widget frame."
+    },
+    {
+      "id": "source",
+      "label": "Show source",
+      "title": "Show or hide the HTML source and stored data",
+      "doc": "Show or hide the widget source and its stored data."
+    }
+  ],
+  "gestures": [
+    "whatever the widget offers"
+  ],
+  "keys": [],
+  "notes": [
+    "sandbox=\"allow-scripts\" with connect-src ’none’: anything local, nothing over the network.",
+    "Bridge: board.get(), board.set(next), board.onData(fn), board.fit().",
+    "PREFER `ui` unless the INTERACTION is the point.",
+    "An html BLOCK inside a stack does not render — give a widget its own tab."
+  ]
+}

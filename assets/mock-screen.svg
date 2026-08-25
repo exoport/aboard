@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-label="Mock application screen used as a markup target">
+  <!-- Dark mock UI, coloured from the FireFly Pro neutral-black palette so it belongs in the board -->
+  <rect width="900" height="560" fill="#000000"/>
+
+  <!-- top chrome -->
+  <rect x="0" y="0" width="900" height="46" fill="#000000"/>
+  <circle cx="24" cy="23" r="5" fill="#4a4a4a"/>
+  <circle cx="42" cy="23" r="5" fill="#4a4a4a"/>
+  <circle cx="60" cy="23" r="5" fill="#4a4a4a"/>
+  <rect x="90" y="14" width="240" height="18" rx="4" fill="#1c1c1c"/>
+  <rect x="742" y="13" width="72" height="20" rx="4" fill="#a4bd00"/>
+  <rect x="826" y="13" width="52" height="20" rx="4" fill="#1c1c1c"/>
+
+  <!-- sidebar -->
+  <rect x="0" y="46" width="188" height="514" fill="#111111"/>
+  <line x1="188" y1="46" x2="188" y2="560" stroke="#2a2a2a" stroke-width="1"/>
+  <rect x="18" y="70" width="96" height="11" rx="3" fill="#5e5e5e"/>
+  <rect x="18" y="102" width="152" height="26" rx="4" fill="#1c1c1c"/>
+  <rect x="18" y="136" width="152" height="26" rx="4" fill="#1b2109"/>
+  <rect x="18" y="136" width="3" height="26" rx="1.5" fill="#a4bd00"/>
+  <rect x="18" y="170" width="152" height="26" rx="4" fill="#1c1c1c"/>
+  <rect x="18" y="204" width="152" height="26" rx="4" fill="#1c1c1c"/>
+  <rect x="18" y="252" width="72" height="11" rx="3" fill="#5e5e5e"/>
+  <rect x="18" y="280" width="152" height="26" rx="4" fill="#1c1c1c"/>
+  <rect x="18" y="314" width="152" height="26" rx="4" fill="#1c1c1c"/>
+
+  <!-- header block -->
+  <rect x="216" y="72" width="300" height="20" rx="4" fill="#c4c4c4"/>
+  <rect x="216" y="102" width="470" height="11" rx="3" fill="#4a4a4a"/>
+  <rect x="216" y="120" width="380" height="11" rx="3" fill="#4a4a4a"/>
+
+  <!-- stat tiles -->
+  <g>
+    <rect x="216" y="160" width="200" height="92" rx="6" fill="#111111" stroke="#2a2a2a"/>
+    <rect x="234" y="178" width="60" height="9" rx="3" fill="#5e5e5e"/>
+    <rect x="234" y="198" width="86" height="24" rx="4" fill="#a4bd00"/>
+    <rect x="234" y="230" width="120" height="8" rx="3" fill="#2a2a2a"/>
+  </g>
+  <g>
+    <rect x="432" y="160" width="200" height="92" rx="6" fill="#111111" stroke="#2a2a2a"/>
+    <rect x="450" y="178" width="60" height="9" rx="3" fill="#5e5e5e"/>
+    <rect x="450" y="198" width="70" height="24" rx="4" fill="#39bae6"/>
+    <rect x="450" y="230" width="120" height="8" rx="3" fill="#2a2a2a"/>
+  </g>
+  <g>
+    <rect x="648" y="160" width="200" height="92" rx="6" fill="#111111" stroke="#2a2a2a"/>
+    <rect x="666" y="178" width="60" height="9" rx="3" fill="#5e5e5e"/>
+    <rect x="666" y="198" width="94" height="24" rx="4" fill="#fb8c00"/>
+    <rect x="666" y="230" width="120" height="8" rx="3" fill="#2a2a2a"/>
+  </g>
+
+  <!-- chart panel -->
+  <rect x="216" y="276" width="416" height="252" rx="6" fill="#111111" stroke="#2a2a2a"/>
+  <rect x="238" y="298" width="110" height="11" rx="3" fill="#5e5e5e"/>
+  <polyline points="240,470 292,432 344,446 396,388 448,404 500,342 552,366 604,306"
+            fill="none" stroke="#a4bd00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="238" y1="492" x2="612" y2="492" stroke="#2a2a2a" stroke-width="2"/>
+  <g fill="#333333">
+    <rect x="240" y="500" width="24" height="7" rx="3"/>
+    <rect x="316" y="500" width="24" height="7" rx="3"/>
+    <rect x="392" y="500" width="24" height="7" rx="3"/>
+    <rect x="468" y="500" width="24" height="7" rx="3"/>
+    <rect x="544" y="500" width="24" height="7" rx="3"/>
+  </g>
+
+  <!-- list panel -->
+  <rect x="648" y="276" width="200" height="252" rx="6" fill="#111111" stroke="#2a2a2a"/>
+  <rect x="666" y="298" width="88" height="11" rx="3" fill="#5e5e5e"/>
+  <g fill="#1c1c1c">
+    <rect x="666" y="326" width="164" height="30" rx="4"/>
+    <rect x="666" y="364" width="164" height="30" rx="4"/>
+    <rect x="666" y="402" width="164" height="30" rx="4"/>
+    <rect x="666" y="440" width="164" height="30" rx="4"/>
+    <rect x="666" y="478" width="164" height="30" rx="4"/>
+  </g>
+</svg>

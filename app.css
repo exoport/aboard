@@ -1,0 +1,508 @@
+/* Shared shell + view styling.
+ *
+ * Palette from the FireFly Pro VS Code theme (ankitcode.firefly), using that
+ * theme's NEUTRAL black family rather than its blue-tinted editor chrome, so
+ * the board reads as black with lighter blacks layered on top:
+ *   #000000  titleBar / input.background   -> page ground
+ *   #0a0a0a  list.hoverBackground          -> recessed wells
+ *   #151515  dropdown.background           -> raised cards and panels
+ *   #2a2a2a  scrollbarSlider.background    -> hairlines
+ *   #343434  tab.activeBackground          -> stronger borders
+ *   #ccd4e0  brightened editor.foreground  -> body text (AAA on every ground)
+ *   #a4bd00  button / badge / string       -> the one accent
+ * Depth runs upward from black: bg -> sunken -> surface -> raised. Deliberately
+ * single-theme, so every colour is stated once and `color-scheme: dark` lets
+ * native controls render dark too.
+ *
+ * Text colours are pinned to WCAG AAA (>=7:1) on surface, sunken and black,
+ * because most type here is small: --dim carries .hint at 0.83rem and was the
+ * one that failed. Hierarchy is carried by size and weight, not by fading the
+ * colour toward the background.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #000000;
+  --sunken: #0a0a0a;
+  --surface: #151515;
+  --raised: #202020;
+
+  --text: #ccd4e0;
+  --muted: #b4b4b4;
+  --dim: #a4a4a4;
+
+  --line: #2a2a2a;
+  --line-strong: #3d3d3d;
+
+  --accent: #a4bd00;
+  --accent-ink: #151515;
+  --accent-dim: #6d7d0a;
+
+  --mark: #fb8c00;
+  --agent: #a7adf4;
+  --edge: #4a4a4a;
+  --focus: #39bae6;
+  --danger: #ff0066;
+  --drop: #1b2109;
+
+  --status-todo: #6b6b6b;
+  --status-doing: #a4bd00;
+  --status-done: #3d3d3d;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+/* Keep anything scrolled into view clear of the sticky header (markup.js scrolls
+   a mark row into view, for one). Generous, because the header grows a row when
+   the tabs wrap: over-scrolling by a little is invisible, landing underneath the
+   header is not. */
+html { scroll-padding-top: 150px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding: 16px 18px 40px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- shell ---------- */
+
+/* The header stays put while a tab's content scrolls under it. With fourteen
+   tabs and a tall DAG, scrolling used to carry the tab strip off screen, so
+   changing tabs meant scrolling back up first.
+ *
+ * Two details it needs to look right. It is stretched across the body's side
+ * padding with a negative margin and matching padding, so nothing shows through
+ * the gap at the edges as content passes underneath; and it carries the page
+ * ground as an opaque background for the same reason. The bottom gap is padding
+ * rather than the tab strip's margin, because a margin is not painted — content
+ * would slide visibly through it. */
+.board-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: -16px -18px 0;
+  padding: 16px 18px 12px;
+  background: var(--bg);
+}
+
+.board-head .tabstrip { margin-bottom: 0; }
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding-bottom: 12px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.79rem;
+  color: var(--muted);
+}
+
+.spacer { flex: 1 1 auto; }
+
+/* Which binary is serving. Quiet — it is only interesting when you are asking
+   "did my rebuild take?", and then it is the only thing on screen that answers. */
+.version-badge {
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 7px 14px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+
+.tab:hover { color: var(--text); }
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.banner {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--agent);
+  border-radius: 3px;
+  background: var(--surface);
+  font-size: 0.86rem;
+}
+
+.banner[data-visible="yes"] { display: flex; }
+.banner strong { color: var(--agent); }
+
+.view { display: none; }
+.view[data-active="yes"] { display: block; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 14px 16px;
+}
+
+.panel-head {
+  margin: 0 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.83rem;
+  color: var(--dim);
+  line-height: 1.45;
+}
+
+/* ---------- controls ---------- */
+
+.primary-btn {
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: none;
+  border-radius: 3px;
+  padding: 7px 13px;
+  cursor: pointer;
+}
+
+.primary-btn:hover { filter: brightness(1.12); }
+.primary-btn:active { filter: brightness(0.94); }
+
+.icon-btn {
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 4px 7px;
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.icon-btn:disabled { opacity: 0.35; cursor: default; }
+
+.icon-btn[aria-pressed="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+select, input[type="text"], textarea {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 5px 7px;
+}
+
+select:hover, input[type="text"]:hover, textarea:hover { border-color: var(--line-strong); }
+
+textarea { line-height: 1.5; resize: vertical; }
+
+input[type="range"] { accent-color: var(--accent); }
+input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.toolbar-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.scroll-x { overflow-x: auto; }
+
+/* Scrollbars, so a dark panel doesn't get a bright gutter. */
+* {
+  scrollbar-color: var(--line-strong) var(--bg);
+  scrollbar-width: thin;
+}
+
+/* ---------- tab strip (tabs are data, so this is generated) ---------- */
+
+.tabstrip {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.tabstrip .tabs {
+  border-bottom: none;
+  margin-bottom: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabstrip .tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+/* Unread marker: an agent changed this tab and nobody has dismissed it. */
+.tab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--agent);
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent) 22%, transparent);
+}
+
+.tab-dot--removal { background: var(--danger); box-shadow: none; }
+
+/* Notify button: a session blocked on `./board -wait` holds an open connection,
+   so a lit dot means something is genuinely listening. Nobody waiting, nothing
+   to press — disabled is the honest state, not a hopeful one. */
+.poke-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.poke-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+  flex: 0 0 auto;
+}
+
+.poke-btn[data-live="yes"] {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+
+.poke-btn[data-live="yes"] .poke-dot {
+  background: var(--accent);
+  animation: poke-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes poke-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poke-btn[data-live="yes"] .poke-dot { animation: none; }
+}
+
+.tab-add {
+  align-self: center;
+  margin-bottom: 2px;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 5px 10px;
+}
+
+/* ---------- per-tab notices ---------- */
+
+.notices { display: flex; flex-direction: column; gap: 8px; }
+.notices:not(:empty) { margin-bottom: 12px; }
+
+/* What a tab is FOR: the human's intent, in their words, above the view. Quiet
+   by default — it is context, not a notice — and only present when it has been
+   written. */
+.tab-note {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 6px 11px;
+  border-left: 2px solid var(--agent);
+  background: var(--sunken);
+  border-radius: 0 3px 3px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.tab-note-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--agent);
+  white-space: nowrap;
+}
+
+.tab-note-text { color: var(--text); flex: 1 1 auto; }
+.tab-note .icon-btn { flex: 0 0 auto; }
+.tab-note-input { width: 100%; min-height: 3.4em; font-size: 0.86rem; }
+
+/* Help panel: generated from the renderer registry, so it cannot go stale. */
+.help-dialog { max-width: 720px; }
+.help-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.help-section { margin-top: 16px; }
+.help-section h3 {
+  margin: 0 0 6px;
+  font-size: 0.74rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dim);
+  font-weight: 600;
+}
+.help-list, .help-keys { display: grid; margin: 0; gap: 5px 14px; font-size: 0.86rem; }
+.help-list { grid-template-columns: 1.2ch 1fr; }
+
+/* The term column sizes to its longest term instead of a guessed width, and is
+   allowed to wrap. A fixed 15ch let "#tab=bb71&node=bb58" and words like
+   "heartbeat" overflow and print straight through the description beside them. */
+.help-keys { grid-template-columns: minmax(9ch, max-content) 1fr; align-items: baseline; }
+.help-keys dt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.help-keys dd, .help-list dd { min-width: 0; overflow-wrap: anywhere; }
+.help-list dt { color: var(--dim); }
+.help-list dd, .help-keys dd { margin: 0; color: var(--text); }
+.help-rest { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+.help-rest summary { cursor: pointer; color: var(--muted); font-size: 0.84rem; }
+.help-rest .help-section { margin-top: 10px; }
+
+/* Action strip: buttons an agent asked for. Distinct from the board's own
+   controls — these hand a decision back to a session, they do not act here. */
+.action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-dim);
+  border-radius: 3px;
+  background: var(--sunken);
+}
+
+.action-label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.action-btn { border-color: var(--accent-dim); color: var(--text); }
+.action-btn:hover:not(:disabled) { background: var(--drop); border-color: var(--accent); }
+
+.banner--removal { border-left-color: var(--danger); }
+.banner--removal strong { color: var(--danger); }
+
+.icon-btn--danger { color: var(--danger); border-color: var(--danger); }
+.icon-btn--danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
+
+/* ---------- new-tab dialog ---------- */
+
+.sheet-dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 18px 20px;
+  min-width: min(420px, 90vw);
+}
+
+.sheet-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
+
+.sheet-dialog form { display: flex; flex-direction: column; gap: 12px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+
+.field > span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field input, .field select { width: 100%; }
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}

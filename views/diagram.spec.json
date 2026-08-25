@@ -1,0 +1,25 @@
+{
+  "type": "diagram",
+  "label": "Diagram",
+  "blurb": "Mermaid: flowchart, sequence, ER, gantt, chart, and 19 more.",
+  "since": 1,
+  "init": {
+    "source": "graph TD\n    A[\"Start\"] --> B[\"Next\"]"
+  },
+  "state": {
+    "source": {
+      "type": "string",
+      "doc": "mermaid source"
+    }
+  },
+  "gestures": [
+    "edit the source and re-render",
+    "hover a node for its mermaid key"
+  ],
+  "keys": [],
+  "notes": [
+    "23 types render; only zenuml is unavailable.",
+    "Colours come from the board tokens; chart types ignore classDef.",
+    "In requirementDiagram, quote any `text:` containing punctuation."
+  ]
+}

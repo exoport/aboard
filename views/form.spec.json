@@ -1,0 +1,44 @@
+{
+  "type": "form",
+  "label": "Form",
+  "blurb": "Ask for structured answers: sliders, choices, text.",
+  "since": 1,
+  "init": {
+    "title": "Questions",
+    "intro": "",
+    "fields": []
+  },
+  "state": {
+    "id": {
+      "type": "string",
+      "doc": "generated"
+    },
+    "title": {
+      "type": "string",
+      "doc": ""
+    },
+    "intro": {
+      "type": "string",
+      "doc": "one line of context above the fields"
+    },
+    "fields": {
+      "type": "array",
+      "doc": "each { id, type: range|select|checkbox|text|textarea, label, value, … }"
+    }
+  },
+  "controls": [
+    {
+      "id": "reset",
+      "label": "Reset answers",
+      "doc": "Clear every answer back to empty."
+    }
+  ],
+  "gestures": [
+    "answer and it saves"
+  ],
+  "keys": [],
+  "notes": [
+    "Field ids stay SEMANTIC and author-chosen — you read answers back by them.",
+    "A default value may mean \"not answered yet\"."
+  ]
+}

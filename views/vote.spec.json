@@ -1,0 +1,55 @@
+{
+  "type": "vote",
+  "label": "Vote",
+  "blurb": "Several participants score the same options; the disagreement is visible.",
+  "since": 1,
+  "init": {
+    "question": "Score the options",
+    "scale": 5,
+    "options": [],
+    "ballots": {}
+  },
+  "state": {
+    "question": {
+      "type": "string",
+      "doc": "what is being decided"
+    },
+    "scale": {
+      "type": "number",
+      "doc": "1..scale, 2-10, default 5"
+    },
+    "options": {
+      "type": "array",
+      "doc": "each { id, label, note?, comments?: { <actor>: text } }"
+    },
+    "ballots": {
+      "type": "object",
+      "doc": "{ <actor>: { <optionId>: score } } — write your own key only"
+    },
+    "closed": {
+      "type": "boolean",
+      "doc": "stop collecting, keep showing"
+    }
+  },
+  "controls": [
+    {
+      "id": "note",
+      "label": "add a note",
+      "doc": "Write or edit your comment on an option."
+    },
+    {
+      "id": "score",
+      "label": "",
+      "title": "score",
+      "doc": "Score an option; the same number again clears it."
+    }
+  ],
+  "gestures": [
+    "a wide split is called out rather than averaged away"
+  ],
+  "keys": [],
+  "notes": [
+    "A spread of half the scale or more is called out as \"split by n\" rather than averaged away.",
+    "Put your reasoning in `comments`; a score with no reason cannot be argued with."
+  ]
+}

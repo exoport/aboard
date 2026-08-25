@@ -1,0 +1,23 @@
+{
+  "type": "stack",
+  "label": "Stack",
+  "blurb": "Several renderers in one tab, top to bottom — a DAG, then a form, then an image.",
+  "since": 1,
+  "init": {
+    "blocks": []
+  },
+  "state": {
+    "blocks": {
+      "type": "array",
+      "doc": "each { id, type, title, state } — any type except stack"
+    }
+  },
+  "gestures": [
+    "collapse a block by its header"
+  ],
+  "keys": [],
+  "notes": [
+    "Nesting is capped at one level.",
+    "Usually right when the shape is \"look at this, then decide that\"."
+  ]
+}

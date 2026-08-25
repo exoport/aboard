@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>smoke</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="out" class="mono">running</div>
+<div id="views"></div>
+<script type="module">
+// Mounts every tab in the real board.json through the same contract the shell
+// uses, so a renderer that parses but throws on mount is caught here.
+const log = [];
+const out = document.getElementById('out');
+const host = document.getElementById('views');
+
+window.addEventListener('error', (e) => log.push('WINDOW ERROR: ' + e.message));
+window.addEventListener('unhandledrejection', (e) => log.push('REJECTION: ' + (e.reason && e.reason.message || e.reason)));
+
+const MODULES = {
+  dag: ['dag', 'mountDag'],
+  kanban: ['kanban', 'mountKanban'],
+  diagram: ['diagram', 'mountDiagram'],
+  form: ['form', 'mountForm'],
+  markup: ['markup', 'mountMarkup'],
+  chat: ['chat', 'mountChat'],
+  notes: ['notes', 'mountNotes'],
+  html: ['html', 'mountHtml'],
+  stack: ['stack', 'mountStack'],
+  table: ['table', 'mountTable'],
+  log: ['log', 'mountLog'],
+  trace: ['trace', 'mountTrace'],
+  gate: ['gate', 'mountGate'],
+  vote: ['vote', 'mountVote'],
+  ui: ['ui', 'mountUi'],
+};
+
+// stack composes other renderers, so the harness must be able to hand it one.
+const registry = {};
+for (const [type, [file, fn]] of Object.entries(MODULES)) {
+  try { registry[type] = (await import(`/views/${file}.js`))[fn]; } catch {}
+}
+const capability = {
+  types: () => Object.keys(MODULES).map((t) => ({ type: t, label: t })),
+  initFor: () => ({}),
+  mountType: (type, el, sub) => (registry[type] ? registry[type](el, sub) : null),
+};
+
+const doc = await (await fetch('/board.json', { cache: 'no-store' })).json();
+const tabs = Array.isArray(doc.tabs) ? doc.tabs : [];
+log.push(`tabs in board.json: ${tabs.length}`);
+
+const byId = (id) => tabs.find((t) => t.id === id);
+function stateOf(tab) {
+  if (tab.stateFrom) {
+    const src = byId(tab.stateFrom);
+    if (src) return (src.state ||= {});
+  }
+  return (tab.state ||= {});
+}
+
+const seenTypes = new Set();
+
+for (const tab of tabs) {
+  const spec = MODULES[tab.type];
+  if (!spec) { log.push(`${tab.id} ${tab.type}: NO MODULE MAPPED`); continue; }
+  const [file, fn] = spec;
+  try {
+    const mod = await import(`/views/${file}.js`);
+    if (typeof mod[fn] !== 'function') { log.push(`${tab.type}: MISSING EXPORT ${fn}`); continue; }
+
+    const root = document.createElement('section');
+    root.className = 'view';
+    root.dataset.view = tab.type;
+    root.dataset.tab = tab.id;
+    root.dataset.active = 'yes';
+    host.append(root);
+
+    const ctx = {
+      get state() { return stateOf(tab); },
+      get tab() { return { id: tab.id, name: tab.name, type: tab.type }; },
+      save: async () => true,
+      refreshOthers: () => {},
+      ...capability,
+    };
+
+    const handle = mod[fn](root, ctx);
+    await new Promise((r) => setTimeout(r, 60));
+    handle?.refresh?.();
+    const kids = root.querySelectorAll('*').length;
+    log.push(`${tab.id} ${tab.type} "${tab.name}": mounted, ${kids} elements, refresh=${typeof handle?.refresh}`);
+    seenTypes.add(tab.type);
+  } catch (err) {
+    log.push(`${tab.id} ${tab.type}: THREW ${err && err.message ? err.message : err}`);
+  }
+}
+
+// Any renderer with no tab on this board still gets mounted once, so a broken
+// type is caught even when the board happens not to use it.
+for (const [type, [file, fn]] of Object.entries(MODULES)) {
+  if (seenTypes.has(type)) continue;
+  try {
+    const mod = await import(`/views/${file}.js`);
+    if (typeof mod[fn] !== 'function') { log.push(`${type}: MISSING EXPORT ${fn}`); continue; }
+    const root = document.createElement('section');
+    root.className = 'view';
+    root.dataset.view = type;
+    root.dataset.active = 'yes';
+    host.append(root);
+    const fake = { id: 'probe', name: 'probe', type };
+    const blank = {};
+    const ctx = {
+      get state() { return blank; },
+      get tab() { return fake; },
+      save: async () => true,
+      refreshOthers: () => {},
+      ...capability,
+    };
+    const handle = mod[fn](root, ctx);
+    await new Promise((r) => setTimeout(r, 60));
+    handle?.refresh?.();
+    log.push(`${type} (unused type): mounted from empty state, ${root.querySelectorAll('*').length} elements`);
+  } catch (err) {
+    log.push(`${type} (unused type): THREW ${err && err.message ? err.message : err}`);
+  }
+}
+
+// kv is the only display component that ever resolved its container but not its
+// contents: it called String() on each key and value where every sibling calls
+// asText(), so a {bind} rendered "[object Object]". Mounted on purpose here
+// because the gallery's kv uses literal values, which is exactly why the bug
+// survived — a component demonstrated only in the case that works is untested.
+try {
+  const mod = await import('/views/ui.js');
+  const root = document.createElement('section');
+  root.className = 'view';
+  root.dataset.view = 'ui';
+  root.dataset.active = 'yes';
+  root.dataset.probe = 'kv-bind';
+  host.append(root);
+  const state = {
+    root: { type: 'kv', pairs: [
+      { key: { bind: 'k' }, value: { bind: 'deep.v' } },
+      { key: 'literal', value: 'still works' },
+    ]},
+    data: { k: 'bound key', deep: { v: 'bound value' } },
+  };
+  mod.mountUi(root, {
+    get state() { return state; },
+    get tab() { return { id: 'probe-kv', name: 'probe', type: 'ui' }; },
+    save: async () => true,
+    refreshOthers: () => {},
+    ...capability,
+  });
+  await new Promise((r) => setTimeout(r, 60));
+  const text = [...root.querySelectorAll('dt, dd')].map((n) => n.textContent).join('|');
+  log.push(`kv resolves a bind: ${text}`);
+} catch (err) {
+  log.push(`kv bind probe: THREW ${err && err.message ? err.message : err}`);
+}
+
+await new Promise((r) => setTimeout(r, 2500));
+// The runtime half of the control check. A control whose id is not declared
+// renders a visible marker and sets data-undeclared, so one query over every
+// mounted renderer answers "did anything ask for a control that does not exist" —
+// which is the half a static grep cannot do, since the id could be built at
+// runtime.
+{
+  const undeclared = [...document.querySelectorAll('[data-undeclared]')]
+    .map((b) => (b.closest('[data-view]')?.dataset.view || '?') + '.' + b.getAttribute('data-gesture'));
+  log.push(`undeclared controls rendered: ${undeclared.length ? undeclared.join(' ') : 'none'}`);
+  log.push(`declared controls rendered: ${document.querySelectorAll('[data-gesture]').length}`);
+}
+log.push(`mermaid svg rendered: ${document.querySelectorAll('[data-view="diagram"] svg').length}`);
+log.push(`dag svg nodes: ${document.querySelectorAll('[data-view="dag"] .node-box').length}`);
+log.push(`kanban cards: ${document.querySelectorAll('[data-view="kanban"] .card').length}`);
+log.push(`form inputs: ${document.querySelectorAll('[data-view="form"] input, [data-view="form"] select, [data-view="form"] textarea').length}`);
+log.push(`markup overlay: ${document.querySelectorAll('[data-view="markup"] svg').length}`);
+log.push(`chat composer: ${document.querySelectorAll('[data-view="chat"] textarea').length}`);
+log.push(`notes textarea: ${document.querySelectorAll('[data-view="notes"] textarea').length}`);
+log.push(`html sandboxed frames: ${document.querySelectorAll('[data-view="html"] iframe[sandbox]').length}`);
+log.push(`stack blocks mounted: ${document.querySelectorAll('[data-view="stack"] .block').length}`);
+
+out.textContent = 'SMOKE_RESULT ' + JSON.stringify(log);
+</script>
+</body>
+</html>

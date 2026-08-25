@@ -1,0 +1,112 @@
+{
+  "type": "dag",
+  "label": "DAG",
+  "blurb": "Nodes and parent links, laid out as a tidy tree. Drag to reparent.",
+  "since": 1,
+  "init": {
+    "nodes": [],
+    "columns": [
+      "todo",
+      "doing",
+      "done"
+    ]
+  },
+  "state": {
+    "nodes": {
+      "type": "array",
+      "doc": "each { id, title, parent, status, order, note, pos }"
+    },
+    "columns": {
+      "type": "array",
+      "doc": "status values; yours, any names, any count"
+    },
+    "height": {
+      "type": "string",
+      "doc": "any CSS length; a number is read as px"
+    },
+    "density": {
+      "type": "number",
+      "doc": "node spacing for the tidy-tree layout"
+    }
+  },
+  "controls": [
+    {
+      "id": "add-root",
+      "label": "Add root",
+      "title": "Create a new root node",
+      "doc": "Add a node with no parent."
+    },
+    {
+      "id": "relayout",
+      "label": "Re-layout",
+      "title": "Discard manual positions and re-tidy the tree",
+      "doc": "Re-tidy the tree, throwing away positions a drag has set."
+    },
+    {
+      "id": "fit",
+      "label": "Fit",
+      "title": "Fit the whole graph in view",
+      "doc": "Zoom and centre so the whole graph is visible."
+    },
+    {
+      "id": "zoom-in",
+      "label": "+",
+      "title": "Zoom in",
+      "doc": "Zoom in a step."
+    },
+    {
+      "id": "zoom-out",
+      "label": "−",
+      "title": "Zoom out",
+      "doc": "Zoom out a step."
+    },
+    {
+      "id": "add-child",
+      "label": "Add child",
+      "title": "Create a new node parented to this one",
+      "doc": "Add a node under the selected one."
+    },
+    {
+      "id": "detach",
+      "label": "Detach",
+      "title": "Make this a root node",
+      "doc": "Clear the selected node’s parent."
+    },
+    {
+      "id": "auto-place",
+      "label": "Auto-place",
+      "title": "Drop the manual position and let layout decide",
+      "doc": "Forget one node’s dragged position."
+    },
+    {
+      "id": "delete",
+      "label": "Delete",
+      "title": "Delete this node",
+      "doc": "Delete the selected node, after a confirm."
+    }
+  ],
+  "gestures": [
+    "click to select",
+    "double-click to rename",
+    "drag to move",
+    "drop one node ON another to reparent",
+    "drag the background to pan",
+    "wheel to zoom",
+    "right-click for id, link, markdown"
+  ],
+  "keys": [
+    [
+      "f",
+      "fit the canvas"
+    ],
+    [
+      "r",
+      "re-layout (discards manual positions)"
+    ]
+  ],
+  "notes": [
+    "`parent` and `status` are independent axes.",
+    "`pos` exists only where the human dragged a node — delete it to let the layout place it again.",
+    "Never create a `parent` cycle."
+  ]
+}

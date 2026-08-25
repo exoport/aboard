@@ -1,0 +1,263 @@
+{
+  "type": "ui",
+  "label": "UI",
+  "blurb": "A layout described as data, drawn by trusted components — no iframe, no script.",
+  "since": 1,
+  "init": {
+    "root": {
+      "type": "card",
+      "title": "New panel",
+      "children": []
+    },
+    "data": {}
+  },
+  "state": {
+    "root": {
+      "type": "object",
+      "doc": "the component tree"
+    },
+    "data": {
+      "type": "object",
+      "doc": "values `{bind:\"path\"}` reads and `field` writes"
+    },
+    "intents": {
+      "type": "array",
+      "doc": "appended when a button is pressed; nothing executes"
+    }
+  },
+  "tones": [
+    "accent",
+    "mark",
+    "agent",
+    "focus",
+    "danger",
+    "muted",
+    "dim"
+  ],
+  "commonProps": [
+    "type",
+    "id",
+    "children",
+    "grow"
+  ],
+  "components": {
+    "col": {
+      "doc": "children stacked vertically",
+      "props": [
+        "gap"
+      ]
+    },
+    "row": {
+      "doc": "children side by side, wrapping",
+      "props": [
+        "gap"
+      ]
+    },
+    "grid": {
+      "doc": "children in equal columns, one column under 700px",
+      "props": [
+        "columns",
+        "gap"
+      ]
+    },
+    "card": {
+      "doc": "a bordered panel; `accent` adds a left rule",
+      "props": [
+        "title",
+        "accent"
+      ]
+    },
+    "tabs": {
+      "doc": "switchable panels; which one is open is per-viewer and never stored",
+      "props": [
+        "panels"
+      ],
+      "itemProps": {
+        "panels": [
+          "label",
+          "children"
+        ]
+      }
+    },
+    "title": {
+      "doc": "the name of a section",
+      "props": [
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "heading": {
+      "doc": "a small uppercase label above a group",
+      "props": [
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "text": {
+      "doc": "a paragraph",
+      "props": [
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "caption": {
+      "doc": "secondary text, smaller and dimmer",
+      "props": [
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "badge": {
+      "doc": "a short monospace tag",
+      "props": [
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "notice": {
+      "doc": "a called-out line; `label` is the bold lead-in",
+      "props": [
+        "label",
+        "value",
+        "text",
+        "tone"
+      ]
+    },
+    "quote": {
+      "doc": "a quotation; `by` renders as the attribution",
+      "props": [
+        "value",
+        "text",
+        "by",
+        "tone"
+      ]
+    },
+    "code": {
+      "doc": "preformatted monospace, scrolls sideways",
+      "props": [
+        "value",
+        "text"
+      ]
+    },
+    "divider": {
+      "doc": "a horizontal rule",
+      "props": []
+    },
+    "spacer": {
+      "doc": "vertical space; `size` is any CSS length",
+      "props": [
+        "size"
+      ]
+    },
+    "list": {
+      "doc": "a bulleted list of plain values",
+      "props": [
+        "items"
+      ]
+    },
+    "checklist": {
+      "doc": "tickable items; each item's `bind` is where its boolean lives, so a tick is readable back. An item with no `bind` renders disabled.",
+      "props": [
+        "items"
+      ],
+      "itemProps": {
+        "items": [
+          "label",
+          "bind",
+          "done"
+        ]
+      }
+    },
+    "kv": {
+      "doc": "a definition list of label/value pairs. Both sides resolve a `{bind}`.",
+      "props": [
+        "pairs"
+      ],
+      "itemProps": {
+        "pairs": [
+          "key",
+          "value"
+        ]
+      }
+    },
+    "table": {
+      "doc": "a read-only table. `rows` are arrays, or objects keyed by column id. For a table the human edits, use the `table` TAB type.",
+      "props": [
+        "columns",
+        "rows"
+      ],
+      "itemProps": {
+        "columns": [
+          "id",
+          "label"
+        ]
+      }
+    },
+    "stat": {
+      "doc": "one large number with a caption under it",
+      "props": [
+        "value",
+        "label",
+        "tone"
+      ]
+    },
+    "meter": {
+      "doc": "a proportion bar; `value` against `max` (default 100)",
+      "props": [
+        "value",
+        "max",
+        "tone"
+      ]
+    },
+    "image": {
+      "doc": "an image from assets/ or uploads/ only",
+      "props": [
+        "src",
+        "alt",
+        "caption"
+      ]
+    },
+    "link": {
+      "doc": "an anchor; `href` must be #, / or http(s)",
+      "props": [
+        "href",
+        "label"
+      ]
+    },
+    "button": {
+      "doc": "records an intent into state.intents and nothing else — it never acts",
+      "props": [
+        "label",
+        "intent"
+      ]
+    },
+    "field": {
+      "doc": "an input that writes into state.data at `bind`. `field` is text, longtext, number, select or checkbox; `options` supplies a select.",
+      "props": [
+        "label",
+        "bind",
+        "field",
+        "options"
+      ]
+    }
+  },
+  "gestures": [
+    "whatever the agent described — buttons record an intent, fields write into the data model",
+    "a tabs component remembers which panel you had open, per viewer"
+  ],
+  "keys": [],
+  "notes": [
+    "Catalog (25): col, row, grid, card, tabs, divider, spacer, title, heading, text, caption, badge, notice, quote, code, link, list, checklist, kv, table, stat, meter, image, button, field.",
+    "Where a prop takes both `value` and `text`, `value` wins.",
+    "`tone` takes a token NAME from `tones` above, never a hex. An unrecognised one draws the default, so `-apply` warns about it.",
+    "`image.src` must be under assets/ or uploads/; `link.href` must be #, / or http(s).",
+    "Any prop may be `{\"bind\":\"path.in.data\"}` instead of a literal — EXCEPT `field.bind` and `checklist[].bind`, which are the paths themselves.",
+    "An unknown component type renders a visible marker. An unknown PROP renders nothing at all, which is why `-apply` warns about one.",
+    "PREFER THIS OVER `html` whenever it can express the shape."
+  ]
+}

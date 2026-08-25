@@ -1,0 +1,67 @@
+{
+  "type": "table",
+  "label": "Table",
+  "blurb": "Typed rows the human edits in place: findings, files, costs, verdicts.",
+  "since": 1,
+  "init": {
+    "columns": [
+      {
+        "id": "item",
+        "label": "Item",
+        "type": "text"
+      }
+    ],
+    "rows": []
+  },
+  "state": {
+    "columns": {
+      "type": "array",
+      "doc": "each { id, label, type: text|number|select|checkbox|longtext, options?, width?, hint? }"
+    },
+    "rows": {
+      "type": "array",
+      "doc": "each { id, <columnId>: value }"
+    },
+    "readOnly": {
+      "type": "boolean",
+      "doc": "as on the kanban"
+    },
+    "addLabel": {
+      "type": "string",
+      "doc": "what the add button says; \"Add row\" is rarely the right word"
+    }
+  },
+  "controls": [
+    {
+      "id": "add",
+      "label": "Add row",
+      "doc": "Append a row. `state.addLabel` renames it."
+    },
+    {
+      "id": "copy-csv",
+      "label": "Copy CSV",
+      "doc": "Copy every row as CSV."
+    },
+    {
+      "id": "copy-md",
+      "label": "Copy markdown",
+      "doc": "Copy every row as a markdown table."
+    },
+    {
+      "id": "delete-row",
+      "label": "✕",
+      "title": "delete this row",
+      "doc": "Delete one row."
+    }
+  ],
+  "gestures": [
+    "click a header to sort",
+    "edits save as you type",
+    "right-click a row to copy or duplicate it"
+  ],
+  "keys": [],
+  "notes": [
+    "Sort order and column width are per-viewer and never written.",
+    "No formulas, no merged cells: this is a form with many rows, not a spreadsheet."
+  ]
+}
