@@ -1,10 +1,10 @@
-# aboard.json
+# .aboard/aboard.json
 
 ```jsonc
 {
   "version": 3,                          // server-managed; the schema the renderers read
-  "updatedAt": "2026-08-22T11:03:09Z",   // server-managed; -apply uses it as the CAS base
-  "lastEditedBy": "agent-1",             // "human", or whatever -by was passed
+  "updatedAt": "2026-08-22T11:03:09Z",   // server-managed; apply uses it as the CAS base
+  "lastEditedBy": "agent-1",             // "human", or whatever --by was passed
   "nextId": 147,                         // server-managed; the id allocator
   "tabs": [ /* … */ ]
 }
@@ -12,17 +12,20 @@
 
 Never set `version`, `updatedAt`, `lastEditedBy` or `nextId` yourself — the server
 manages all four. Leaving `updatedAt` exactly as you read it is what makes the
-conflict check work. `aboard apply` replaces the whole document, so always build from a
-fresh `Read`.
+conflict check work. `aboard apply` replaces the whole document, so always build
+from a fresh `Read`.
 
 `version` is in that list because it was NOT, and it cost a whole board: this file
 showed `"version": 2` long after the board moved to 3, an agent copied the example
-it was reading, and `aboard apply` wrote it through with `applied` and exit 0. The
+it was reading, and `apply` wrote it through with `applied` and exit 0. The
 browser refuses to render a version it does not know, so the human got a blank
 board and a pink banner one round trip after being told it was ready. The server
-now stamps the field and `aboard apply` warns when a document names the wrong one — but
+now stamps the field and `apply` warns when a document names the wrong one — but
 the reason it is documented here rather than only fixed in code is that a
 hand-written `version` is never right for longer than one schema change.
+
+A second, isolated board lives in `.aboard/aboard.<name>.json` with the same
+shape; `--name` (env `ABOARD_NAME`) selects it.
 
 ## Ids
 
@@ -87,7 +90,7 @@ independently of whatever tab or stack block holds it.
   "stateFrom": "bb1",         // OPTIONAL: render another tab's state with this
                               // type — a kanban and a DAG over one dataset
 
-  "touched": {                // set BY THE SERVER when an agent changed this tab
+  "touched": {                // set BY THE SERVER when an agent changed the tab
     "by": "agent-1", "at": "…", "note": "optional"
   },
   "pendingRemoval": {         // a removal REQUEST awaiting the user
@@ -166,7 +169,8 @@ they gated something that already ran.
 { "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
-The lines live in a sidecar file, NOT in this state: `<cmd> 2>&1 | aboard log bb126`.
+The lines live in a sidecar file (`.aboard/run/logs/<tab>.log`), NOT in this
+state: `<cmd> 2>&1 | aboard log bb126`.
 
 ### trace
 
@@ -174,8 +178,8 @@ The lines live in a sidecar file, NOT in this state: `<cmd> 2>&1 | aboard log bb
 { "limit": 200, "height": "44vh" }
 ```
 
-Reads the journal rather than `aboard.json`, so the history is not something an
-agent can quietly rewrite.
+Reads `.aboard/run/journal.jsonl` rather than the state document, so the history
+is not something an agent can quietly rewrite.
 
 ### vote
 
@@ -197,10 +201,15 @@ Write your own key in `ballots`; the human's column is the editable one.
       { "type": "button", "id": "again", "label": "Run it again", "intent": "re-run the suite" } ] } ] } }
 ```
 
-Catalog: `col`, `row`, `card`, `title`, `heading`, `text`, `caption`, `badge`,
-`divider`, `list`, `kv`, `code`, `stat`, `meter`, `button`, `field`. `tone` is a
-token NAME, never a hex. `field` writes into `state.data`; `button` appends to
-`state.intents` and executes nothing. An unknown `type` renders a visible marker.
+Catalog (25): `col`, `row`, `grid`, `card`, `tabs`, `title`, `heading`, `text`,
+`caption`, `badge`, `notice`, `quote`, `code`, `divider`, `spacer`, `list`,
+`checklist`, `kv`, `table`, `stat`, `meter`, `image`, `link`, `button`, `field`.
+`tone` is a token NAME (`accent`, `mark`, `agent`, `focus`, `danger`, `muted`,
+`dim`), never a hex. `field` writes into `state.data`; `button` appends to
+`state.intents` and executes nothing. An unknown `type` renders a visible marker;
+an unknown PROP renders nothing at all — so run `aboard capabilities ui` for each
+component's props rather than guessing, and read `aboard apply`'s stderr, which
+walks the tree and names what it could not resolve.
 
 ### diagram
 
@@ -243,13 +252,13 @@ mean "not answered yet" — if it matters, ask.
 ```jsonc
 { "layout": "side-by-side",              // or "stacked"
   "images": [
-    { "id": "i1", "src": "assets/before.png", "caption": "Before",
+    { "id": "bb1", "src": "uploads/before.png", "caption": "Before",
       "annotatable": true,
-      "regions": [ { "id": "r2", "x": 0.472, "y": 0.271, "w": 0.235, "h": 0.186,
+      "regions": [ { "id": "bb2", "x": 0.472, "y": 0.271, "w": 0.235, "h": 0.186,
                      "note": "this needs a different scale", "color": "mark",
                      "shape": "ellipse" } ],   // absent or "rect" = rectangle
-      "strokes": [ { "id": "s1", "points": "0.101,0.427 0.095,0.423", "note": "" } ] },
-    { "id": "i2", "src": "assets/after.png", "caption": "After", "annotatable": false }
+      "strokes": [ { "id": "bb3", "points": "0.101,0.427 0.095,0.423", "note": "" } ] },
+    { "id": "bb4", "src": "uploads/after.png", "caption": "After", "annotatable": false }
   ] }
 ```
 
@@ -260,8 +269,12 @@ mean "not answered yet" — if it matters, ask.
   before/after pair where only one side is marked.
 - `strokes[].points` is one space-separated `"x,y x,y"` string. Keep the compact
   form; nested arrays bloat the file enormously.
-- `color` is a **token name** (`mark`, `accent`, `focus`, `claude`, `danger`), not
-  a hex, so it survives a retheme. Absent means the default.
+- `color` is a **token name** (`mark`, `accent`, `focus`, `agent`, `danger`), not
+  a hex, so it survives a retheme. Absent means the default. The accepted palette
+  is declared, and `aboard apply` warns — naming the real ones — when a write uses
+  a colour the board does not have.
+- Images the human pastes or drops land in `.aboard/uploads/`, served from
+  `/uploads/<file>`.
 - The single-image shape (`image`, `caption`, `regions`, `strokes` at the top
   level) is still read and migrated on load.
 
@@ -275,22 +288,24 @@ clearing marks. The toolbar swatch sets the colour of *new* marks only.
 ```jsonc
 { "height": "62vh",                      // optional, as above
   "messages": [
-    { "id": "m1", "at": "2026-08-22T09:14:00Z", "by": "agent-1",
+    { "id": "bb5", "at": "2026-08-22T09:14:00Z", "by": "agent-1",
       "text": "Taking the schema work." },
-    { "id": "m2", "at": "…", "by": "human", "text": "Do the migration first." }
+    { "id": "bb6", "at": "…", "by": "human", "text": "Do the migration first." }
 ] }
 ```
 
 Append; do not rewrite or delete others' messages. `by` distinguishes speakers —
 use `agent-1`, `agent-2`, `agent-<role>` so several agents read as distinct
-actors. Avoid `claude`: it reads as one participant when there may be many. Read messages with
-`by: "human"` as directed at you.
+actors. Avoid `claude`: it reads as one participant when there may be many. Read
+messages with `by: "human"` as directed at you.
 
 ### notes
 
 ```jsonc
-{ "text": "Free-form text. Not rendered as markdown." }
+{ "text": "Free-form text.", "markdown": false }
 ```
+
+`markdown: true` renders it with a Read/Edit toggle.
 
 ### html
 
@@ -314,19 +329,26 @@ aboard.onData(fn)       // called when it changed elsewhere
 aboard.fit()            // ask the parent to resize the frame to the content
 ```
 
-So an interactive widget round-trips its state into `aboard.json` like any other
-tab. Write ordinary HTML — no build step, no framework, no imports.
+So an interactive widget round-trips its state into the board document like any
+other tab. Write ordinary HTML — no build step, no framework, no imports.
+
+The initial data is injected as `window.__ABOARD_DATA__`, and the frame talks to
+the parent over a `__aboard`-tagged postMessage envelope. Neither is something a
+widget should touch directly; use the four calls above.
 
 ### stack
 
 ```jsonc
 { "blocks": [
-    { "id": "b1", "type": "dag",    "title": "Dependencies", "state": { /* dag state */ } },
-    { "id": "b2", "type": "form",   "title": "Decide",       "state": { /* form state */ } },
-    { "id": "b3", "type": "markup", "title": "On screen",    "state": { /* markup state */ } }
+    { "id": "bb61", "type": "dag",    "title": "Dependencies", "state": { /* dag state */ } },
+    { "id": "bb62", "type": "form",   "title": "Decide",       "state": { /* form state */ } },
+    { "id": "bb63", "type": "markup", "title": "On screen",    "state": { /* markup state */ } }
 ] }
 ```
 
 Each block is a full renderer with its own state, rendered top to bottom and
 collapsible. Any type except `stack` — nesting is capped at one level. This is
 usually the right answer when you want "look at this, then decide that".
+
+An `html` block is served from `/tab/<tab>/<block>/html` and its `aboard.set()`
+lands in that block's own `state.data`.

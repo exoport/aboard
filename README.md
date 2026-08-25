@@ -1,347 +1,224 @@
-# aboard
+# aboard — a shared visual board for a human and their agents
 
-A shared board for a human and Claude Code. `aboard.json` is the single source of
-truth, on disk, in the repo. The browser is one editor of it; Claude Code is another.
+`aboard` is a single-binary Go CLI that serves a browser board for one project. A human
+opens it in a docked VS Code tab; one or more Claude Code sessions read and write the
+same state file from the terminal. **Tabs are data, not code** — an agent opens one for
+whatever it needs to show (a dependency graph, a kanban, a mermaid diagram, a question
+form, an annotated screenshot, a channel to another session, a bespoke sandboxed
+widget) and reads back what the human changed.
 
-## Run
+> **Status:** pre-1.0. The command surface and the state schema may change between
+> minor releases until `v1.0.0`. See [CHANGELOG.md](CHANGELOG.md).
 
-```sh
-./restart.sh            # builds the Go binary, frees the port, serves
-./restart.sh -dev       # same, but serves the UI from disk (no rebuild per edit)
+## Why aboard
+
+Terminal prose is a narrow channel for the two things human-in-the-loop work actually
+needs: **showing structure** and **asking for a decision**. A dependency graph argued
+with by dragging nodes, a form with three typed questions, a screenshot with two
+circles on it, a gate with allow / deny / edit-then-allow — each of those is a better
+interface to the same exchange than a wall of text, and they are what make staying in
+the loop bearable rather than exhausting.
+
+So the board's job is **bandwidth, not storage**. It is a local, persistent,
+non-authoritative channel: `.aboard/` is gitignored, the conclusions get promoted into
+the project's own documents, and if the board and a committed document disagree the
+document wins. That posture is argued out in
+[why a local, non-authoritative channel](docs/explanation/why-a-local-non-authoritative-channel.md),
+and it is the half of this tool that is not code.
+
+Everything is one file: the shell, the stylesheet, every renderer and the mermaid
+bundle are embedded with `//go:embed`. No Node, no `node_modules`, no asset directory
+to ship alongside, and nothing on the network at runtime.
+
+## Install
+
+With a Go toolchain (1.26 or later):
+
+```bash
+go install github.com/exoport/aboard/cmd/aboard@latest
 ```
 
-Or via make: `make run`, `make dev`, `make status`, `make dist`.
+The binary lands at `$(go env GOPATH)/bin/aboard`. A `go install` build reports
+`Version=dev` from `aboard version`, since it is built without goreleaser's ldflags.
 
-It prints its URL on startup. Inside VS Code: `Ctrl/Cmd+Shift+P` →
-**Simple Browser: Show** → paste that URL. It docks as an editor tab, so the
-board sits beside your code.
+Or take the release archive for your platform:
 
-## Ports, and running several boards
-
-**The port is derived from the project's absolute path** (a hash into
-41000–48999), so:
-
-- two checkouts never collide — each gets its own port automatically;
-- the same checkout keeps the same URL between runs, so the Simple Browser tab
-  and any bookmark stay valid.
-
-If the derived port is taken by something that is *not* a board, it walks forward
-and records where it actually landed. If it is taken by *this project's own*
-board, it refuses to start a duplicate and points at the running one:
-
-```
-this project's board is already running at http://localhost:46624 (pid 568001)
+```bash
+VERSION=$(curl -fsSL https://api.github.com/repos/exoport/aboard/releases/latest | jq -r .tag_name)
+curl -fsSL "https://github.com/exoport/aboard/releases/download/${VERSION}/aboard_linux_amd64.tar.gz" \
+  | sudo tar -xz -C /usr/local/bin aboard
+aboard version
 ```
 
-The running board is recorded in `.aboard/instance.json` (gitignored):
+Releases publish `aboard_<os>_<arch>.tar.gz` (`.zip` on Windows), `aboard_checksums.txt`,
+and `aboard_checksums.txt.bundle` — a Sigstore bundle over the checksums file (Fulcio
+certificate, signature, SCT and Rekor proof in one file, verifiable **fully offline**)
+signed by keyless cosign from this repo's release workflow:
 
-```json
-{ "app": "aboard", "project": "/home/you/proj", "port": 46624,
-  "url": "http://localhost:46624", "state": "aboard.json", "pid": 568001 }
+```bash
+cosign verify-blob \
+  --bundle aboard_checksums.txt.bundle \
+  --new-bundle-format \
+  --certificate-identity-regexp \
+    "^https://github\.com/exoport/aboard/\.github/workflows/release\.yml@refs/tags/v.*$" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  aboard_checksums.txt
+sha256sum -c aboard_checksums.txt --ignore-missing
 ```
 
-That file is the discovery mechanism. `restart.sh` reads it to stop *only this
-project's* board rather than every `./aboard` on the machine; the test scripts read
-it instead of assuming a port; and Claude Code can read it to learn the URL
-without being told. `aboard status` prints it, and `GET /health` returns the
-same record so one board can identify another over the wire.
+Full recipes: [How to install aboard](docs/how-to/install.md) ·
+[How to verify a release artifact](docs/how-to/verify.md).
 
-### Two sessions, one board
+## Quick start
 
-This is the default and it works: **one server, one `aboard.json`, both sessions
-reading and writing it, one browser tab showing everything.** The server is a
-single process on the project's port — whichever session starts it, the other
-finds it.
-
-Two rules make it safe:
-
-- `./restart.sh` **leaves a healthy board alone** and just prints its URL. Only
-  `-force` restarts. A second session therefore cannot yank the server out from
-  under the first.
-- Write through `aboard apply`, not by editing the file. Direct writes have no
-  compare-and-set, so concurrent edits are silently lost:
-
-```sh
-aboard apply --by "agent-1" < edited.json
+```bash
+cd ~/work/your-project
+aboard init --example --gitignore   # create .aboard/, seed the example board, ignore it
+aboard serve                        # prints the URL — the port is derived from this project
 ```
 
-`aboard apply` takes the `updatedAt` already inside the submitted document as its
-base, so "read, edit, apply" is safe by construction. A stale write is refused:
+Then, in VS Code: `Ctrl/Cmd+Shift+P` → **Simple Browser: Show** → paste that URL. It
+docks as an editor tab, so the board sits beside your code. The port is derived from
+the project root, so the URL is the same every run and two checkouts never collide —
+the tab stays valid. Walk the whole loop in
+[Your first board](docs/tutorials/first-board.md); the docking details and their
+gotchas are in [How to run aboard inside VS Code](docs/how-to/run-in-vscode.md).
 
-```
-refused: the board changed since you read it (…) — re-read aboard.json, redo the edit, apply again
-```
+A board with nothing on it is the normal starting point: `aboard init` without
+`--example` gives you an empty one, and agents open the tabs they need.
 
-`--by` lands in `lastEditedBy`, so the browser's "Claude changed this" banner
-fires and each session can see who moved what. See `CLAUDE.md`.
+## The tab types
 
-### Two separate boards in one project
+Fifteen renderers. A tab picks one with its `type`, owns its own `state`, and may set
+`stateFrom` to render another tab's state — so a `dag` and a `kanban` can be two
+readings of one dataset.
 
-When sessions should *not* share — a side investigation that must not disturb the
-main board:
+| type      | renders                                          | what the human can do in it                                                        |
+| --------- | ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `dag`     | nodes and parent links as a tidy tree            | drag to move, drop onto another node to reparent, rename, add, delete, pan, zoom    |
+| `kanban`  | the same nodes grouped by `status`               | drag between columns, reorder, rename, reparent; `readOnly` makes it agent-owned    |
+| `diagram` | mermaid — 23 diagram and chart types             | edit the source, hover a node for its key                                           |
+| `form`    | typed questions                                  | range, select, checkbox, text, textarea; reset                                      |
+| `markup`  | images with a drawing layer                      | region / ellipse / pen / move / resize, per-mark colours and notes, hide marks      |
+| `chat`    | a work channel between sessions                  | send and interject; each speaker coloured                                           |
+| `notes`   | free text, optionally markdown                   | edit freely, Read/Edit toggle                                                       |
+| `table`   | typed rows                                       | edit cells in place, sort by header, add / duplicate / delete rows, copy CSV or md  |
+| `gate`    | approval requests                                | allow / deny / edit-then-allow, each with a reason                                  |
+| `log`     | command output as it happens                     | follow, filter, ANSI colour — lines live in a sidecar file, not in the state file   |
+| `trace`   | who wrote what, when                             | one lane per actor, a dot per write, click for detail; reads the journal            |
+| `vote`    | scored options                                   | click to score, click again to clear; a wide split is called out, not averaged      |
+| `ui`      | a component tree from a trusted catalog          | buttons that record intent — no iframe, no script                                   |
+| `html`    | agent-authored HTML/CSS/JS                       | anything you write — canvas, drag-and-drop, WebGL — sandboxed, no network           |
+| `stack`   | several of the above in one tab                  | collapsible blocks, top to bottom                                                   |
 
-```sh
-./restart.sh -name review     # own port, own aboard.review.json, own instance record
-```
+Three rules of thumb: `dag` when you want the shape argued with, `diagram` when the
+shape is yours to assert; `ui` when the layout is ordinary and `html` when the
+interaction itself is the point; `table` the moment you find yourself writing rows into
+`notes`. The complete per-type inventory is what `aboard capabilities` prints — see
+[the capability manifest](docs/reference/capabilities.md).
 
-`--name` derives a different port, uses `aboard.<name>.json` as state, and records
-itself separately, so the two never interfere.
+## The CLI at a glance
 
-Overrides, in precedence order: `--port N`, then `PORT=N`, then the derived port.
+| Command                     | What it does                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `aboard init`               | Create `.aboard/`; `--example` seeds the example board, `--gitignore` adds the ignore. |
+| `aboard serve`              | Run the board server for this project. `--dev`, `--port`, `--name`, `--base-path`.    |
+| `aboard status`             | Is a board running, where, since when — plus the caps beacon and skill staleness.     |
+| `aboard apply`              | Read a document on stdin and write it through the running board (compare-and-set).    |
+| `aboard wait`               | Block until the human pokes, or until a predicate matches. Exit 3 means nobody came.  |
+| `aboard poke`               | Release every session waiting on this board, as the human's notify button does.       |
+| `aboard journal`            | Recent accepted writes: when, who, which tabs.                                         |
+| `aboard watch`              | The same, as JSON lines, until interrupted.                                            |
+| `aboard log <tab>`          | Pipe a command's output into a `log` tab.                                              |
+| `aboard export <tab\|key>`  | One tab as markdown (or `--format csv`), for pasting into the project's own documents. |
+| `aboard capabilities [type]`| What this board can do. No server needed; `--check` gates the committed skill copy.    |
+| `aboard recipes list\|show` | The recipes available here, and one recipe's body or its `--template`.                 |
+| `aboard version`            | Build identity of this binary.                                                         |
 
-The UI is compiled into the binary with `//go:embed`, so deploying the board is
-copying one file — no Node, no `node_modules`, no asset directory to ship
-alongside. `aboard.json` deliberately stays on disk: it is the shared state both
-the browser and Claude Code read and write.
+`--cwd DIR` on the root resolves the project from somewhere other than the working
+directory, and commands that emit structured data take `--output-format human|json|yaml`.
+Run `aboard <command> --help`, or read the generated
+[CLI reference](docs/reference/cli.md) for every command, flag and default.
 
-Use `-dev` while changing `views/` or `app.css` — it reads those from the working
-directory instead of the embedded copies, so a reload is enough. Without it the
-embedded copies win and edits appear to do nothing.
+## The skill
 
-`server.js` is the original Node implementation, kept as a fallback for machines
-with no Go toolchain (`restart.sh` picks it automatically). The two are
-behaviourally identical; the Go one additionally serves `ETag`s, so the 3.5 MB
-mermaid bundle revalidates as a `304` instead of being resent on every reload.
+`.claude/skills/aboard/` teaches a Claude Code session how to use a board: which tab
+type suits which kind of explanation, the state schema, how to read the human's edits
+back, and how two sessions share one board without losing each other's writes. **Copy
+that directory into your own project** — it is not embedded in the binary and there is
+no install command:
 
-## The loop
-
-- **You edit** — in any of the five views below. Each gesture POSTs the new state
-  and the server writes `aboard.json`.
-- **Claude edits** — reads `aboard.json`, changes it, writes it back. The server
-  watches the file and pushes an SSE ping; open boards reload and show a banner.
-- **Neither side clobbers the other** — a write carries the `updatedAt` it was
-  based on. If the file moved on in between, the server answers `409` and the
-  browser reloads rather than overwriting.
-- **No echo loops** — each browser tags its writes with a client id and ignores
-  the notification for its own change.
-
-## Tabs
-
-**Tabs are data, not code.** `aboard.json` carries a `tabs[]` array; each tab is a
-name, a `type` that picks a renderer, and its own `state`. An agent opens one for
-whatever it needs to show and names it accordingly — the types below are
-capabilities, not a fixed set of tabs.
-
-| type | what it renders |
-|---|---|
-| `dag` | nodes and parent links as a tidy tree; drag a node onto another to reparent |
-| `kanban` | the same nodes grouped by `status`; drag between columns |
-| `diagram` | mermaid — 23 diagram and chart types |
-| `form` | sliders, selects, checkboxes, text: structured answers |
-| `markup` | images with a drawing layer; normalized coordinates an agent can interpret |
-| `chat` | a work channel — agents coordinate where the human can watch and interject |
-| `notes` | free text; the plain escape hatch |
-| `html` | agent-authored HTML/CSS/JS in a sandboxed frame with no network access |
-| `stack` | several of the above in one tab, top to bottom, collapsible |
-
-A tab may set `stateFrom` to render another tab's state, so a `dag` and a
-`kanban` can be two readings of one dataset. A new capability is a line in the
-`TYPES` registry in `aboard.html`, not a new tab.
-
-### Change markers
-
-When an agent's write changes a tab, the server stamps it `touched`. That raises
-a dot on the tab and a banner inside it; **only the human dismissing it clears
-either**. An agent write cannot remove the marker — the server carries it
-forward — so a later write can never hide an earlier change.
-
-### Removal needs acknowledgement
-
-**An agent cannot delete a tab.** A write that drops one has the tab restored
-with `pendingRemoval` set, which the human answers in the tab with *Keep* or
-*Remove tab*. Agents ask; the human decides. Enforced in `tabs.go`, not left to
-convention.
-
-### The html type
-
-Served from `/tab/<id>/html` into an iframe with `sandbox="allow-scripts"` (no
-`allow-same-origin`) behind a CSP whose `connect-src` is `'none'`. So a widget can
-do anything local — canvas, SVG, WebGL, animation — and nothing over the network.
-That matters because this server has no authentication: anything that can reach it
-can rewrite the whole board. State round-trips through a `postMessage` bridge
-(`aboard.get()` / `aboard.set()` / `aboard.onData()` / `aboard.fit()`), so an
-interactive widget persists like any other tab.
-
-## Dependencies
-
-There is no `package.json`, no `node_modules`, and no `go.sum`. `go build` is the
-whole setup step, and the result is one file.
-
-| layer | depends on |
-|---|---|
-| server (Go) | **stdlib only** — no `go.sum`, zero external modules |
-| server (Node fallback) | Node built-ins only — `http`, `fs`, `path` |
-| browser | vanilla ES modules, no framework, no build step |
-| fonts | system stacks (`ui-sans-serif`, `ui-monospace`) — no webfonts |
-| network at runtime | none; the board works fully offline |
-
-The Go server watches `aboard.json` by polling its content hash every 200 ms
-rather than using `fsnotify`. That keeps the module count at zero, and it is also
-more robust than a single-file OS watch, which a rename-based save silently
-breaks.
-
-One third-party file exists: **`vendor/mermaid.min.js`** (mermaid 11.17.0, MIT),
-committed rather than installed, loaded only when the Diagram tab is first
-opened. It is self-contained and carries mermaid's own dependency tree inlined —
-d3, dagre, elkjs, cytoscape, DOMPurify, marked, khroma, dayjs, roughjs — so it is
-one file to trust holding a dozen upstream libraries. See `vendor/README.md` for
-its provenance, checksum, and update procedure.
-
-The test scripts additionally expect a `chromium`-family browser and `curl` on
-`PATH`, but nothing at runtime does.
-
-## For Claude Code
-
-`.claude/skills/aboard/` is a skill that teaches a session how to use this board:
-which tab suits which kind of explanation, the `aboard.json` schema, how to read
-the user's edits back, and how two sessions share one board without losing each
-other's writes. It is auto-discovered — no registration needed.
-
-`CLAUDE.md` carries only the two rules that must not wait for a skill load: write
-through `aboard apply`, and do not restart a healthy server.
-
-## Files
-
-| path | role |
-|---|---|
-| `aboard.json` | all state: `nodes`, `columns`, `diagram`, `form`, `markup` — the only file not embedded |
-| `main.go` | the server: embedded UI, static serve, compare-and-set POST, poll → SSE |
-| `Makefile` | `run` / `dev` / `build` / `check` / `test` / `dist` |
-| `server.js` | the original Node server, kept as a no-Go fallback |
-| `aboard.html` | shell: tab router, save plumbing, live reload |
-| `app.css` | the single token set the whole UI is coloured from |
-| `views/*.js` | one ES module per tab, each exporting `mount<Name>(root, ctx)` |
-| `.claude/skills/aboard/` | the skill: when to use the board, schema, recipes, multi-session |
-| `CLAUDE.md` | the two always-on safety rules |
-| `vendor/mermaid.min.js` | vendored so the Diagram tab works with no network |
-| `assets/` | images the Markup view can point at |
-
-## Test
-
-```sh
-./test/smoke.sh          # needs the server running, and a chromium-family browser
+```bash
+cp -r .claude/skills/aboard /path/to/your-project/.claude/skills/
 ```
 
-It mounts every view against the real `aboard.json` in headless Chromium and fails
-if any module throws, exports the wrong name, or renders nothing — the failure a
-syntax check cannot catch. Then it loads the real shell once per tab and checks
-each one activates.
+It is auto-discovered from there. Its facts half is generated (`make caps`), so
+`aboard status` can tell you when a copied skill has gone stale against the binary,
+and `aboard capabilities` answers in a project that never copied it at all.
 
-Two URL flags exist for it, both useful by hand too:
+## Recipes
 
-- `?tab=dag` — deep-link a view instead of the last one used.
-- `?nosse=1` — skip the live-reload stream. The stream never closes, which stops
-  a headless browser from ever reaching network-idle.
+A recipe is a short markdown method for one board move — ask for a decision, show a
+structure, react to the human's edits — with frontmatter an agent can match against and
+an optional JSON tab skeleton it can apply.
 
-```sh
-./test/shot.sh              # screenshot every tab into .shots/ (gitignored)
-./test/shot.sh dag diagram  # or just some
+```bash
+aboard recipes list                   # every recipe available here, and what shadows what
+aboard recipes show ask-for-a-decision
+aboard recipes show ask-for-a-decision --template   # just the tab skeleton, ready to edit
 ```
 
-Worth doing after any restyle: two bugs in this tool were invisible to colour
-assertions and obvious in a screenshot — a DAG that never auto-fit, and mermaid
-labels clipped by a font-weight override applied after mermaid had measured them.
+Recipes ship with the binary and a project may add or override its own in
+`_apex/aboard/recipes/`, `_aboard/recipes/` or `.aboard/recipes/` — first match by name
+wins, and a shadowed recipe is always reported rather than hidden. Writing one:
+[How to write a recipe](docs/how-to/write-a-recipe.md).
 
-`test/theme-probe.html` dumps the palette actually in effect, quicker than
-reading colours out of an image when a token looks wrong.
+## Inside ape
 
-## Colours
+The same cobra tree mounts inside another CLI: `ape aboard <command>` is this command
+set, hosted by [ape](https://github.com/exoport/apex_process_ape), sharing **one
+`.aboard/` per project** — the same state file, the same derived port, the same
+instance record. A board started by `ape aboard serve` is the board `aboard status`
+reports, and either binary can drive it. The two hosts are distinguishable where it
+matters (`/health` and the instance file carry `app: "ape-aboard"` rather than
+`app: "aboard"`, so an error message can name the command you actually have) and
+identical everywhere else, including `capsHash`. See
+[How to embed aboard in ape](docs/how-to/embed-in-ape.md) and
+[why two identities](docs/explanation/why-two-identities.md).
 
-Single dark theme, taken from the **FireFly Pro** VS Code theme
-(`ankitcode.firefly`) — specifically that theme's *neutral* black family rather
-than its blue-tinted editor chrome, so the board is black with lighter blacks
-layered on it. Depth runs upward from black: `bg → sunken → surface → raised`.
+## Documentation
 
-| token | value | source in the theme |
-|---|---|---|
-| `--bg` | `#000000` | `titleBar` / `input.background` |
-| `--sunken` | `#0a0a0a` | `list.hoverBackground` |
-| `--surface` | `#151515` | `dropdown.background` |
-| `--raised` | `#202020` | — (derived) |
-| `--line` | `#2a2a2a` | `scrollbarSlider.background` |
-| `--line-strong` | `#3d3d3d` | near `tab.activeBackground` |
-| `--text` | `#ccd4e0` | `editor.foreground`, brightened for contrast |
-| `--accent` | `#a4bd00` | `button.background` (also strings) |
-| `--edge` | `#4a4a4a` | — (neutralised line number) |
-| `--mark` | `#fb8c00` | attribute-name orange |
-| `--agent` | `#a7adf4` | `support.function` periwinkle |
+Full docs follow [Diátaxis](https://diataxis.fr/) — pick the quadrant that matches what
+you need:
 
-`--text` keeps the theme's slightly cool cast, since that is what the editor
-beside it uses; everything structural is neutral.
+- **[Tutorials](docs/tutorials/)** — learn aboard by walking through a complete example.
+- **[How-to guides](docs/how-to/)** — install, run it in VS Code, write a recipe, embed it in ape, verify a release.
+- **[Reference](docs/reference/)** — the CLI, the `.aboard/` layout, the state file, the HTTP API, the capability manifest.
+- **[Explanation](docs/explanation/)** — the design rationale, including the decisions that are closed.
 
-Text colours are pinned to **WCAG AAA (≥7:1)** against surface, sunken and black,
-because most type here is small. Hierarchy is carried by size and weight, not by
-fading colour toward the background:
+Start at [docs/README.md](docs/README.md) for a guided index.
 
-| token | on `--surface` | on black |
-|---|---|---|
-| `--text` `#ccd4e0` | 12.2:1 | 14.1:1 |
-| `--muted` `#b4b4b4` | 8.8:1 | 10.1:1 |
-| `--dim` `#a4a4a4` | 7.3:1 | 8.5:1 |
+## Development
 
-## Diagrams
-
-### What renders
-
-Verified by rendering one sample of every type against the vendored bundle
-(`test/mermaid-probe.html` — rerun it after upgrading mermaid). **23 of 24 work:**
-
-| | |
-|---|---|
-| **graphs** | `flowchart` / `graph`, `block-beta`, `architecture-beta`, `mindmap`, `gitGraph` |
-| **software** | `sequenceDiagram`, `classDiagram`, `stateDiagram-v2`, `erDiagram`, `requirementDiagram`, `C4Context`, `packet-beta` |
-| **charts** | `pie`, `xychart-beta`, `quadrantChart`, `radar-beta`, `sankey-beta`, `treemap-beta` |
-| **planning** | `gantt`, `timeline`, `journey`, `kanban` |
-
-Only `zenuml` is unavailable — it needs a separate plugin that isn't in the bundle.
-
-Gotcha found while probing: in `requirementDiagram`, a `text:` field containing
-punctuation must be quoted (`text: "must round-trip"`) or the parser swallows the
-following line.
-
-### Colouring
-
-The Diagram tab feeds the board's tokens to mermaid as `themeVariables`, so an
-uncoloured diagram already matches the tool. To colour individual nodes, hit
-**Add colours** in the toolbar: it appends `classDef` classes resolved from the
-live tokens, so hand-coloured nodes stay in the palette instead of fighting it.
-
-Two families, because solid fills rarely work on black:
-
-```mermaid
-%% ring — dark surface, coloured border. Quiet; use freely.
-classDef accent fill:#151515,stroke:#a4bd00,stroke-width:2px,color:#ccd4e0
-
-%% fill — solid with dark ink. Loud; use on the one node that matters.
-classDef accentFill fill:#a4bd00,stroke:#a4bd00,color:#151515
+```bash
+git clone https://github.com/exoport/aboard.git
+cd aboard
+make help          # available targets
+make tools         # build the pinned dev tools under $GOBIN
+make build         # → ./aboard
+make test          # go test -race ./...
+make ci-local      # the full pre-push gate
 ```
 
-Apply either way:
+CI runs build + test on both Linux and Windows, and lint + govulncheck on Linux, for
+every push to `main` and every pull request. Windows is not a formality: root discovery
+walks upward through path separators and the state file is written through a
+same-directory temp + rename, and both behave differently there. The browser suite (`make smoke`) and the screenshot tool
+(`make shot`) are **local only** — they drive a real headless chromium against a running
+server, so a CI run could only skip them, and a gate that always skips reads as a pass.
+Working conventions, hard rules and the gotcha list are in [CLAUDE.md](CLAUDE.md).
 
-```mermaid
-class H,P accent          %% several nodes at once
-NodeId:::accentFill       %% inline on one node
-style S fill:#151515,stroke:#39bae6   %% one-off, no class
-```
+## License
 
-Hues map to meaning already in use elsewhere in the board: lime `accent` for the
-human path, periwinkle `agent`, orange `warn` for shared state, cyan `info`,
-`quiet` for background detail. Chart types (`pie`, `xychart`, `radar`) don't take
-`classDef` — colour those through `themeVariables` in `views/diagram.js`.
-
-There is no light variant by design, so every colour is stated once and
-`color-scheme: dark` lets native controls render dark too. Views reference only
-tokens — no hardcoded hex — so a retheme is a change to `app.css` alone. The
-Diagram tab reads the same tokens at render time and feeds them to mermaid as
-`themeVariables`.
-
-## Adding a view
-
-Write `views/thing.js` exporting `mountThing(root, ctx)` where `ctx` gives you
-`state` (live), `save()` (debounced POST), and `refreshOthers(id)`. Return
-`{ refresh() }` — the shell calls it when the file changed underneath or the tab
-was re-activated. Then add it to the `VIEWS` array in `aboard.html`.
-
-Two rules that matter: keep per-viewer UI state (selection, active tool, zoom) in
-local JS, never in `aboard.json`; and in `refresh()`, never clobber an input the
-human currently has focused.
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution — the embedded UI
+carries the mermaid bundle (MIT).

@@ -3,6 +3,17 @@
 Status: decided 2026-08-25 with the human (16 questions asked, all answered). This is the
 brief every implementing session works from. Where it says DECIDED, do not relitigate.
 
+**Phase A–C landed** as the three bisectable commits decision 2 asked for:
+`9f0c7af` (port the spike verbatim), `c192fb8` (split into an embeddable engine, a cobra
+tree and one resolved root), `a83c107` (rename the product, keeping every name that is a
+data contract). **Phase D is in progress**: the feature commits, the build/release
+tooling, the skill, the docs, the handoffs and the example board.
+
+One deviation from §15 worth reading before you follow the paths below: the example
+board is **embedded at `pkg/aboard/example/aboard.json`**, not `testdata/example-board/`,
+so that a `go install` binary carries the thing `aboard init --example` seeds from.
+Everywhere this plan says `testdata/example-board/`, read `pkg/aboard/example/`.
+
 ## Sources
 
 | what | where | role |

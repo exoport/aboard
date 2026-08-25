@@ -6,7 +6,7 @@ telling them what to try.
 
 This file carries JUDGMENT: when to reach for which type, what the human can do,
 what not to do. The FACTS — every state field, every control, every gesture, every
-endpoint, every flag — are emitted by the binary itself into
+endpoint, every command and flag — are emitted by the binary itself into
 [reference.generated.md](reference.generated.md), and `aboard status` warns when
 that file no longer matches. So: read this for how to think, read the generated one
 (or `aboard capabilities <type>`) for what exists.
@@ -16,11 +16,11 @@ Where the two disagree, the generated one is right and this one is stale.
 **Two different lists describe what the human can do, and the difference matters
 when you are deciding how much to trust them.**
 
-- **`controls`** — the buttons. Each is declared in `views/<type>.spec.json` and
-  the renderer draws it FROM that declaration, so the label on screen and the
-  description here are one edit. A control that is not declared renders as a
-  visible marker, and the suite fails on a declaration nothing uses. This list
-  cannot quietly go stale.
+- **`controls`** — the buttons. Each is declared in
+  `pkg/aboard/web/views/<type>.spec.json` and the renderer draws it FROM that
+  declaration, so the label on screen and the description here are one edit. A
+  control that is not declared renders as a visible marker, and the suite fails on
+  a declaration nothing uses. This list cannot quietly go stale.
 - **`gestures`** — everything with no button behind it: drag, drop, wheel,
   double-click, right-click, type-and-it-saves. Prose, reviewed by people, and
   **not verifiable by anything**. No check can confirm a sentence still describes
@@ -34,34 +34,43 @@ the truth allows.
 ## Commands
 
 ```sh
-aboard status                            # is a board running here? URL, pid, state file
-aboard apply --by "agent-1" < next.json   # compare-and-set write (the only safe write)
-aboard wait --by "agent-1" --timeout 10m  # block until the human presses Notify (exit 0), or give up (exit 3)
-aboard poke --by "agent-1" --note "go"   # release every waiting session, as the button does
-aboard watch                             # every change as JSON lines, until interrupted
-aboard journal --limit 40                 # recent writes: when, who, which tabs
-<cmd> 2>&1 | aboard log bb126            # stream output into a log tab
-./restart.sh                               # start it, or print the URL of the running one
-./restart.sh -force                        # actually restart (after changing Go or assets)
-./restart.sh -dev                          # serve views/ and app.css from disk, no rebuild
-./restart.sh -name review                  # a second isolated board: own port + own state file
-./test/smoke.sh                            # every tab mounts and every tab activates
-./test/shot.sh [tab-id …]                  # screenshots into .shots/
-make run | dev | build | check | test | status | dist
+aboard status                              # is a board running here? URL, pid, state file, caps beacon
+aboard init --example --gitignore          # create .aboard/, seed it, ignore it
+aboard serve                               # run the server for this project
+aboard apply --by "agent-1" < next.json    # compare-and-set write (the only safe write)
+aboard wait --by "agent-1" --timeout 10m   # block until the human presses Notify (exit 0), or give up (exit 3)
+aboard poke --by "agent-1" --note "go"     # release every waiting session, as the button does
+aboard watch                               # every change as JSON lines, until interrupted
+aboard journal --limit 40                  # recent writes: when, who, which tabs
+<cmd> 2>&1 | aboard log bb126              # stream output into a log tab
+aboard export bb32 --format csv            # one tab as text, for pasting into a document
+aboard capabilities ui                     # what this board can do — no server needed
+aboard recipes list                        # every recipe available here, with scope and shadowing
+aboard recipes show show-a-structure       # one recipe's body; --template for just the JSON skeleton
+aboard version                             # which binary is this
+make caps | smoke | shot | build | test | lint | status
 ```
 
-Commands and their flags, as the binary declares them (`aboard capabilities`
-prints this, so ask it rather than trusting this list):
-`aboard --cwd DIR <command>`; `serve --base-path --dev --dev-dir --name --port
---state`; `status --output-format`; `apply --by --name`; `wait --by --for --note
---timeout`; `poke --by --note`; `journal --limit --output-format`; `watch`;
-`log <tab>`; `export <tab|key> --format`; `capabilities [type] --check --format`;
-`version --output-format`.
+Every command takes `--cwd DIR` on the root, to resolve the project from
+somewhere other than the working directory, and `--name N` (env `ABOARD_NAME`) to
+address a second, isolated board. `status`, `journal`, `recipes list` and
+`version` take `--output-format human|json|yaml`. The complete flag table, per
+command, is in [reference.generated.md](reference.generated.md) — it is generated
+from the same declaration the cobra tree is asserted against, so it cannot drift.
+
+Exit codes mean one thing each: **0** done, **1** it ran and failed (no board, a
+refused write, a broken connection), **2** usage — a flag or argument the command
+cannot act on, caught before anything was contacted — and **3**, which only
+`wait` produces: nobody came.
 
 `--for` takes: `poke` (the human's Notify button), `change` (any write),
 `tab <id>`, `answer <id>` (that tab changed AND a human did it), or
 `node <id>=<status>`. Anything else is refused immediately rather than blocking on
 something that will never fire.
+
+`--by human` is refused from the CLI. The human's writes come from the browser;
+an agent claiming to be them would hide its own tracks in the journal, which is
+the one record neither side can rewrite.
 
 ## Endpoints
 
@@ -70,8 +79,8 @@ something that will never fire.
 | `GET /` | the board UI |
 | `GET /aboard.json` | current state |
 | `POST /aboard.json` | write, compare-and-set (`__base`, `__origin`, `__by`) |
-| `GET /events` | SSE: `aboard.json` changed (`{origin}`), waiter count changed (`{waiters:n}`), and the UI signature (`{ui:{html,css,js}}`) — sent first on every connect so a page notices its own code changed and reloads |
-| `GET /health` | `{app, project, port, url, state, pid}` — who owns this port |
+| `GET /events` | SSE: the state changed (`{origin}`), waiter count changed (`{waiters:n}`), and the UI signature (`{ui:{html,css,js}}`) — sent first on every connect so a page notices its own code changed and reloads |
+| `GET /health` | `{app, project, port, url, state, pid}` — who owns this port, and which binary is serving |
 | `GET /tab/<id>/html` | one `html` tab as a standalone sandboxed document |
 | `GET /wait` | long poll: blocks until poked (`?for=poke&timeout=<secs>&by=<label>&note=<why>`) |
 | `POST /poke` | release every waiting session — what the Notify button calls |
@@ -83,15 +92,19 @@ something that will never fire.
 | `POST /upload` | an image body; answers `{url}`. Type sniffed from the bytes, 12 MiB cap, server names the file |
 | `GET /uploads/<file>` | serve one, always from disk (uploads arrive after the build) |
 
-`.aboard/instance.json` records the running board. Read it rather than assuming a
-port; the port is derived from the project path.
+`--base-path /prefix` moves all of them under that prefix; the shell is served
+with the prefix injected, so every fetch, the SSE stream and an html tab's iframe
+build from it.
+
+`.aboard/run/instance.json` records the running board. Read it rather than
+assuming a port; the port is derived from the project root.
 
 ## Document
 
 ```jsonc
 { "version": 3,          // server-managed; stamped on every write
   "updatedAt": "…",      // server-managed, and the compare-and-set base
-  "lastEditedBy": "…",   // server-managed from -by
+  "lastEditedBy": "…",   // server-managed from --by
   "nextId": 148,         // server-managed id allocator
   "tabs": [ … ] }
 ```
@@ -115,6 +128,7 @@ that is what the tag is for. Form *field* ids stay semantic.
 | `type` | picks the renderer |
 | `state` | type-specific (below) |
 | `stateFrom` | render another tab's state with this type |
+| `note` | what the tab is FOR, in whoever's words — read it before acting |
 | `touched` | server-set when an agent changed the tab; only the user clears it |
 | `pendingRemoval` | `{by, at, reason}` — a removal request the user answers |
 
@@ -217,11 +231,11 @@ The human can answer, and Reset answers.
 ```jsonc
 { "layout": "side-by-side",              // or "stacked"
   "images": [
-    { "id":"bb1", "src":"assets/before.png", "caption":"Before", "annotatable":true,
+    { "id":"bb1", "src":"uploads/before.png", "caption":"Before", "annotatable":true,
       "regions":[ { "id":"bb2","x":0.47,"y":0.27,"w":0.24,"h":0.19,
                     "note":"…","color":"mark","shape":"ellipse" } ],
       "strokes":[ { "id":"bb3","points":"0.10,0.42 0.11,0.43","note":"","color":"focus" } ] },
-    { "id":"bb4", "src":"assets/after.png", "caption":"After", "annotatable":false } ] }
+    { "id":"bb4", "src":"uploads/after.png", "caption":"After", "annotatable":false } ] }
 ```
 
 - **Coordinates are normalized 0..1** against each image's own box, never pixels.
@@ -230,10 +244,14 @@ The human can answer, and Reset answers.
 - Several images side by side, each with its own marks and coordinate space.
 - `annotatable: false` → a reference image with no overlay and no tools.
 - `shape`: `"ellipse"`, or absent/`"rect"` for a rectangle.
-- `color`: a token **name** (`mark`, `accent`, `focus`, `claude`, `danger`), never
-  a hex, so it survives a retheme. Absent means the default.
+- `color`: a token **name** (`mark`, `accent`, `focus`, `agent`, `danger`), never
+  a hex, so it survives a retheme. Absent means the default. The palette is
+  declared, so `aboard apply` warns when a write names a colour the board does not
+  have, and prints the ones it does.
 - `strokes[].points` is one `"x,y x,y"` string. Keep the compact form.
-- Put new images in `assets/` (png, jpg, svg, webp).
+- Images the human pastes or drops land in `.aboard/uploads/` and are served from
+  `/uploads/<file>`; images you ship with the binary live in its embedded
+  `assets/`.
 
 The human can: draw with **region**, **ellipse** or **pen**; **move** a mark;
 **resize** a rect or ellipse by its handles; hide/show marks per image; note each
@@ -260,12 +278,13 @@ The human can send messages (Enter to send, Shift+Enter for a newline).
 ### notes — the plain escape hatch
 
 ```jsonc
-{ "text": "Free-form text. Not rendered as markdown." }
+{ "text": "Free-form text.", "markdown": false }
 ```
 
-For anything no structure fits: a decision log, a summary, a paste. The human can
-edit it freely and Copy all. If you rewrite it while they are typing, they get a
-"reload text" affordance rather than losing their sentence.
+For anything no structure fits: a decision log, a summary, a paste. `markdown:
+true` renders it with a Read/Edit toggle. The human can edit it freely and Copy
+all. If you rewrite it while they are typing, they get a "reload text" affordance
+rather than losing their sentence.
 
 ### html — build anything
 
@@ -289,8 +308,6 @@ So: a report, a summary, a dashboard, a small form, stats, a comparison table �
 components gets there: a canvas, a drag-and-drop sorter, a simulation, WebGL, a
 custom gesture. If you are reaching for `html` to lay out text and numbers, use
 `ui` instead.
-
-
 
 ```jsonc
 { "html": "<h3>…</h3><script>…</script>", "data": { … }, "height": "62vh" }
@@ -358,7 +375,7 @@ they gated something that already ran:
 
 ```sh
 aboard apply --by "agent-1" < next.json          # add to state.pending
-aboard wait --by "agent-1" -for "answer bb128"   # block until a human decides
+aboard wait --by "agent-1" --for "answer bb128"  # block until a human decides
 ```
 
 ### log — output as it happens
@@ -367,9 +384,9 @@ aboard wait --by "agent-1" -for "answer bb128"   # block until a human decides
 { "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
-The lines are NOT in `aboard.json` — they live in a sidecar file the server owns,
-because the document is rewritten whole on every write and tracked in git. Feed it
-by piping, and the tab picks it up within two seconds:
+The lines are NOT in the state document — they live in a sidecar file the server
+owns (`.aboard/run/logs/<tab>.log`), because the document is rewritten whole on
+every write. Feed it by piping, and the tab picks it up within two seconds:
 
 ```sh
 go test ./... 2>&1 | aboard log bb126
@@ -385,10 +402,10 @@ while the tab is off screen.
 { "limit": 200, "height": "44vh" }
 ```
 
-Reads the journal, not `aboard.json`: one lane per actor, a dot per accepted write,
-click a dot for the tabs it changed, click an actor chip to filter. That also means
-history is not something an agent can quietly rewrite. Useful the moment two
-sessions share a board — `lastEditedBy` only ever names the last one.
+Reads the journal, not the state document: one lane per actor, a dot per accepted
+write, click a dot for the tabs it changed, click an actor chip to filter. That
+also means history is not something an agent can quietly rewrite. Useful the
+moment two sessions share a board — `lastEditedBy` only ever names the last one.
 
 ### vote — several participants score the same options
 
@@ -408,23 +425,32 @@ summary wins the argument.
 
 ```jsonc
 { "data": { "count": 18 },
-  "root": { "type":"col", "children": [
-    { "type":"card", "title":"Today", "accent":true, "children": [
-      { "type":"row", "children": [ { "type":"stat", "value":{"bind":"count"}, "label":"shipped", "tone":"accent" } ] },
-      { "type":"text", "value":"…" },
-      { "type":"button", "id":"again", "label":"Run it again", "intent":"re-run the suite" } ] } ] } }
+  "root": { "type": "col", "children": [
+    { "type": "card", "title": "Today", "accent": true, "children": [
+      { "type": "row", "children": [ { "type": "stat", "value": {"bind":"count"}, "label": "shipped", "tone": "accent" } ] },
+      { "type": "text", "value": "…" },
+      { "type": "button", "id": "again", "label": "Run it again", "intent": "re-run the suite" } ] } ] } }
 ```
 
-The catalog: `col`, `row`, `card`, `title`, `heading`, `text`, `caption`, `badge`,
-`divider`, `list`, `kv`, `code`, `stat`, `meter`, `button`, `field`. `tone` takes a
-token NAME (`accent`, `mark`, `agent`, `focus`, `danger`, `muted`, `dim`), never a
-hex. `{"bind":"path"}` reads from `state.data`; a `field` writes back into it; a
-`button` appends to `state.intents` and executes nothing.
+The catalog is 25 components: `col`, `row`, `grid`, `card`, `tabs`, `title`,
+`heading`, `text`, `caption`, `badge`, `notice`, `quote`, `code`, `divider`,
+`spacer`, `list`, `checklist`, `kv`, `table`, `stat`, `meter`, `image`, `link`,
+`button`, `field`. `tone` takes a token NAME (`accent`, `mark`, `agent`, `focus`,
+`danger`, `muted`, `dim`), never a hex. `{"bind":"path"}` reads from `state.data`;
+a `field` writes back into it; a `button` appends to `state.intents` and executes
+nothing.
+
+**Ask for the props rather than guessing them**: `aboard capabilities ui` lists
+every component with what it reads, including the fixed item shapes (`kv` takes
+`pairs[{key, value}]`, not `items[{k, v}]`). An unknown `type` renders a visible
+marker; an unknown PROP renders nothing at all, which looks like a styling
+problem rather than a mistake — so read the stderr warnings from `aboard apply`,
+which descend into the tree and name an unknown component, an unknown prop, a
+wrong item shape and a `{bind}` that resolves nowhere.
 
 No iframe and no script, so it inherits the board's type, contrast and palette for
-free — the trade is a closed catalog. An unknown `type` renders a visible marker
-rather than nothing. **`ui` for an ordinary shape, `html` when the interaction
-itself is the point.**
+free — the trade is a closed catalog. **`ui` for an ordinary shape, `html` when the
+interaction itself is the point.**
 
 ### stack — several renderers in one tab
 
@@ -448,17 +474,17 @@ type `html` and a block's id is `"<tab>/<block>"`.
 ## Sizing
 
 `state.height` accepts any CSS length (or a number read as px) on `dag`, `chat`,
-`html`, `log` and `trace`. Defaults fill the viewport. `dag` also takes `density` for node
-spacing, `markup` takes `layout`.
+`html`, `log` and `trace`. Defaults fill the viewport. `dag` also takes `density`
+for node spacing, `markup` takes `layout`.
 
 ## Waiting for the human
 
 Asking on the board is only half a question — you also have to be there when the
-answer lands. Instead of polling `aboard.json`, block:
+answer lands. Instead of polling the state file, block:
 
 ```sh
 aboard apply --by "agent-1" < next.json      # ask (a form, a markup, a chat message)
-aboard wait  -by "agent-1" -timeout 15m     # then wait to be told to look
+aboard wait  --by "agent-1" --timeout 15m    # then wait to be told to look
 ```
 
 While you wait, the board's header shows **notify agent-1** with a lit dot: the
@@ -466,19 +492,20 @@ human can see that a session is listening, and pressing it releases you. Nobody
 waiting means the button is disabled — a waiter is an open connection, so the
 count cannot lie or go stale.
 
-- exit **0** — poked. The event (`{event, at, by, note}`) is on stdout; re-read
-  `aboard.json` and act on what changed.
+- exit **0** — released. The event (`{event, at, by, note}`) is on stdout; re-read
+  the state file and act on what changed.
 - exit **3** — timed out. Nobody came. Say so rather than pretending you waited.
-- Only `--for poke` exists. An unknown predicate is refused immediately rather
-  than blocking on something that will never fire.
+- `--for` narrows it: `poke`, `change`, `tab <id>`, `answer <id>` (that tab
+  changed AND a human did it), `node <id>=<status>`. An unknown predicate is
+  refused immediately rather than blocking on something that will never fire.
 
 Tell the user you are waiting, and say what you are waiting for — a lit button
 with no explanation is a mystery. `aboard poke` is the same gesture from the
 other side, for handing off to another session (`agent-1` finishes, pokes,
 `agent-2` wakes).
 
-`./test/smoke.sh` pokes the board as part of testing it, so it will release you.
-Do not run the suite while another session is waiting for something that matters.
+`make smoke` pokes the board as part of testing it, so it will release you. Do not
+run the suite while another session is waiting for something that matters.
 
 ## Guarantees you can rely on
 
@@ -494,7 +521,7 @@ Do not run the suite while another session is waiting for something that matters
   read state (`{"human":"…","agent-2":"…"}`); a write may set its own key and
   nobody else's.
 - **`nextId` never regresses** and always stays above every id in use.
-- **One server per project**, on a port derived from the project path.
+- **One server per project**, on a port derived from the discovered project root.
 - **Live reload.** Your write pings every open board over SSE.
 - **A waiter cannot go stale.** `aboard wait` holds an open connection, so if the
   session dies the count drops and the Notify button greys out by itself.
@@ -502,16 +529,20 @@ Do not run the suite while another session is waiting for something that matters
 ## Adding a capability
 
 A renderer is one ES module exporting `mount<Name>(root, ctx)` and returning
-`{ refresh() }`, plus one line in the `TYPES` registry in `aboard.html`. `ctx`
-gives you `state` (this tab's slice), `tab`, `save()`, `nextId()`, and — for a
-composite renderer — `types()`, `initFor()`, `mountType()`.
+`{ refresh() }`, plus one line in the `TYPES` registry in the shell, one in the
+browser suite's `MODULES`, and one `pkg/aboard/web/views/<type>.spec.json` — or it
+mounts nowhere, is tested nowhere, and no agent ever learns it exists. `ctx` gives
+you `state` (this tab's slice), `tab`, `save()`, `nextId()`, and — for a composite
+renderer — `types()`, `initFor()`, `mountType()`.
 
 Rules that keep the board coherent: colour only from the tokens in `app.css`
-(never a hex), keep per-viewer UI state in local JS (never in `aboard.json`),
-never `innerHTML` with state values, never assign to `ctx.state` (it is a
-getter — mutate in place), and in `refresh()` never clobber an input the human
+(never a hex), keep per-viewer UI state in local JS (never in the state
+document), never `innerHTML` with state values, never assign to `ctx.state` (it is
+a getter — mutate in place), and in `refresh()` never clobber an input the human
 has focus in.
 
-Assets are compiled into the binary, so after editing anything under `views/`,
-`app.css`, `aboard.html` or `assets/`, run `./restart.sh -force` — or `-dev` to
-serve from disk while iterating.
+The web tree is compiled into the binary, so after editing anything under
+`pkg/aboard/web/`, rebuild and restart — or run `aboard serve --dev` to serve it
+from disk while iterating. After editing a `*.spec.json` or a built-in recipe, run
+`make caps` and commit what it writes: it regenerates the control module, the
+generated reference and the recipe index, then asserts they match.

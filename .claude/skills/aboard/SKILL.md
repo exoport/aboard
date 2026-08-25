@@ -1,19 +1,156 @@
 ---
 name: aboard
-description: Show the user something on this project's shared board — a diagram, dependency graph, kanban, chart, annotated screenshot, question form, a channel for talking to another agent, or a bespoke HTML widget — and read back what they changed. Tabs are data you create and name, not a fixed set. Also covers writing aboard.json safely when a board is live or another session is editing it, and what the board is for: a local, non-authoritative channel whose conclusions must be promoted into committed artifacts.
-when_to_use: Whenever an explanation would land better as a picture or an interactive thing than a paragraph; when a plan or dependency set has structure worth seeing; when you need structured input rather than asking several questions in prose; when you want the user to point at part of an image; when you need to coordinate with another agent session somewhere the user can watch; when the user says "show me", "draw this", "put it on the board", "make me a tab", "what does the board say", "I moved things around", or asks you to react to their edits; before editing aboard.json for any reason; and whenever another Claude Code session may be editing the same project's board.
+description: 'Show the user something on this project''s shared board — a diagram, dependency graph, kanban, chart, annotated screenshot, question form, a channel for talking to another agent, or a bespoke HTML widget — and read back what they changed. Tabs are data you create and name, not a fixed set. Also covers writing .aboard/aboard.json safely when a board is live or another session is editing it, and what the board is for: a local, non-authoritative channel whose conclusions must be promoted into committed artifacts.'
+when_to_use: 'Whenever an explanation would land better as a picture or an interactive thing than a paragraph; when a plan or dependency set has structure worth seeing; when you need structured input rather than asking several questions in prose; when you want the user to point at part of an image; when you need to coordinate with another agent session somewhere the user can watch; when the user says "show me", "draw this", "put it on the board", "make me a tab", "what does the board say", "I moved things around", or asks you to react to their edits; before editing .aboard/aboard.json for any reason; and whenever another Claude Code session may be editing the same project''s board.'
+argument-hint: "--<recipe-name> optional prompt — run a recipe by name; without a recipe, describe what to show"
 ---
 
 # The shared board
 
 A local server in this project serves a board that the user and you both edit.
-`aboard.json` on disk is the single source of truth. You read it with `Read`, write
-it with `aboard apply`; the user works in a browser tab docked inside VS Code.
+`.aboard/aboard.json` on disk is the single source of truth. You read it with
+`Read`, write it with `aboard apply`; the user works in a browser tab docked
+inside VS Code.
 
 **Tabs are data, not a fixed menu.** A tab is a name you choose, a `type` that
 picks a renderer, and its own state. Open one for whatever the moment needs and
 remove it when it stops earning its place. The types below are capabilities, not
 a list of tabs that exist.
+
+## Arguments
+
+Read `$ARGUMENTS` before anything else. It is either a recipe invocation or a
+description of what to show.
+
+**If `$ARGUMENTS` begins with `--<name>`** — a single token after two dashes,
+before any other text — that token is a **recipe name**, and everything after it
+is the **prompt**.
+
+```sh
+aboard recipes show <name>
+```
+
+Read the body it prints and follow it, treating the remaining text as the
+subject. `/aboard --show-a-structure the auth migration` means: run
+`aboard recipes show show-a-structure`, then apply that method to the auth
+migration. The recipe is the method; the rest of the line is what it is about.
+
+If you only want the tab skeleton and not the prose:
+
+```sh
+aboard recipes show <name> --template
+```
+
+That prints the recipe's ` ```aboard-template ` block as JSON and nothing else,
+ready to edit and hand to `aboard apply`. A recipe with no such block exits
+non-zero naming itself, rather than printing an empty document you would apply
+as an empty tab.
+
+**If `aboard recipes show` exits non-zero, the name is unknown.** Do not guess at
+a near-miss. Run:
+
+```sh
+aboard recipes list
+```
+
+and tell the user which names exist here — it prints `name`, `scope`, `path` and
+`shadowed-by` for every recipe actually available in this project, which is more
+than the built-in set: a project can add its own under `_apex/aboard/recipes/`,
+`_aboard/recipes/` or `.aboard/recipes/`, and the first of those four wins on a
+name collision. [references/recipes.md](references/recipes.md) lists the
+built-ins only, which is why `recipes list` is the complete answer.
+
+**Otherwise `$ARGUMENTS` is a plain description** (or empty). Proceed normally:
+read the rest of this skill, choose a type, and put the thing on the board. You
+can still reach for a recipe on your own initiative — nothing about the `--name`
+form is privileged, it is just the shorthand.
+
+## Resuming after a context clear
+
+Three commands, in this order, before touching a tab:
+
+```sh
+aboard status              # running? which URL? and the caps beacon
+aboard capabilities        # what this board can actually do — every type, every
+                           # state field, every control in toolbar order, every
+                           # colour name, every gesture, endpoint, command and flag
+aboard journal --limit 20  # who changed what recently, including other sessions
+```
+
+`aboard status` reports: running (use it), a stale record, or nothing (start it
+with `aboard serve`). It also prints a `caps` line — the hash of what this board
+can actually do. **If it warns that the skill reference was generated for a
+different hash, this skill is describing a board that no longer exists**: run
+`aboard capabilities dag` (or any type) for the truth, and `make caps` to
+regenerate [references/reference.generated.md](references/reference.generated.md).
+
+`aboard capabilities` needs no running server and answers on a fresh checkout, in
+a project that never copied this skill. **Do not reconstruct the surface from
+memory — ask the binary.** `aboard capabilities kanban` is the cheap per-type
+version. Reach for it whenever you are about to guess at a field name, and note
+that `aboard apply` warns on stderr when a write sets state no renderer reads,
+which is the failure that otherwise looks like success.
+
+**Never assume a port** — it is derived from the project root. Take the URL from
+`aboard status` or `.aboard/run/instance.json`, and give it to the user the first
+time:
+
+> Board is at http://localhost:46624 — `Ctrl/Cmd+Shift+P` → "Simple Browser: Show" → paste that URL.
+
+If there is no board at all, `aboard init` creates `.aboard/aboard.json` and the
+run directory and prints the gitignore line; `aboard init --example` seeds it with
+15 tabs covering every renderer, each carrying a `note` saying what it
+demonstrates (`kanban` twice, and `notes` as a block inside the `stack` tab);
+`aboard init --gitignore` adds `.aboard/` to the project's `.gitignore`. `aboard serve` refuses to start without a state file and
+says so.
+
+## Two hard rules
+
+**1. Never `Edit` or `Write` `.aboard/aboard.json` while a board is running.**
+Those bypass compare-and-set, so a concurrent change from the browser or another
+session is silently destroyed. Instead:
+
+```sh
+aboard apply --by "agent-1" < /tmp/next-aboard.json
+```
+
+Read the file, build the whole new document, apply it. `apply` uses the
+`updatedAt` inside the submitted document as its base, so read-edit-apply is safe
+with no extra bookkeeping. A refusal means someone got there first — re-read,
+redo the edit, apply again. Do not fall back to `Edit`. Direct editing is fine
+only when `aboard status` reports nothing running.
+
+`--by` is not decoration: it names you in `lastEditedBy` and on every tab you
+touched, which is how the user and any other session tell who did what. Use
+**`agent-1`, `agent-2`, `agent-<role>`** — not `claude`, which reads as a single
+participant when there may be several. It is what the change banner shows.
+`--by human` is refused from the CLI: the human's writes come from the browser,
+and an agent claiming to be them would hide its own tracks.
+
+The shape of every write, with the id allocator and the `upsertTab` helper worth
+pasting, is `aboard recipes show apply-a-write`.
+
+**2. Never restart a healthy server.** Run `aboard status` first. If a board is
+already running for this project, **use its URL** — do not kill it and start your
+own, because a second session's restart takes the first session's server out from
+under it. `aboard serve` will not do it for you either: it refuses to start a
+second board for the same project and prints where the running one is
+(`this project's board is already running at <url> (pid N)`). That refusal is the
+answer, not an obstacle. Restart only after changing Go code or the embedded web
+tree, and prefer saying so: it briefly drops the other session's browser
+connection.
+
+**Asking is only half a question.** If you need the answer before you can go on,
+block for it instead of polling:
+
+```sh
+aboard wait --by "agent-1" --timeout 15m
+```
+
+The board's header then shows *notify agent-1* with a lit dot, and the human
+pressing it releases you (exit 0; exit 3 means nobody came). Say what you are
+waiting for when you start waiting. Full contract in
+[references/capabilities.md](references/capabilities.md#waiting-for-the-human).
 
 ## What the board is FOR — and what it must never be
 
@@ -21,16 +158,17 @@ a list of tabs that exist.
 separately, because they are three different claims and only two of them are
 obvious:
 
-- **Local.** `aboard.json` is NOT committed in a normal project. The port is
-  derived from the checkout path, `.aboard/` and `uploads/` are per-machine, and
+- **Local.** `.aboard/` is NOT committed in a normal project. The port is derived
+  from the project root, the run directory and uploads are per-machine, and
   several developers on one repo each have their own board with their own agents.
   Committing it means a whole-file JSON conflict on every merge, in a blob nobody
   can review, over a conversation that was never theirs. In a real project add
-  `aboard.json`, `.aboard/`, `uploads/` to `.gitignore`. (The board's OWN repo is
-  the exception: there, the board is the product.)
+  `.aboard/` to `.gitignore` — one line, which is why the layout puts everything
+  under it. (The board's OWN repo is the exception: there, the board is the
+  product.)
 - **Persistent.** Not versioned is not the same as scratch. A gate request waiting
-  on the human, a form half answered, a session parked on `aboard wait` — those must
-  survive a restart and a week away. Do not treat the file as disposable.
+  on the human, a form half answered, a session parked on `aboard wait` — those
+  must survive a restart and a week away. Do not treat the file as disposable.
 - **Non-authoritative.** If the board and a committed document disagree, **the
   document wins.** The board is where a thing is worked out; the repo is where it
   lands.
@@ -124,7 +262,7 @@ Two things make a late promotion cheap enough to actually happen.
 **The text is one command away.** `aboard export <tab-id-or-key>` prints the tab
 as markdown for pasting into whatever document the project uses — decisions with
 their reasons, answers beside their questions, a node tree, a chat transcript.
-`-format csv` for rows. It reads `aboard.json` from disk, so it needs no running
+`--format csv` for rows. It reads the state file from disk, so it needs no running
 server. Adapt what it gives you; do not paste it whole into a spec, because a
 board tab and a document have different jobs.
 
@@ -234,59 +372,8 @@ direction:
 - **To show someone else**, export the tab (markdown, CSV, SVG from its
   right-click menu) and commit that. A genuinely shared board would need auth and
   hosting, and this server deliberately has neither.
-- **The journal is local too.** `.aboard/journal.jsonl` tells you who changed what
-  on THIS machine. It is not a project audit trail; do not cite it as one.
-
-## Is it running?
-
-```sh
-aboard status
-```
-
-Running (use it), stale record, or nothing (`./restart.sh`). It also prints a
-`caps` line: the hash of what this board can actually do. **If it warns that the
-skill reference was generated for a different hash, this skill is describing a
-board that no longer exists** — run `aboard capabilities dag` (or any type) for
-the truth, and `make caps` to regenerate
-[references/reference.generated.md](references/reference.generated.md).
-
-`aboard capabilities` needs no running server, and answers on a fresh checkout:
-every type, every state field it actually reads, every gesture, every endpoint,
-every flag. Reach for it when you are about to guess at a field name — and note
-that `aboard apply` warns on stderr when a write sets state no renderer reads,
-which is the failure that otherwise looks like success.
-
-**Never assume a port** — it is derived per project. Take the URL from `aboard status` or
-`.aboard/instance.json`, and give it to the user the first time:
-
-> Board is at http://localhost:46624 — `Ctrl/Cmd+Shift+P` → "Simple Browser: Show" → paste that URL.
-
-## Writing
-
-**Never `Edit` or `Write` `aboard.json` while a board is running.** Those bypass
-compare-and-set, so a concurrent change from the browser or another session is
-silently destroyed. Instead:
-
-```sh
-aboard apply --by "agent-1" < /tmp/next-aboard.json
-```
-
-Read `aboard.json`, build the whole new document, apply it. `aboard apply` uses the
-`updatedAt` inside the submitted document as its base, so read-edit-apply is safe
-with no extra bookkeeping. A refusal means someone got there first — re-read, redo
-the edit, apply again. Do not fall back to `Edit`.
-
-**Asking is only half a question.** If you need the answer before you can go on,
-block for it instead of polling — `aboard wait --by "agent-1" -timeout 15m`.
-The board's header then shows *notify agent-1* with a lit dot, and the human
-pressing it releases you (exit 0; exit 3 means nobody came). Say what you are
-waiting for when you start waiting. Full contract in
-[references/capabilities.md](references/capabilities.md#waiting-for-the-human).
-
-`--by` is not decoration: it names you in `lastEditedBy` and on every tab you
-touched, which is how the user and any other session tell who did what. Use
-**`agent-1`, `agent-2`, `agent-<role>`** — not `claude`, which reads as a single
-participant when there may be several. It is what the change banner shows.
+- **The journal is local too.** `.aboard/run/journal.jsonl` tells you who changed
+  what on THIS machine. It is not a project audit trail; do not cite it as one.
 
 ## Choosing a type
 
@@ -300,9 +387,9 @@ participant when there may be several. It is what the change banner shows.
 | talk to another agent where the user can see it | `chat` | send and interject; each speaker coloured |
 | say something no structure fits | `notes` | free text, edit freely; `markdown: true` renders it with a Read/Edit toggle |
 | put many typed rows in front of them | `table` | edit cells in place (text, number, select, checkbox, longtext), sort by header, add / duplicate / delete rows, copy CSV or markdown |
-| get a yes, a no, or a "not like that" | `gate` | allow / deny / edit-then-allow, each with a reason; pair it with `-wait -for "answer <tab>"` |
+| get a yes, a no, or a "not like that" | `gate` | allow / deny / edit-then-allow, each with a reason; pair it with `aboard wait --for "answer <tab>"` |
 | show output as it happens | `log` | follow, filter, ANSI colour — lines live in a sidecar file, fed by `aboard log <id>` |
-| show who did what, when | `trace` | one lane per actor, a dot per write, click for detail; reads the journal, not `aboard.json` |
+| show who did what, when | `trace` | one lane per actor, a dot per write, click for detail; reads the journal, not the state file |
 | let several participants score options | `vote` | click to score, click again to clear; a wide split is called out rather than averaged |
 | lay something out without writing code | `ui` | a component tree drawn by trusted components — no iframe, no script; buttons record intent |
 | build a bespoke interactive thing | `html` | anything you write — canvas, drag-and-drop, WebGL — sandboxed, no network |
@@ -330,8 +417,8 @@ indicator lies, which is worse than not having one.
 `state.intents` and nothing executes. Read the intents next turn.
 
 **How much room a view takes is your call, not the renderer's:** `state.height`
-accepts any CSS length on `dag`, `chat`, `html` and `log`. Kanban columns are yours too —
-`state.columns` takes any names, any count.
+accepts any CSS length on `dag`, `chat`, `html`, `log` and `trace`. Kanban columns
+are yours too — `state.columns` takes any names, any count.
 
 **Prefer `ui` over `html` whenever `ui` can express it.** A `ui` tree is drawn by
 trusted components, so it cannot get the theme, the contrast or the type sizes
@@ -339,12 +426,12 @@ wrong; there is no iframe or CSP to reason about; and the next session can chang
 one node of it instead of reading a page of your JavaScript. Reports, summaries,
 dashboards, small forms, stats, comparison tables: `ui`.
 
-**Ask for the component's props rather than guessing them** — `./aboard
--capabilities ui` lists all 25 with what each one reads, including the fixed item
+**Ask for the component's props rather than guessing them** — `aboard
+capabilities ui` lists all 25 with what each one reads, including the fixed item
 shapes (`kv` takes `pairs[{key, value}]`, not `items[{k, v}]`). Guessing is the
 expensive mistake here: an unknown component TYPE draws a visible marker, but an
 unknown PROP draws nothing at all, so the tab renders as a titled card wrapping an
-empty box and looks like a styling problem. `aboard apply` warns about both now, and
+empty box and looks like a styling problem. `aboard apply` warns about both, and
 about a `{bind}` that resolves nowhere.
 
 Reach for `html` only when the INTERACTION is the point and no arrangement of
@@ -356,11 +443,11 @@ use `ui`. An `html` block inside a `stack` works like any other block.
 ## What travels between projects
 
 The renderers and their spec files are compiled into the binary, so every gesture
-and every state field works — and documents itself via `aboard capabilities` —
-in any project you drop the binary into, with no skill and no server. `aboard.json`
-is that project's content and travels with nothing. This skill travels only if
-copied in, which is why `aboard status` warns when its generated half no longer
-matches the binary.
+and every state field works — and documents itself via `aboard capabilities` — in
+any project you drop the binary into, with no skill and no server. Built-in
+recipes travel the same way. `.aboard/aboard.json` is that project's content and
+travels with nothing. This skill travels only if copied in, which is why
+`aboard status` warns when its generated half no longer matches the binary.
 
 ## Ids
 
@@ -393,7 +480,7 @@ stop meaning anything, and the kind is already implied by where the object sits.
 
 That asymmetry is real and it is not about politeness:
 
-- **They say "bb32" → you are fine.** You can read `aboard.json` in a second and
+- **They say "bb32" → you are fine.** You can read the state file in a second and
   find out exactly what it is. Take the id and act.
 - **You say "bb32" → they may have no idea.** They cannot grep the board from
   their head. An id they saw ten minutes ago is still live; an id from yesterday,
@@ -444,7 +531,8 @@ try; the server carries it forward regardless.
 
 ## Reading their edits
 
-Read `aboard.json` and diff against what you last applied. Highest signal first:
+Read `.aboard/aboard.json` and diff against what you last applied. Highest signal
+first:
 
 - `nodes[].parent` changed — they restructured your hierarchy. Treat it as a
   correction to your model, not noise.
@@ -459,38 +547,70 @@ Say what changed before acting on it:
 
 > You moved "auth" under "platform" and set the downtime slider to 5 minutes — so I'll treat auth as a platform concern and plan for a 5-minute window.
 
+`aboard recipes show react-to-their-edits` is the diff, written out.
+
+## Where everything lives
+
+One directory, `.aboard/`, at the project root — found by walking up from the
+working directory, or from `--cwd`. One line in `.gitignore` covers all of it.
+
+| path | what it is |
+|---|---|
+| `.aboard/aboard.json` | the board itself: the document you read and apply |
+| `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) |
+| `.aboard/uploads/` | images the human pasted or dropped — content, not runtime |
+| `.aboard/recipes/` | this project's own recipes, shadowing the built-ins by name |
+| `.aboard/run/instance.json` | port, pid, URL of the running board — the discovery authority |
+| `.aboard/run/instance.<name>.json` | the same, per named board |
+| `.aboard/run/journal.jsonl` | every accepted write; what `trace` and `aboard journal` read |
+| `.aboard/run/logs/<tab>.log` | one sidecar log per `log` tab |
+| `.aboard/run/shots/` | screenshots from the local browser suite |
+
+The split is content against machine-local runtime: everything under `run/` is
+true only for this machine and this moment, which is why nothing there is ever
+worth keeping.
+
+Recipes are looked up in four places, first match on a name wins:
+`_apex/aboard/recipes/` → `_aboard/recipes/` → `.aboard/recipes/` → built into the
+binary. Shadowing is allowed and always reported by `aboard recipes list`.
+
 ## Reference
 
 - [references/capabilities.md](references/capabilities.md) — **the full surface**:
   every command, endpoint, tab type, field, and what the human can do in each.
   Read this when you want to know what is possible, not just what you remember.
-- [references/schema.md](references/schema.md) — `aboard.json` and every type's state.
-- [references/recipes.md](references/recipes.md) — worked examples for each type.
-- [references/multi-session.md](references/multi-session.md) — two sessions, ports, etiquette.
+- [references/schema.md](references/schema.md) — `.aboard/aboard.json` and every
+  type's state.
+- [references/multi-session.md](references/multi-session.md) — two sessions, ports,
+  etiquette.
+- [references/recipes.md](references/recipes.md) — the built-in recipe index
+  (generated). `aboard recipes list` is the complete answer for this project.
+- [references/reference.generated.md](references/reference.generated.md) — the
+  facts, emitted by the binary (generated).
 
 ## Pitfalls
 
-- **Assets are embedded in the binary.** After editing `views/*.js`, `app.css`,
-  `aboard.html`, or `assets/`, run `./restart.sh -force`, or run `-dev` to serve
+- **The web tree is embedded in the binary.** After editing anything under
+  `pkg/aboard/web/`, rebuild and restart, or run `aboard serve --dev` to serve it
   from disk. Otherwise your change appears to do nothing.
-- **`./restart.sh` on a healthy board does nothing by design.** It prints the URL,
-  so a second session cannot kill the first one's server. `-force` when you mean it.
-- **A new renderer type needs a line in the `TYPES` registry in `aboard.html`.**
+- **A board already running is a success, not an obstacle.** `aboard status` tells
+  you the URL; use it rather than starting a second server.
+- **A new renderer type needs a line in the `TYPES` registry in the shell.**
   A tab whose `type` has no renderer shows a "no renderer" notice.
 - **Pen strokes serialise as one `"x,y x,y"` string**, not nested arrays. One
   scribble as arrays was 75% of the file's lines.
 - **Per-viewer UI state stays in the browser** — selection, zoom, collapsed
-  blocks, marks-hidden. Never write it into `aboard.json`.
-- **Look at a screenshot before claiming a visual change works.**
-  `./test/shot.sh` then read the image. Several real bugs here passed every DOM
-  and colour assertion and were obvious in a picture.
+  blocks, marks-hidden. Never write it into the state file.
+- **Look at a screenshot before claiming a visual change works.** `make shot`
+  then read the image. Several real bugs here passed every DOM and colour
+  assertion and were obvious in a picture.
 - **Render it and look before you say it is ready.** That applies to what you
   WRITE, not only to renderer code — a tab is a thing on someone's screen, and
   "I put it on the board" is a claim about how it looks. Three sessions in a row
   ended the same way: the agent said it was ready, the human looked, it was wrong.
-  `ui` is where this bites, because it fails silently AND successfully: `aboard apply`
+  `ui` is where this bites, because it fails silently AND successfully: `apply`
   prints `applied` and exits 0 whether the tree renders or draws an empty box.
-  Read the stderr warnings (they now descend into a `ui` tree and into `stack`
+  Read the stderr warnings (they descend into a `ui` tree and into `stack`
   blocks, so a mistyped prop or a `{bind}` pointing nowhere is named at the write),
   then shoot the tab and read the picture. Neither step is optional, because the
   warnings cannot see a layout that is legal and still unreadable.

@@ -1,0 +1,123 @@
+# Every command string that appears in the shipped skill and docs.
+#
+# Union of the command inventories in staging/skill/NOTES.md ("Every command
+# written in the staged skill") and staging/docs/NOTES.md ("Every command
+# written in the docs"), deduplicated and sorted by group. The next phase runs
+# each one once: a CLI command in a doc is a claim, and nothing else tests it.
+#
+# Placeholders: <tab> / <id> / <name> / <type> are substituted at run time.
+# Lines marked NEW need the Phase D Go work (init, recipes) to have landed.
+
+## aboard — root and help
+aboard --help
+aboard <cmd> --help
+
+## aboard — describes itself, no server needed
+aboard version
+aboard version --output-format json
+aboard capabilities
+aboard capabilities <type>
+aboard capabilities dag
+aboard capabilities kanban
+aboard capabilities ui
+aboard capabilities --format md
+aboard capabilities --format js
+aboard capabilities --check
+
+## aboard — the project
+aboard init                                          # NEW
+aboard init --example                                # NEW
+aboard init --gitignore                              # NEW
+aboard init --example --gitignore                    # NEW
+aboard status
+aboard serve
+aboard serve --dev
+aboard serve --name review
+aboard serve --base-path /aboard
+aboard serve > /tmp/aboard-serve.log 2>&1 &                # tutorial: detached
+
+## aboard — writing
+aboard apply --by "agent-1" < next.json
+aboard apply --by "agent-1" < /tmp/next-aboard.json
+aboard apply --by human                              # must exit 1, refused
+<cmd> 2>&1 | aboard log bb126
+go test ./... 2>&1 | aboard log bb126
+aboard log <id>
+
+## aboard — the notify channel
+aboard wait --by "agent-1" --timeout 10m
+aboard wait --by "agent-1" --timeout 15m
+aboard wait --by "agent-1" --for "answer bb128"
+aboard wait --for "answer <tab>"
+aboard wait --by "agent-1" --note "finished the tutorial write" --timeout 2m
+aboard wait --for change --timeout 3s                # must exit 3, timeout
+aboard poke --by "agent-1" --note "go"
+aboard poke --note "<message>"
+
+## aboard — history
+aboard journal --limit 5
+aboard journal --limit 20
+aboard journal --limit 40
+aboard watch                                         # streams; see finding 2 in docs NOTES
+
+## aboard — reading a tab out
+aboard export <tab-id-or-key>
+aboard export bb32 --format csv
+aboard export <tab> --format csv
+aboard export "$TAB"                                       # tutorial: id read from the state file
+
+## aboard — recipes
+aboard recipes list                                  # NEW
+aboard recipes list --output-format json             # NEW
+aboard recipes show <name>                           # NEW
+aboard recipes show <name> --template                # NEW
+aboard recipes show apply-a-write                    # NEW
+aboard recipes show react-to-their-edits             # NEW
+aboard recipes show show-a-structure                 # NEW
+aboard recipes show ask-for-a-decision               # NEW
+aboard recipes show ask-for-a-decision --template    # NEW
+aboard recipes show my-move                          # NEW; how-to/write-a-recipe, project scope
+aboard recipes show my-move --template               # NEW; same page
+
+## hosted by ape (not mounted yet)
+ape aboard --help
+ape aboard capabilities
+ape aboard serve
+
+## make targets quoted in the skill or the docs
+make help
+make build
+make test
+make lint
+make status
+make caps
+make smoke
+make shot
+make docs-cli
+make docs-check
+make ci-local
+make tools
+
+## third-party, used in the install / verify / tutorial pages
+go install github.com/exoport/aboard/cmd/aboard@latest
+curl -fsSL https://api.github.com/repos/exoport/aboard/releases/latest | jq -r .tag_name
+sudo tar -xz -C /usr/local/bin aboard
+cosign verify-blob --bundle aboard_checksums.txt.bundle --new-bundle-format ...
+sha256sum -c aboard_checksums.txt --ignore-missing
+bingo get <module>@<version>
+python3 -c "import json; ..."                        # two snippets in the tutorial
+
+## flags that must exist for the above to parse
+# root:         --cwd, --name (env ABOARD_NAME)
+# serve:        --dev, --dev-dir, --name, --port, --state, --base-path
+# status:       --output-format
+# init:         --name, --example, --gitignore                     # NEW
+# apply:        --by, --name
+# wait:         --by, --for, --timeout, --note
+# poke:         --by, --note
+# journal:      --limit, --output-format
+# export:       --format
+# capabilities: --format, --check
+# recipes list: --output-format                                    # NEW
+# recipes show: --template                                         # NEW
+# version:      --output-format
