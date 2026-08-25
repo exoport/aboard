@@ -18,6 +18,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,7 +53,7 @@ Start with:
   aboard capabilities     what this board can do (no server needed)`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Version:       aboard.Version(),
+		Version:       aboard.VersionString(),
 	}
 
 	// Flag parse failures are usage errors, not run failures, and cobra hands
@@ -68,9 +69,24 @@ Start with:
 
 	root.PersistentFlags().String("cwd", "", "directory to resolve the project root from (default: the working directory)")
 
+	// --name is PERSISTENT, not per-command. It used to sit on `serve` and
+	// `apply` only, with every other command reading ABOARD_NAME from the
+	// environment — so `aboard serve --name review` worked and `aboard status
+	// --name review` was an unknown-flag error, which reads as the second board
+	// not existing. A board name selects the DOCUMENT; every command that touches
+	// a board needs it, so it belongs to the root.
+	//
+	// The default is the empty string and NOT os.Getenv("ABOARD_NAME"), even
+	// though the environment is the fallback: a flag default that changed with
+	// the environment would be reported by the manifest, and capsHash would move
+	// when someone exported a variable. The environment is resolved at use, in
+	// boardName.
+	root.PersistentFlags().String("name", "", "board name, for a second isolated board in the same project (env ABOARD_NAME)")
+
 	root.AddCommand(
 		newServeCmd(opts),
 		newStatusCmd(opts),
+		newInitCmd(opts),
 		newApplyCmd(opts),
 		newWaitCmd(opts),
 		newPokeCmd(opts),
@@ -79,7 +95,9 @@ Start with:
 		newLogCmd(opts),
 		newExportCmd(opts),
 		newCapabilitiesCmd(opts),
+		newRecipesCmd(opts),
 		newVersionCmd(opts),
+		newGenDocsCmd(opts),
 	)
 	return root
 }
@@ -161,11 +179,28 @@ func projectRoot(cmd *cobra.Command) (aboard.Root, error) {
 	root, err := aboard.FindRoot(start)
 	if err != nil {
 		if errors.Is(err, aboard.ErrNoRoot) {
-			return "", fmt.Errorf("%w — create %s/ in the project you want a board for", err, aboard.DirName)
+			return "", fmt.Errorf("no %s/ here — run `aboard init` in the project you want a board for%s",
+				aboard.DirName, legacyBoardHint(start))
 		}
 		return "", err
 	}
 	return root, nil
+}
+
+// legacyBoardHint recognises the spike's directory and says so.
+//
+// The board this grew out of kept its state in `.board/`, and a checkout that
+// used it has one sitting there. Without this the message is "no .aboard/ here"
+// beside a directory the reader can see that looks exactly like what was asked
+// for, and the obvious conclusion is that the tool is broken rather than that
+// the name changed. Not a migration — nothing is read out of it — just a
+// sentence so the reader stops looking.
+func legacyBoardHint(start string) string {
+	if info, err := os.Stat(filepath.Join(start, ".board")); err == nil && info.IsDir() {
+		return " (this directory has a .board/ from the board spike — aboard keeps its state in " +
+			aboard.DirName + "/ and does not read the old one)"
+	}
+	return ""
 }
 
 // looseRoot is projectRoot for the commands that describe the BINARY rather than
@@ -184,16 +219,20 @@ func looseRoot(cmd *cobra.Command) (aboard.Root, error) {
 	return aboard.NewRoot(start)
 }
 
-// boardName resolves --name, falling back to the environment.
+// boardName resolves the board this command acts on: the persistent --name
+// flag, then ABOARD_NAME, then the default board.
 //
-// ABOARD_NAME rather than a flag on every command: only `serve` and `apply` take
-// the flag, and the rest read the environment, so a session working on a named
-// board exports it once instead of repeating it.
-func boardName(explicit string) string {
-	if explicit != "" {
-		return explicit
+// One function, called by every command that opens a document, so "which board"
+// is answered the same way everywhere. A missing flag is not an error here — a
+// host that mounts this tree without the root flag still gets the environment
+// and the default.
+func boardName(cmd *cobra.Command) string {
+	if cmd != nil {
+		if explicit, err := cmd.Flags().GetString("name"); err == nil && explicit != "" {
+			return explicit
+		}
 	}
-	return os.Getenv("ABOARD_NAME")
+	return strings.TrimSpace(os.Getenv("ABOARD_NAME"))
 }
 
 // envInt reads a positive integer from the environment, for the settings that

@@ -188,9 +188,16 @@ func Status(root Root, name string, assets fs.FS) StatusReport {
 // Human renders the report the way the terminal has always shown it.
 func (r StatusReport) Human() string {
 	var b strings.Builder
+	// A named board says its name in every line that names the project. With two
+	// boards in one directory, "no board recorded for /path" is ambiguous exactly
+	// when it matters — the reader asked about one of them.
+	where := r.Project
+	if r.Name != "" {
+		where += " [" + r.Name + "]"
+	}
 	switch {
 	case !r.Recorded:
-		fmt.Fprintf(&b, "no board recorded for %s\n", r.Project)
+		fmt.Fprintf(&b, "no board recorded for %s\n", where)
 		fmt.Fprintf(&b, "it would use port %d\n", r.WouldUsePort)
 	case !r.Running:
 		fmt.Fprintf(&b, "stale record: %s (pid %d) is not answering\n", r.URL, r.PID)
@@ -198,7 +205,7 @@ func (r StatusReport) Human() string {
 	default:
 		fmt.Fprintf(&b, "aboard running at %s\n", r.URL)
 		fmt.Fprintf(&b, "  project %s\n  state   %s\n  pid     %d\n  since   %s\n",
-			r.Project, r.State, r.PID, r.Started)
+			where, r.State, r.PID, r.Started)
 		if r.App != "" && r.App != HostStandalone {
 			fmt.Fprintf(&b, "  served  %s\n", r.App)
 		}

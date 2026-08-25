@@ -21,6 +21,15 @@ import (
 // `help` is excluded: cobra creates it, nobody declared it, and it is not part
 // of the board's surface. `completion` is not excluded — it is switched off in
 // NewRootCmd, and if that ever regresses this test says so.
+//
+// HIDDEN commands are excluded too, and this is the decision made rather than
+// inherited: `gen-docs` and `recipes index` maintain THIS repository, they are
+// not things a user of a board does, and the manifest describes the user-facing
+// surface. Declaring them would put a maintainer command in every agent's
+// capability listing and move capsHash whenever one was added. The rule is only
+// safe because hiding is asserted separately (TestHiddenCommandsAreDeliberate):
+// otherwise a command could disappear from the surface by accident and this test
+// would approve of it.
 func TestCommandTableMatchesCobraTree(t *testing.T) {
 	root := NewRootCmd(Options{Host: aboard.HostStandalone})
 
@@ -32,7 +41,7 @@ func TestCommandTableMatchesCobraTree(t *testing.T) {
 	seen := map[string]bool{}
 	for _, cmd := range root.Commands() {
 		name := cmd.Name()
-		if name == "help" {
+		if name == "help" || cmd.Hidden {
 			continue
 		}
 		seen[name] = true
@@ -46,6 +55,55 @@ func TestCommandTableMatchesCobraTree(t *testing.T) {
 	for name := range declared {
 		if !seen[name] {
 			t.Errorf("commands.go declares %q but the cobra tree has no such command", name)
+		}
+	}
+}
+
+// The exact set of hidden commands, asserted both ways. A command that becomes
+// hidden by accident vanishes from the manifest, from `--help` and from the
+// generated CLI reference all at once — and the parity test above would report
+// nothing, because it now skips them. So the list is written down here.
+func TestHiddenCommandsAreDeliberate(t *testing.T) {
+	want := map[string]bool{"gen-docs": true, "recipes index": true}
+
+	got := map[string]bool{}
+	var walk func(c *cobra.Command, prefix string)
+	walk = func(c *cobra.Command, prefix string) {
+		for _, sub := range c.Commands() {
+			name := strings.TrimSpace(prefix + " " + sub.Name())
+			if sub.Hidden {
+				got[name] = true
+			}
+			walk(sub, name)
+		}
+	}
+	walk(NewRootCmd(Options{Host: aboard.HostStandalone}), "")
+
+	for name := range want {
+		if !got[name] {
+			t.Errorf("%q is meant to be hidden and is not", name)
+		}
+	}
+	for name := range got {
+		if !want[name] {
+			t.Errorf("%q is hidden but nothing says it should be — either declare it in commands.go or add it here", name)
+		}
+	}
+}
+
+// A hidden command is still a command: it must run. `make caps` and
+// `make docs-cli` call these two, so a typo in one is a broken build target that
+// no other test would notice.
+func TestHiddenCommandsResolve(t *testing.T) {
+	root := NewRootCmd(Options{Host: aboard.HostStandalone})
+	for _, args := range [][]string{{"gen-docs"}, {"recipes", "index"}} {
+		cmd, _, err := root.Find(args)
+		if err != nil {
+			t.Errorf("%v: %v", args, err)
+			continue
+		}
+		if cmd.RunE == nil {
+			t.Errorf("%v resolved to %q, which has no RunE", args, cmd.CommandPath())
 		}
 	}
 }

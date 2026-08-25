@@ -23,7 +23,7 @@ copied the skill has nothing to be out of date.`,
 			if err != nil {
 				return err
 			}
-			rep := aboard.Status(root, boardName(""), aboard.WebFS())
+			rep := aboard.Status(root, boardName(cmd), aboard.WebFS())
 			return renderOutput(stdout(opts), outputFormat, rep, rep.Human)
 		},
 	}

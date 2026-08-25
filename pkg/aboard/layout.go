@@ -41,6 +41,10 @@ const DirName = ".aboard"
 // DirName rather than beside it so a project ignores one path, not two.
 const runDirName = "run"
 
+// recipeDirName is the leaf of all three on-disk recipe directories, so the three
+// tiers differ only in where they hang and never in what they are called.
+const recipeDirName = "recipes"
+
 // ErrNoRoot is returned by FindRoot when no ancestor of the starting directory
 // contains a DirName directory.
 var ErrNoRoot = errors.New("no " + DirName + " directory found")
@@ -110,6 +114,32 @@ func (r Root) UploadsDir() string { return filepath.Join(r.Dir(), uploadDir) }
 // UploadFile is one of them, by base name. The caller must have reduced the name
 // to a base already; this only joins.
 func (r Root) UploadFile(base string) string { return filepath.Join(r.UploadsDir(), base) }
+
+// RecipesDir is this checkout's own recipes: the lowest-precedence directory of
+// the three on disk, and the one that ships with `aboard init`. Content, not
+// runtime — a recipe is a document somebody wrote.
+func (r Root) RecipesDir() string { return filepath.Join(r.Dir(), recipeDirName) }
+
+// ApexRecipesDir and WorkspaceRecipesDir are the two higher-precedence recipe
+// directories. They sit BESIDE `.aboard/`, not inside it, because they are meant
+// to be committed and shared while `.aboard/` is gitignored wholesale.
+//
+// Literal strings, deliberately, and not configurable: ape hard-codes
+// `_apex/pipelines` exactly the same way. A discovery path that can be
+// reconfigured is a discovery path that has to be explained in every error
+// message, and "first wins, in this order" stops being a fact anyone can state.
+func (r Root) ApexRecipesDir() string {
+	return filepath.Join(string(r), "_apex", "aboard", recipeDirName)
+}
+
+// WorkspaceRecipesDir is `<root>/_aboard/recipes`.
+func (r Root) WorkspaceRecipesDir() string {
+	return filepath.Join(string(r), "_aboard", recipeDirName)
+}
+
+// GitignoreFile is the project's own ignore file, which `init --gitignore`
+// appends `.aboard/` to.
+func (r Root) GitignoreFile() string { return filepath.Join(string(r), ".gitignore") }
 
 // InstanceFile records the running board. One record per named board, so a
 // `--name review` instance does not overwrite the default board's record and

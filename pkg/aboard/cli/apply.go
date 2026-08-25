@@ -6,7 +6,7 @@ import (
 )
 
 func newApplyCmd(opts Options) *cobra.Command {
-	var name, by string
+	var by string
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Write a board document from stdin, through the running board",
@@ -30,11 +30,10 @@ is not evidence that anything rendered.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Apply(root, boardName(name), by, aboard.WebFS(),
+			return aboard.Apply(root, boardName(cmd), by, aboard.WebFS(),
 				stdin(opts), stdout(opts), stderr(opts))
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", "agent-1", "actor recorded in lastEditedBy and on every tab this write touched")
-	cmd.Flags().StringVar(&name, "name", "", "board name (env ABOARD_NAME)")
 	return cmd
 }

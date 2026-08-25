@@ -61,6 +61,7 @@ type Command struct {
 func RootFlags() []Flag {
 	return []Flag{
 		{Name: "cwd", Type: "string", Doc: "directory to resolve the project root from (default: the working directory)"},
+		{Name: "name", Type: "string", Doc: "board name, for a second isolated board in the same project (env ABOARD_NAME)"},
 	}
 }
 
@@ -85,7 +86,6 @@ func Commands() []Command {
 				{Name: "base-path", Type: "string", Doc: "serve under a URL prefix, e.g. /aboard (default: the server root)"},
 				{Name: "dev", Type: "bool", Def: "false", Doc: "serve the web tree from disk instead of the embedded copy"},
 				{Name: "dev-dir", Type: "string", Doc: "with --dev, the web tree to serve (default: pkg/aboard/web under the root)"},
-				{Name: "name", Type: "string", Doc: "board name, for a second isolated board in the same project (env ABOARD_NAME)"},
 				{Name: "port", Type: "int", Def: "0", Doc: "port to listen on (0 derives one from the project root; env PORT)"},
 				{Name: "state", Type: "string", Doc: "state file to serve (default: .aboard/aboard.json under the root)"},
 			},
@@ -100,11 +100,20 @@ func Commands() []Command {
 			Exits: commonExits(),
 		},
 		{
+			Name: "init",
+			Doc:  "create .aboard/ in this directory and write an empty board",
+			Flags: []Flag{
+				{Name: "example", Type: "bool", Def: "false", Doc: "seed the board with the example tabs compiled into this binary"},
+				{Name: "gitignore", Type: "bool", Def: "false", Doc: "append " + GitignoreLine + " to the project's .gitignore if it is not already ignored"},
+				{Name: "output-format", Type: "string", Def: "human", Doc: "human, json or yaml"},
+			},
+			Exits: commonExits(),
+		},
+		{
 			Name: "apply",
 			Doc:  "read a board document on stdin and write it through the running board (compare-and-set)",
 			Flags: []Flag{
 				{Name: "by", Type: "string", Def: "agent-1", Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
-				{Name: "name", Type: "string", Doc: "board name (env ABOARD_NAME)"},
 			},
 			Exits: commonExits(),
 		},
@@ -169,6 +178,15 @@ func Commands() []Command {
 				{Code: ExitOK, Meaning: "printed; or with --check, the committed reference is current"},
 				{Code: ExitFailed, Meaning: "with --check: the committed reference no longer matches the binary"},
 				{Code: ExitUsage, Meaning: "no such tab type, or an unknown --format"},
+			},
+		},
+		{
+			Name: "recipes",
+			Doc:  "list the recipes available here, or print one",
+			Exits: []Exit{
+				{Code: ExitOK, Meaning: "printed"},
+				{Code: ExitFailed, Meaning: "no such recipe, or the recipe has no template"},
+				{Code: ExitUsage, Meaning: "an unknown output format"},
 			},
 		},
 		{

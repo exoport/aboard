@@ -43,6 +43,6 @@
     "sandbox=\"allow-scripts\" with connect-src ’none’: anything local, nothing over the network.",
     "Bridge: aboard.get(), aboard.set(next), aboard.onData(fn), aboard.fit().",
     "PREFER `ui` unless the INTERACTION is the point.",
-    "An html BLOCK inside a stack does not render — give a widget its own tab."
+    "An html BLOCK inside a stack renders like any other block; its persisted state lives at blocks[].state.data, not the tab’s own state.data."
   ]
 }

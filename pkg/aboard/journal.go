@@ -22,6 +22,7 @@ package aboard
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -152,8 +153,27 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 
 	for _, t := range next {
 		prev, existed := before[t.ID]
+		// The same comparison reconcileTabs makes, deliberately: one of them
+		// raises the dot on the tab and the other writes the journal line, and a
+		// change that gets one without the other is a change the human can see but
+		// not trace, or trace but not see.
+		//
+		// `note` was missing. A note is the human's own sentence about what a tab
+		// is for, an agent can overwrite it in a normal write, and the journal —
+		// the thing you go to when you ask "who changed this while I was
+		// thinking?" — had no record of it at all.
+		//
+		// `pendingRemoval` was missing too, and it was worse: a write that DROPS a
+		// tab changes nothing else about it, so an agent asking to delete
+		// something produced a banner on the human's screen and not one line
+		// anywhere else. `aboard journal` said nothing, `aboard watch` emitted
+		// nothing, and `aboard wait --for "tab bb126"` waited for a change that
+		// had already happened. Found by dropping a tab with a bare POST and
+		// looking at the journal afterwards.
 		if existed && jsonEqual(prev.State, t.State) &&
-			prev.Name == t.Name && prev.Type == t.Type && prev.StateFrom == t.StateFrom {
+			prev.Name == t.Name && prev.Type == t.Type &&
+			prev.StateFrom == t.StateFrom && prev.Note == t.Note &&
+			sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval) {
 			continue
 		}
 		entry.Tabs = append(entry.Tabs, t.ID)
@@ -163,6 +183,17 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 		}
 	}
 	return entry
+}
+
+// sameRemovalAsk compares two removal requests, either of which may be absent.
+// Absent-to-present and present-to-absent are both changes: the first is an
+// agent asking, the second is the human answering, and both belong in the
+// record.
+func sameRemovalAsk(a, b *removalAsk) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 /* ---------- endpoints ---------- */
@@ -254,17 +285,37 @@ func (s *server) notifyWatchers(entry JournalEntry) {
 
 /* ---------- CLI ---------- */
 
-// JournalEntries reads recent writes from the running board. Returned rather
-// than printed so `--output-format json` and the human form render the same
-// values.
-func JournalEntries(root Root, name string, limit int) ([]JournalEntry, error) {
+// Where a journal listing came from, reported so the human form can say.
+const (
+	JournalFromServer = "server"
+	JournalFromDisk   = "disk"
+)
+
+// JournalEntries reads recent writes, from the running board if there is one and
+// from the file on disk if there is not.
+//
+// The disk fallback exists because of the resume protocol: status, capabilities,
+// journal, in that order, as the first three commands a session runs after a
+// context clear. The first two answer with no server — that is the whole point of
+// them — and the third used to exit 1, so the documented sequence failed in any
+// project whose board happened to be stopped. The journal is an append-only FILE;
+// nothing about reading it needs a server, exactly as `export` needs none.
+//
+// The source is returned rather than printed here so the caller decides where it
+// says so: on stderr in human mode, and nowhere at all in json mode, where a
+// prose line would be something for jq to choke on.
+func JournalEntries(root Root, name string, limit int) ([]JournalEntry, string, error) {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
-		return nil, err
+		entries, derr := journalFromDisk(root, limit)
+		if derr != nil {
+			return nil, JournalFromDisk, derr
+		}
+		return entries, JournalFromDisk, nil
 	}
 	resp, err := http.Get(fmt.Sprintf("%s/journal?limit=%d", inst.URL, limit))
 	if err != nil {
-		return nil, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
+		return nil, JournalFromServer, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -272,9 +323,28 @@ func JournalEntries(root Root, name string, limit int) ([]JournalEntry, error) {
 		Entries []JournalEntry `json:"entries"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("unreadable journal: %w", err)
+		return nil, JournalFromServer, fmt.Errorf("unreadable journal: %w", err)
 	}
-	return payload.Entries, nil
+	return payload.Entries, JournalFromServer, nil
+}
+
+// journalFromDisk reads the same file the server appends to, through the same
+// tail() the endpoint uses — so the two answers cannot differ in shape, only in
+// how fresh they are.
+//
+// A journal file that does not exist yet is an empty list, not an error: a board
+// that has never been written to has nothing to report, and that is an answer.
+func journalFromDisk(root Root, limit int) ([]JournalEntry, error) {
+	raw := newJournal(root).tail(limit)
+	out := make([]JournalEntry, 0, len(raw))
+	for i, line := range raw {
+		var entry JournalEntry
+		if err := json.Unmarshal(line, &entry); err != nil {
+			return nil, fmt.Errorf("%s line %d is not a journal entry: %w", root.JournalFile(), i+1, err)
+		}
+		out = append(out, entry)
+	}
+	return out, nil
 }
 
 // JournalHuman is the one-line-per-write form the terminal shows.
@@ -297,14 +367,32 @@ func JournalHuman(entries []JournalEntry) string {
 	return b.String()
 }
 
-// Watch streams every change as JSON lines until the connection ends.
-func Watch(root Root, name string, out io.Writer) error {
+// Watch streams every change as JSON lines until the connection ends or the
+// context is cancelled.
+//
+// The context is the whole point of the signature. /watch is a stream that never
+// closes by design, so a plain http.Get blocked in Read forever and Ctrl-C did
+// nothing: the signal cancelled a context nobody had handed to the request, and
+// the process sat there until it was killed. `timeout -s INT 3 aboard watch` was
+// still alive at five seconds.
+//
+// Cancellation is a CLEAN exit here, not a failure — the caller asked it to
+// stop — so the context errors are swallowed rather than reported as a broken
+// connection.
+func Watch(ctx context.Context, root Root, name string, out io.Writer) error {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		return err
 	}
-	resp, err := http.Get(inst.URL + "/watch")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inst.URL+"/watch", nil)
 	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("watching %s: %w", inst.URL, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -315,6 +403,9 @@ func Watch(root Root, name string, out io.Writer) error {
 	scan.Buffer(make([]byte, 0, 64<<10), 4<<20)
 	for scan.Scan() {
 		fmt.Fprintln(out, scan.Text())
+	}
+	if ctx.Err() != nil {
+		return nil
 	}
 	return scan.Err()
 }

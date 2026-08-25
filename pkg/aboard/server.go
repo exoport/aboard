@@ -153,10 +153,16 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		stateFile = cfg.Root.StateFile(cfg.Name)
 	}
 	if _, err := os.Stat(stateFile); err != nil {
-		// Naming the path it looked for is the whole message: the commonest
-		// cause is a project that has a `.aboard/` but no document in it, and
-		// "no such file" without the path sends the reader to grep the source.
-		return fmt.Errorf("no board document at %s — create one before serving (a minimal board is {\"version\":%d,\"nextId\":1,\"tabs\":[]})", stateFile, SchemaVersion)
+		// Naming the path it looked for AND the command that creates it. The
+		// commonest cause is a project that has a `.aboard/` but no document in
+		// it, and "no such file" without the path sends the reader to grep the
+		// source; a path without a command sends them to write the JSON by hand,
+		// which is how a document with the wrong `version` gets into a board.
+		hint := "aboard init"
+		if cfg.Name != "" {
+			hint += " --name " + cfg.Name
+		}
+		return fmt.Errorf("no board document at %s — run `%s` in %s", stateFile, hint, cfg.Root)
 	}
 
 	// .js must be text/javascript or the browser refuses the ES modules; some
@@ -229,7 +235,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	if cfg.Name != "" {
 		label = "  [" + cfg.Name + "]"
 	}
-	logger.Printf("aboard  ->  %s%s   (%s, %s)", srv.instance.URL, label, mode, Version())
+	logger.Printf("aboard  ->  %s%s   (%s, %s)", srv.instance.URL, label, mode, VersionString())
 	logger.Printf("state  ->  %s", srv.stateFile)
 	logger.Printf("project->  %s", cfg.Root)
 	logger.Printf(`In VS Code: Ctrl/Cmd+Shift+P -> "Simple Browser: Show" -> paste the URL above.`)
@@ -343,7 +349,7 @@ func (s *server) writeInstance(root Root, name string) error {
 		App:     s.opts.HostID(),
 		Host:    s.opts.HostID(),
 		Argv0:   s.opts.Argv0,
-		Version: Version(),
+		Version: VersionString(),
 		Built:   BuildStamp(),
 		Project: root.String(),
 		Name:    name,
@@ -494,9 +500,25 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		origin = "browser"
 	}
 	base, _ := incoming["__base"].(string)
+	// An ABSENT __by is "unknown", NOT "human".
+	//
+	// It used to default to "human", and "human" is not a label here — it is the
+	// key every guarantee in tabs.go keys off. A write stamped human may delete
+	// tabs, clear the change markers that tell the human something happened, and
+	// drop chat acks. So a bare POST with no __by at all — a curl, a script, a
+	// half-written tool — was handed all three: one request could empty the board
+	// and leave no dot, no removal request and no trace that anything had been
+	// hidden.
+	//
+	// The browser always sends it explicitly (aboard.html's pushDoc builds
+	// `{ ...doc, __origin, __base, __by: 'human' }`), and `aboard apply --by
+	// human` is refused outright, so nothing that legitimately holds human powers
+	// relies on the default. Which means the default's only remaining job is to
+	// name a caller that did not say who it was — and the safe answer to that is
+	// an agent-level one.
 	by, _ := incoming["__by"].(string)
 	if by == "" {
-		by = "human"
+		by = "unknown"
 	}
 	delete(incoming, "__origin")
 	delete(incoming, "__base")

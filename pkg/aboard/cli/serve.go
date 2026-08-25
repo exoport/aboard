@@ -9,7 +9,6 @@ import (
 
 func newServeCmd(opts Options) *cobra.Command {
 	var (
-		name     string
 		state    string
 		devDir   string
 		basePath string
@@ -41,7 +40,7 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 			}
 			cfg := aboard.ServeConfig{
 				Root:      root,
-				Name:      boardName(name),
+				Name:      boardName(cmd),
 				Port:      port,
 				Dev:       dev,
 				DevDir:    devDir,
@@ -57,7 +56,6 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 	cmd.Flags().StringVar(&basePath, "base-path", "", "serve under a URL prefix, e.g. /aboard (default: the server root)")
 	cmd.Flags().BoolVar(&dev, "dev", false, "serve the web tree from disk instead of the embedded copy")
 	cmd.Flags().StringVar(&devDir, "dev-dir", "", "with --dev, the web tree to serve (default: pkg/aboard/web under the root)")
-	cmd.Flags().StringVar(&name, "name", "", "board name, for a second isolated board in the same project (env ABOARD_NAME)")
 	cmd.Flags().IntVar(&port, "port", 0, "port to listen on (0 derives one from the project root; env PORT)")
 	cmd.Flags().StringVar(&state, "state", "", "state file to serve (default: .aboard/aboard.json under the root)")
 	return cmd

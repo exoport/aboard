@@ -128,6 +128,18 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 			t.Touched = prev.Touched
 		}
 
+		// Guarantee 4: an agent may move its OWN read stamp and nobody else's.
+		// Most writes drop `seen` entirely, having never looked at it, and that
+		// must not erase what the other actors recorded — with two sessions and a
+		// human on one board, "changed since I last looked" is a per-actor
+		// question and one actor's answer is not another's to clear.
+		//
+		// This is where mergeSeen had zero call sites: the function was written,
+		// tested by eye and never wired in, so the guarantee existed in the
+		// comment at the top of this file and nowhere in the code. That is the
+		// worst shape a guarantee can have — documented, believed, and absent.
+		t.Seen = mergeSeen(prev.Seen, t.Seen, by)
+
 		// Guarantee 3: an agent cannot un-read a message. A chat message carries
 		// an ack once a session has consumed it, and the human's edit/delete
 		// window closes at that point — so an agent that dropped the ack could
@@ -137,10 +149,17 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 			t.State = state
 		}
 
+		// `note` is in the comparison for the same reason it is in changeSummary:
+		// it is human-authored intent — what this tab is FOR, in their words — and
+		// an agent rewriting it is exactly the kind of change the dot exists to
+		// announce. The two comparisons are kept identical on purpose; when they
+		// disagreed, a note-only write was journaled and left no marker, so the
+		// human's own sentence could be replaced with nothing on screen to say so.
 		changed := !jsonEqual(prev.State, t.State) ||
 			prev.Name != t.Name ||
 			prev.Type != t.Type ||
-			prev.StateFrom != t.StateFrom
+			prev.StateFrom != t.StateFrom ||
+			prev.Note != t.Note
 
 		if changed {
 			note := ""

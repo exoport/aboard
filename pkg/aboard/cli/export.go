@@ -33,7 +33,7 @@ retyping was the cost that made it expensive.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Export(root.StateFile(boardName("")), args[0], format,
+			return aboard.Export(root.StateFile(boardName(cmd)), args[0], format,
 				stdout(opts), stderr(opts))
 		},
 	}

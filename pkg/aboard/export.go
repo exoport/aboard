@@ -484,5 +484,8 @@ func tabCSV(st map[string]any) (string, error) {
 		return b.String(), nil
 	}
 
-	return "", fmt.Errorf("this tab has no rows or nodes to put in a csv — try -format md")
+	// `--format md`, not `-format md`. The single-dash spelling is the spike's
+	// grammar and it does not exist here; a message that hands the reader a flag
+	// the binary rejects costs them a round trip to find out the tool was wrong.
+	return "", fmt.Errorf("this tab has no rows or nodes to put in a csv — try `--format md`")
 }

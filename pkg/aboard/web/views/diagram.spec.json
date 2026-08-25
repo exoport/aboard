@@ -12,9 +12,35 @@
       "doc": "mermaid source"
     }
   },
+  "controls": [
+    {
+      "id": "rerender",
+      "label": "Re-render",
+      "title": "Re-render the diagram from the current source",
+      "doc": "Render the current source again. Rendering is otherwise debounced while you type, and a syntax error keeps the last good picture on screen — this is how you ask for the retry."
+    },
+    {
+      "id": "copy",
+      "label": "Copy source",
+      "title": "Copy the diagram source to the clipboard",
+      "doc": "Copy the mermaid source to the clipboard."
+    },
+    {
+      "id": "palette",
+      "label": "Add colours",
+      "title": "Append classDef colour classes taken from the board palette",
+      "doc": "Append classDef colour classes resolved from the live board tokens, so a hand-coloured node belongs to the palette instead of fighting it. Two families: `ring` colours the border only, `Fill` is solid. Appending twice is refused."
+    },
+    {
+      "id": "toggle",
+      "label": "Hide source",
+      "title": "Show or hide the source editor",
+      "doc": "Show or hide the source editor. The label follows the state, so it reads Show source once the editor is hidden."
+    }
+  ],
   "gestures": [
-    "edit the source and re-render",
-    "hover a node for its mermaid key"
+    "type in the source editor — it saves as you type and re-renders after a short pause",
+    "hover a node for its mermaid key, which is what you need in order to edit the source"
   ],
   "keys": [],
   "notes": [

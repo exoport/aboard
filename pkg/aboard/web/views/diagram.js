@@ -1,6 +1,16 @@
 // Mermaid diagram view: renders this tab's state.source and lets the human edit it.
 
 import { api } from './api.js';
+import { controlsFor } from './controls.js';
+
+// The four buttons below used to be raw markup inside the template string —
+// literal button tags — so their labels and tooltips lived only here: invisible to
+// `aboard capabilities`, absent from the help panel, and unreachable by the
+// drift checks. The grep that was meant to catch that looked for
+// createElement('button') and a template literal is not that. Declared in
+// views/diagram.spec.json now, drawn from the declaration, and a Go test greps
+// for a raw tag so this cannot come back quietly.
+const ctl = controlsFor('diagram');
 
 const VENDOR_SRC = api('/lib/mermaid.min.js');
 
@@ -108,11 +118,7 @@ export function mountDiagram(root, ctx) {
   root.innerHTML = `
     <div class="panel">
       <p class="panel-head">Diagram</p>
-      <div class="toolbar">
-        <button type="button" class="primary-btn" data-action="rerender" title="Re-render the diagram from the current source">Re-render</button>
-        <button type="button" class="icon-btn" data-action="copy" title="Copy the diagram source to the clipboard">Copy source</button>
-        <button type="button" class="icon-btn" data-action="palette" title="Append classDef colour classes taken from the board palette">Add colours</button>
-        <button type="button" class="icon-btn" data-action="toggle" aria-pressed="true" title="Show or hide the source editor">Hide source</button>
+      <div class="toolbar" data-role="toolbar">
         <span class="toolbar-label" data-role="status"></span>
       </div>
       <div class="diagram-render" data-role="render"></div>
@@ -129,10 +135,15 @@ export function mountDiagram(root, ctx) {
   const $source = root.querySelector('[data-role="source"]');
   const $status = root.querySelector('[data-role="status"]');
   const $editor = root.querySelector('[data-role="editor"]');
-  const $toggleBtn = root.querySelector('[data-action="toggle"]');
-  const $rerenderBtn = root.querySelector('[data-action="rerender"]');
-  const $copyBtn = root.querySelector('[data-action="copy"]');
-  const $paletteBtn = root.querySelector('[data-action="palette"]');
+  // Built in toolbar order and inserted before the status label, which is the
+  // only thing the template still owns. The order here is the order declared in
+  // views/diagram.spec.json, and the help panel shows that order.
+  const $rerenderBtn = ctl('rerender', { className: 'primary-btn' });
+  const $copyBtn = ctl('copy');
+  const $paletteBtn = ctl('palette');
+  const $toggleBtn = ctl('toggle', { pressed: true });
+  root.querySelector('[data-role="toolbar"]')
+    .prepend($rerenderBtn, $copyBtn, $paletteBtn, $toggleBtn);
 
   let renderTimer = null;
   let renderSeq = 0;
