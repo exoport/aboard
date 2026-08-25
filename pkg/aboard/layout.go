@@ -1,0 +1,201 @@
+// layout.go — where everything lives, decided once.
+//
+// The spike had three different opinions about where a path starts, and none of
+// them agreed: the instance file was joined against the process's working
+// directory, while the journal and the sidecar logs were joined against the
+// directory of the state file. Run the binary from a subdirectory and it wrote
+// its instance record there while reading state from the project root — two
+// boards, one project, neither able to find the other. Nothing failed loudly,
+// which is why it survived.
+//
+// So there is now exactly ONE resolved root and this is the only file that joins
+// a path underneath it. Everything else asks a Root method. The rule is
+// mechanical and therefore checkable: no filepath.Join outside this file.
+//
+// The split under the root is between CONTENT and MACHINE-LOCAL RUNTIME:
+//
+//	.board/board.json          the board itself — the thing a human curates
+//	.board/uploads/            images they pasted; content too
+//	.board/run/instance.json   port, pid, url — true only for this machine, now
+//	.board/run/journal.jsonl   the write log
+//	.board/run/logs/<tab>.log  sidecar command output
+//	.board/run/shots/          screenshots from test/shot.sh
+//
+// A project ignores `.board/` wholesale and loses nothing it wanted to keep.
+package aboard
+
+import (
+	"crypto/sha256"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+// DirName is the marker directory an aboard project is recognised by, and the
+// container for everything the board owns.
+const DirName = ".board"
+
+// runDirName separates machine-local runtime files from content. Nested inside
+// DirName rather than beside it so a project ignores one path, not two.
+const runDirName = "run"
+
+// ErrNoRoot is returned by FindRoot when no ancestor of the starting directory
+// contains a DirName directory.
+var ErrNoRoot = errors.New("no " + DirName + " directory found")
+
+// Root is a project root: the directory that contains `.board/`. It is always
+// absolute — FindRoot resolves it — so anything derived from it is stable
+// regardless of where the process was started.
+type Root string
+
+// FindRoot walks up from start looking for a directory that contains `.board/`,
+// stopping at the filesystem's fixed point (filepath.Dir is its own fixed point
+// at a volume root, on every platform, which is this loop's only exit).
+//
+// Mirrors apexcfg.Find deliberately: a developer with both tools in the same
+// tree should not have to hold two different discovery rules in their head.
+func FindRoot(start string) (Root, error) {
+	abs, err := filepath.Abs(start)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", start, err)
+	}
+	for dir := abs; ; {
+		if info, statErr := os.Stat(filepath.Join(dir, DirName)); statErr == nil && info.IsDir() {
+			return Root(dir), nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("%w at or above %s", ErrNoRoot, abs)
+		}
+		dir = parent
+	}
+}
+
+// NewRoot takes a directory as the root without walking. Used where the root is
+// already known (a caller that resolved it once) and as the fallback for the
+// commands that must answer with no project at all — `capabilities` describes
+// the binary, not a board, so it cannot be made to depend on finding one.
+func NewRoot(dir string) (Root, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", dir, err)
+	}
+	return Root(abs), nil
+}
+
+// String is the absolute project directory.
+func (r Root) String() string { return string(r) }
+
+// Dir is the board's own directory: `<root>/.board`.
+func (r Root) Dir() string { return filepath.Join(string(r), DirName) }
+
+// RunDir holds everything true only for this machine and this moment.
+func (r Root) RunDir() string { return filepath.Join(r.Dir(), runDirName) }
+
+// StateFile is the board document. A named board gets its own file so two
+// boards in one project never share state.
+func (r Root) StateFile(name string) string {
+	if name == "" {
+		return filepath.Join(r.Dir(), "board.json")
+	}
+	return filepath.Join(r.Dir(), "board."+name+".json")
+}
+
+// UploadsDir holds images the human pasted or dropped. Content, not runtime:
+// a markup tab references them by name and would break without them.
+func (r Root) UploadsDir() string { return filepath.Join(r.Dir(), uploadDir) }
+
+// UploadFile is one of them, by base name. The caller must have reduced the name
+// to a base already; this only joins.
+func (r Root) UploadFile(base string) string { return filepath.Join(r.UploadsDir(), base) }
+
+// InstanceFile records the running board. One record per named board, so a
+// `--name review` instance does not overwrite the default board's record and
+// leave restart.sh stopping the wrong process.
+func (r Root) InstanceFile(name string) string {
+	if name == "" {
+		return filepath.Join(r.RunDir(), "instance.json")
+	}
+	return filepath.Join(r.RunDir(), "instance."+name+".json")
+}
+
+// JournalFile is the append-only record of accepted writes.
+//
+// NOT qualified by board name, which is the spike's rule kept deliberately
+// rather than reproduced by accident: the journal answers "who changed what in
+// this project", and a second named board in the same project is part of the
+// same conversation. Rotated generations are this path plus ".1".
+func (r Root) JournalFile() string { return filepath.Join(r.RunDir(), "journal.jsonl") }
+
+// LogsDir holds the sidecar log files, one per tab.
+func (r Root) LogsDir() string { return filepath.Join(r.RunDir(), "logs") }
+
+// LogFile is one tab's log. The caller must have validated the tab id against
+// logTabRe first — this becomes a filename.
+func (r Root) LogFile(tab string) string { return filepath.Join(r.LogsDir(), tab+".log") }
+
+// ShotsDir is where test/shot.sh writes. Under the run directory because a
+// screenshot is a machine-local artefact, and inside the project because a
+// snap-confined chromium cannot write outside $HOME.
+func (r Root) ShotsDir() string { return filepath.Join(r.RunDir(), "shots") }
+
+// DevDir is the web tree on disk, served instead of the embedded copy under
+// `serve --dev`. Only meaningful inside aboard's own checkout; --dev-dir
+// overrides it.
+func (r Root) DevDir() string { return filepath.Join(string(r), "pkg", "aboard", "web") }
+
+// SkillReference is the generated half of the committed skill: facts, emitted
+// from the manifest, checked for staleness by `capabilities --check`.
+func (r Root) SkillReference() string {
+	return filepath.Join(string(r), ".claude", "skills", "board", "references", "reference.generated.md")
+}
+
+// GeneratedControls is the control module the renderers import, emitted from the
+// same manifest. A development path: it exists in aboard's own checkout and
+// nowhere else, and the staleness check treats its absence as "nothing to check"
+// for exactly that reason.
+func (r Root) GeneratedControls() string {
+	return filepath.Join(string(r), "pkg", "aboard", "web", "views", "controls.generated.js")
+}
+
+/* ---------- port derivation ---------- */
+
+// Each project gets its own port, derived from its root, so boards in different
+// checkouts never collide and each one's URL stays the same between runs. The
+// range sits above the crowded 3000-9000 dev band and below the ephemeral range
+// the kernel hands out for outbound connections.
+const (
+	portBase  = 41000
+	portSpan  = 8000
+	portTries = 24
+)
+
+// DerivePort maps a project root (plus optional board name) to a stable port.
+//
+// Hashing the DISCOVERED ROOT rather than the working directory is what makes
+// the URL the same whichever subdirectory you run the command from — the spike
+// hashed os.Getwd(), so `cd views && board -status` reported a different port
+// than the board it was looking at.
+func DerivePort(root Root, name string) int {
+	sum := sha256.Sum256([]byte(string(root) + "\x00" + name))
+	return portBase + int(binary.BigEndian.Uint32(sum[:4])%portSpan)
+}
+
+// Resolve turns a caller-supplied path into an absolute one, interpreting a
+// relative path against the project root rather than the working directory.
+//
+// The root is what every other path in this file hangs off, so a `--state
+// board.json` typed from a subdirectory has to mean the same file it would mean
+// from the root. Interpreting it against the process's cwd is exactly the bug
+// this file exists to remove.
+func (r Root) Resolve(p string) string {
+	if p == "" {
+		return ""
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(string(r), p)
+}

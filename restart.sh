@@ -3,9 +3,9 @@
 #
 #   ./restart.sh              # start it, or point at the existing one
 #   ./restart.sh -force       # stop the running one and start fresh
-#   ./restart.sh -dev         # UI from disk, for iterating on views/ and app.css
+#   ./restart.sh -dev         # UI from disk, for iterating on pkg/aboard/web
 #   ./restart.sh -name review # a second, isolated board in the same project
-#   ./board -status           # what is running here, and on which port
+#   ./board status            # what is running here, and on which port
 #
 # A healthy board is left alone. Two Claude Code sessions in one project are
 # meant to SHARE a board, so the second session running this script must not
@@ -18,11 +18,11 @@
 cd "$(dirname "$0")" || exit 1
 
 # Pull -name out of the arguments so we act on the matching instance, and strip
-# -force since it is ours, not the binary's.
+# -force since it is ours, not the binary's. Anything else is passed through to
+# `board serve` as a long flag.
 NAME=""
 FORCE=0
 prev=""
-set -- "$@"
 ARGS=""
 for arg in "$@"; do
   case "$prev" in -name|--name) NAME="$arg" ;; esac
@@ -31,6 +31,10 @@ for arg in "$@"; do
   esac
   case "$arg" in
     -force|--force) FORCE=1 ;;
+    # The old single-dash modes are gone; translate the two this script has
+    # always advertised rather than handing cobra a flag it will refuse.
+    -dev) ARGS="$ARGS --dev" ;;
+    -name) ARGS="$ARGS --name" ;;
     *) ARGS="$ARGS $arg" ;;
   esac
   prev="$arg"
@@ -38,9 +42,9 @@ done
 [ -z "$NAME" ] && NAME="$BOARD_NAME"
 
 if [ -n "$NAME" ]; then
-  INSTANCE=".board/instance.$NAME.json"
+  INSTANCE=".board/run/instance.$NAME.json"
 else
-  INSTANCE=".board/instance.json"
+  INSTANCE=".board/run/instance.json"
 fi
 
 read_field() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\).*/\1/p" "$INSTANCE"; }
@@ -64,11 +68,7 @@ if [ -f "$INSTANCE" ]; then
   rm -f "$INSTANCE"
 fi
 
-if command -v go >/dev/null 2>&1; then
-  go build -o board . || exit 1
-  # shellcheck disable=SC2086
-  exec ./board $ARGS
-fi
-
-echo "no go toolchain; falling back to the Node server" >&2
-exec node server.js
+command -v go >/dev/null 2>&1 || { echo "no go toolchain on PATH" >&2; exit 1; }
+go build -o board ./cmd/board || exit 1
+# shellcheck disable=SC2086
+exec ./board serve $ARGS

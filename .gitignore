@@ -4,17 +4,15 @@
 /board
 /dist/
 
-# Screenshots from test/shot.sh
-/.shots/
-
-# Running-instance record (port, pid) — machine-specific
+# Everything the board owns for this project: the state document, the images the
+# human pasted, and the machine-local runtime files (instance record, journal,
+# sidecar logs, screenshots). One path, because there is one directory.
+#
+# A board is a LOCAL, PERSISTENT, NON-AUTHORITATIVE channel. Committing it would
+# mean a whole-file JSON conflict on every merge, over a conversation that was
+# never the other developer's.
 /.board/
 
-# A named board's own state file (see ./restart.sh -name)
-/board.*.json
-
-# Images the human pasted or dropped onto a markup tab (upload.go)
-/uploads/
-
-# live state: a board is that project's conversation, never committed (spike exception does not apply)
-/board.json
+# Local cross-module development (go.work). Never a committed replace directive.
+/go.work
+/go.work.sum

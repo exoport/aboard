@@ -11,14 +11,23 @@ cd "$(dirname "$0")/.."
 
 # Discover this project's port from the running instance rather than assuming
 # one: the port is derived per project, so it is not a fixed number any more.
-if [ -z "$PORT" ] && [ -f .board/instance.json ]; then
-  PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' .board/instance.json)
+INSTANCE=".board/run/instance.json"
+STATE=".board/board.json"
+if [ -z "$PORT" ] && [ -f "$INSTANCE" ]; then
+  PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$INSTANCE")
 fi
 if [ -z "$PORT" ]; then
-  echo "no running board found (.board/instance.json missing) — start it with ./restart.sh" >&2
+  echo "no running board found ($INSTANCE missing) — start it with ./restart.sh" >&2
   exit 1
 fi
-BASE="http://localhost:$PORT"
+# A board served under --base-path answers only under that prefix, so build every
+# URL from the instance record rather than from the port alone.
+BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null)
+[ -z "$BASE" ] && BASE="http://localhost:$PORT"
+# The web tree moved into the Go package that embeds it; the static greps below
+# read source, so they need the real directory rather than the URL path.
+WEB="pkg/aboard/web"
+export STATE WEB
 
 BROWSER=""
 for c in chromium chromium-browser google-chrome google-chrome-stable; do
@@ -103,7 +112,7 @@ echo "== each tab activates in the real shell =="
 # Tabs are data, and ids are bare numbers that also appear on nested objects, so
 # parse the tabs array rather than grepping for an id-shaped string.
 TABS=$(node -e "
-  const b=JSON.parse(require('fs').readFileSync('board.json','utf8'));
+  const b=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   process.stdout.write((b.tabs||[]).map(t=>t.id).join(' '));
 ")
 for tab in $TABS; do
@@ -131,16 +140,16 @@ echo "== a tab can be promoted into the project's own documents =="
 # conclusion.
 if [ -x ./board ]; then
   check "a tab exports as markdown with no server" \
-    "$(./board -export decisions 2>/dev/null | head -1 | cut -c1-1)" "#"
+    "$(./board export decisions 2>/dev/null | head -1 | cut -c1-1)" "#"
   check "a rows tab exports as csv" \
-    "$(./board -export table-example -format csv 2>/dev/null | head -1 | cut -d, -f1)" "id"
+    "$(./board export table-example --format csv 2>/dev/null | head -1 | cut -d, -f1)" "id"
   # `set -e` aborts a subshell the moment the command inside it fails, so
   # `; echo $?` never runs and the check reads empty. Handle the failure inline.
   check "an unknown tab is refused, not silently empty" \
-    "$(./board -export definitely-not-a-tab >/dev/null 2>&1 && echo 0 || echo 1)" "1"
+    "$(./board export definitely-not-a-tab >/dev/null 2>&1 && echo 0 || echo 1)" "1"
   # A gate export is only worth pasting if the REASON travels with the verdict.
   check "a gate export carries the reasons" \
-    "$(./board -export decisions 2>/dev/null | grep -c 'Why:' | awk '{print ($1>0)?"yes":"no"}')" "yes"
+    "$(./board export decisions 2>/dev/null | grep -c 'Why:' | awk '{print ($1>0)?"yes":"no"}')" "yes"
 else
   echo "  skip no ./board binary — run make build"
 fi
@@ -151,7 +160,7 @@ echo "== html tabs can be framed where the board is actually used =="
 # webview above it is not. If someone narrows this list back, that failure is
 # invisible until a human opens the docked browser, so assert the header itself.
 HTML_TAB=$(node -e "
-  const b=JSON.parse(require('fs').readFileSync('board.json','utf8'));
+  const b=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   const t=(b.tabs||[]).find((t)=>t.type==='html');
   process.stdout.write(t ? t.id : '');
 ")
@@ -191,7 +200,7 @@ fi
 # therefore its own assertion, and so is the sandbox, since the containment must
 # be identical to a top-level tab's.
 BLOCK_PATH=$(node -e "
-  const b=JSON.parse(require('fs').readFileSync('board.json','utf8'));
+  const b=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   for (const t of b.tabs||[]) {
     if (t.type!=='stack') continue;
     const blk=((t.state||{}).blocks||[]).find((x)=>x.type==='html');
@@ -233,21 +242,21 @@ echo "== the board describes itself (and the skill cannot silently disagree) =="
 # can do.
 if [ -x ./board ]; then
   check "the manifest answers with no server needed" \
-    "$(PORT= ./board -capabilities 2>/dev/null | node -e "
+    "$(PORT= ./board capabilities 2>/dev/null | node -e "
       let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
         try { const m=JSON.parse(d); process.stdout.write(String((m.types||[]).length>0 && !!m.capsHash)); }
         catch { process.stdout.write('false'); }
       })")" "true"
 
   check "one type can be asked for on its own" \
-    "$(./board -capabilities dag 2>/dev/null | node -e "
+    "$(./board capabilities dag 2>/dev/null | node -e "
       let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
         try { const m=JSON.parse(d); process.stdout.write(String(m.types.length===1 && m.types[0].type==='dag')); }
         catch { process.stdout.write('false'); }
       })")" "true"
 
   # THE drift check: the committed reference must still match the binary.
-  if ./board -capabilities -check >/dev/null 2>&1; then
+  if ./board capabilities --check >/dev/null 2>&1; then
     echo "  ok   the committed skill reference matches the binary"
   else
     echo "  FAIL the committed skill reference is stale — run make caps"; FAILED=1
@@ -256,12 +265,12 @@ if [ -x ./board ]; then
   # Every declared type must have a renderer, and every renderer a declaration.
   # A missing spec is how a capability goes undocumented; a missing mount is a
   # blank tab.
-  printf '%s' "$(./board -capabilities 2>/dev/null)" | node -e "
+  printf '%s' "$(./board capabilities 2>/dev/null)" | node -e "
     const fs=require('fs');
     let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
       let declared=[];
       try { declared=(JSON.parse(d).types||[]).map((t)=>t.type).sort(); } catch {}
-      const shell=fs.readFileSync('board.html','utf8');
+      const shell=fs.readFileSync(process.env.WEB+'/board.html','utf8');
       const block=shell.slice(shell.indexOf('const TYPES = {'), shell.indexOf('const \$tabs'));
       const mounted=[...block.matchAll(/^\s{2}(\w+):\s*\{\s*label:/gm)].map((m)=>m[1]).sort();
       const missingSpec=mounted.filter((t)=>!declared.includes(t));
@@ -292,14 +301,14 @@ if [ -x ./board ]; then
   # plain button() rather than a declared control — but they go through the helper
   # like everything else, which is what makes this grep total instead of "total
   # except one file nobody remembers".
-  RAW=$(grep -l "createElement('button')" views/*.js board.html 2>/dev/null | grep -v 'views/controls.js' || true)
+  RAW=$(grep -l "createElement('button')" "$WEB"/views/*.js "$WEB"/board.html 2>/dev/null | grep -v 'views/controls.js' || true)
   check "every button goes through controls.js" "${RAW:-none}" "none"
 
   # 2. Every DECLARED control is actually used by its renderer. The other
   #    direction, and the one nothing else covers: a control that is removed from
   #    the code leaves its declaration behind, and a spec describing a button that
   #    no longer exists is exactly the drift this whole series is about.
-  ORPHANS=$(./board -capabilities 2>/dev/null | node -e "
+  ORPHANS=$(./board capabilities 2>/dev/null | node -e "
     const fs=require('fs');
     let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
       let types=[]; try { types=(JSON.parse(d).types||[]); } catch {}
@@ -307,7 +316,7 @@ if [ -x ./board ]; then
       for (const t of types) {
         const ids=(t.controls||[]).map((c)=>c.id);
         if (!ids.length) continue;
-        let src=''; try { src=fs.readFileSync('views/'+t.type+'.js','utf8'); } catch { continue; }
+        let src=''; try { src=fs.readFileSync(process.env.WEB+'/views/'+t.type+'.js','utf8'); } catch { continue; }
         for (const id of ids) if (!src.includes(\"'\"+id+\"'\")) bad.push(t.type+'.'+id);
       }
       process.stdout.write(bad.length ? bad.join(' ') : 'none');
@@ -319,8 +328,8 @@ if [ -x ./board ]; then
   #    affordance is a judgement no rule can make — a dialog's Cancel is not worth
   #    declaring, a delete-row button is. So this reports and a human decides,
   #    which is the honest version of the check that was planned here.
-  PLAIN=$(grep -cE "(^|[^.\w])button\(" views/*.js 2>/dev/null \
-    | grep -v 'views/controls.js' | grep -v ':0$' | tr '\n' ' ' || true)
+  PLAIN=$(grep -cE "(^|[^.\w])button\(" "$WEB"/views/*.js 2>/dev/null \
+    | grep -v 'views/controls.js' | grep -v ':0$' | sed "s|$WEB/||" | tr '\n' ' ' || true)
   echo "  note plain (undeclared) buttons remain in: ${PLAIN:-none}"
 
   # And every route the manifest advertises must actually answer.
@@ -348,7 +357,7 @@ if [ -x ./board ]; then
   BADDOC=$(mktemp)
   node -e "
     const fs=require('fs');
-    const d=JSON.parse(fs.readFileSync('board.json','utf8'));
+    const d=JSON.parse(fs.readFileSync(process.env.STATE,'utf8'));
     d.version = 2;                                  // the incident: copied from a stale doc
     d.updatedAt = '1999-01-01T00:00:00.000Z';       // stale on purpose, so the POST is refused
     d.tabs = [{ id:'zz1', name:'probe', type:'ui', state:{
@@ -372,7 +381,7 @@ if [ -x ./board ]; then
     ]}}];
     fs.writeFileSync(process.argv[1], JSON.stringify(d));
   " "$BADDOC"
-  WARN=$(./board -apply -by "smoke" < "$BADDOC" 2>&1 >/dev/null || true)
+  WARN=$(./board apply --by "smoke" < "$BADDOC" 2>&1 >/dev/null || true)
   rm -f "$BADDOC"
 
   want_warning() {
@@ -432,14 +441,14 @@ if [ -x ./board ]; then
   # named to be self-explanatory rather than to look like a participant.
   STAMPED=$(node -e "
     const fs=require('fs'), http=require('http');
-    const d=JSON.parse(fs.readFileSync('board.json','utf8'));
+    const d=JSON.parse(fs.readFileSync(process.env.STATE,'utf8'));
     d.version = 2; d.__base = d.updatedAt; d.__by = 'smoke-test';
     const body=JSON.stringify(d);
     const req=http.request('$BASE/board.json',{method:'POST',headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(body)}},(res)=>{
       let out='';res.on('data',(c)=>out+=c).on('end',()=>{
         if (res.statusCode===409) { process.stdout.write('conflict'); return; }
         // Read it back off disk: the response carries only ok/updatedAt.
-        process.stdout.write(String(JSON.parse(fs.readFileSync('board.json','utf8')).version));
+        process.stdout.write(String(JSON.parse(fs.readFileSync(process.env.STATE,'utf8')).version));
       });
     });
     req.on('error',()=>process.stdout.write('error'));
@@ -462,6 +471,67 @@ jfield() {
       catch { process.stdout.write('?'); }
     })"
 }
+
+# Make a real write FIRST, then assert the journal saw it.
+#
+# Counting entries alone passed on history: a journal file left over from any
+# earlier session satisfied ">= 1" without this suite ever exercising the write
+# path, so the check could not have failed even with journalling switched off.
+# So: rename a tab through `board apply`, revert the name, and assert the newest
+# entry is the revert — right author, right tab.
+#
+# It leaves one mark behind, and deliberately: an agent write stamps `touched`,
+# and only the human's dismiss clears it (that is guarantee 2). A test cannot
+# undo that without pretending to be the human, which is worse than a dot.
+if [ -x ./board ]; then
+  PROBE=$(node -e "
+    const fs=require('fs');
+    const d=JSON.parse(fs.readFileSync(process.env.STATE,'utf8'));
+    const t=(d.tabs||[])[0];
+    process.stdout.write(t ? t.id + '\u0009' + t.name : '');
+  ")
+  PROBE_ID=$(printf '%s' "$PROBE" | cut -f1)
+  PROBE_NAME=$(printf '%s' "$PROBE" | cut -f2-)
+  if [ -n "$PROBE_ID" ]; then
+    apply_name() {
+      DOC=$(mktemp)
+      node -e "
+        const fs=require('fs');
+        const d=JSON.parse(fs.readFileSync(process.env.STATE,'utf8'));
+        const t=(d.tabs||[]).find((x)=>x.id===process.argv[1]);
+        t.name=process.argv[2];
+        fs.writeFileSync(process.argv[3], JSON.stringify(d));
+      " "$PROBE_ID" "$1" "$DOC"
+      ./board apply --by "smoke" < "$DOC" >/dev/null 2>&1
+      rc=$?
+      rm -f "$DOC"
+      return $rc
+    }
+    ok1=$(apply_name "$PROBE_NAME (smoke)" && echo 0 || echo 1)
+    ok2=$(apply_name "$PROBE_NAME" && echo 0 || echo 1)
+    check "a rename applies and reverts through the running board" "$ok1$ok2" "00"
+    check "the name really went back" \
+      "$(node -e "
+        const fs=require('fs');
+        const d=JSON.parse(fs.readFileSync(process.env.STATE,'utf8'));
+        const t=(d.tabs||[]).find((x)=>x.id===process.argv[1]);
+        process.stdout.write(t && t.name===process.argv[2] ? 'yes' : 'no');
+      " "$PROBE_ID" "$PROBE_NAME")" "yes"
+    check "the journal recorded the write that just happened" \
+      "$(curl -s "$BASE/journal?limit=5" | node -e "
+        let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+          let e=[]; try { e=JSON.parse(d).entries||[]; } catch {}
+          const last=e[e.length-1]||{};
+          const ok = last.by==='smoke' && (last.tabs||[]).includes(process.argv[1]);
+          process.stdout.write(ok ? 'yes' : 'no');
+        })" "$PROBE_ID")" "yes"
+  else
+    echo "  skip the board has no tabs to rename"
+  fi
+else
+  echo "  skip no ./board binary — run make build"
+fi
+
 check_ge "the journal records writes" "$(jfield)" "1"
 
 # A valid predicate must be ACCEPTED and then time out; an invalid one is refused
@@ -506,11 +576,14 @@ check "a non-image upload is refused" \
 check "an encoded traversal under uploads/ is refused" \
   "$(curl -s --path-as-is -o /dev/null -w '%{http_code}' "$BASE/uploads/%2e%2e%2fboard.json")" "404"
 rm -f "$PNG"
-[ -n "$UP" ] && rm -f "$UP"
+# $UP is a URL path ("uploads/<file>"); on disk it lives under .board/, which is
+# where the board keeps its content now. Removing the URL relative to the cwd
+# quietly removed nothing and left the probe image behind on every run.
+[ -n "$UP" ] && rm -f ".board/$UP"
 
 echo "== an action strip records an intent instead of acting =="
 ACT_TAB=$(node -e "
-  const b=JSON.parse(require('fs').readFileSync('board.json','utf8'));
+  const b=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   const t=(b.tabs||[]).find((t)=>t.state && Array.isArray(t.state.actions) && t.state.actions.length);
   process.stdout.write(t ? t.id : '');
 ")
@@ -553,7 +626,7 @@ echo "== a read-only kanban offers nothing to edit =="
 # can drag which then snaps back reads as a bug. Asserted on rendered DOM, and on
 # a tab that actually sets the flag.
 RO_TAB=$(node -e "
-  const b=JSON.parse(require('fs').readFileSync('board.json','utf8'));
+  const b=JSON.parse(require('fs').readFileSync(process.env.STATE,'utf8'));
   const t=(b.tabs||[]).find((t)=>t.type==='kanban' && t.state && t.state.readOnly===true);
   process.stdout.write(t ? t.id : '');
 ")
@@ -616,7 +689,7 @@ check "an unknown predicate is refused, not silently awaited" \
 if [ -x ./board ]; then
   WANT=$((BASE_WAIT + 1))
   WAITLOG=$(mktemp)
-  ( ./board -wait -by smoke-waiter -timeout 30s -note "checking the notify channel" > "$WAITLOG" 2>&1; echo "exit=$?" >> "$WAITLOG" ) &
+  ( ./board wait --by smoke-waiter --timeout 30s --note "checking the notify channel" > "$WAITLOG" 2>&1; echo "exit=$?" >> "$WAITLOG" ) &
   WAITPID=$!
 
   # Registration is a round trip, so poll rather than sleep a guessed amount.
@@ -647,7 +720,7 @@ if [ -x ./board ]; then
   check "a poke releases everyone, so nobody is left waiting" "$(waiting_count)" "0"
   rm -f "$WAITLOG"
 else
-  echo "  skip no ./board binary — run make build for the -wait end-to-end check"
+  echo "  skip no ./board binary — run make build for the `wait` end-to-end check"
 fi
 
 # The button itself: assert the rendered control, not the source text that builds
