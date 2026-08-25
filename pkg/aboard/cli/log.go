@@ -12,7 +12,7 @@ func newLogCmd(opts Options) *cobra.Command {
 		Long: `Pipe a long-running command's output onto the board, so the human can watch it
 happen rather than waiting for it to finish.
 
-The stream lives in a sidecar file under .board/run/logs/, NOT inside the board
+The stream lives in a sidecar file under .aboard/run/logs/, NOT inside the board
 document: that document is rewritten whole on every write, so an appending log
 inside a tab's state would mean rewriting the entire board once per line. The
 tab's state holds only a pointer.
@@ -20,7 +20,7 @@ tab's state holds only a pointer.
 Lines are echoed to stdout as well — piping output to the board should not mean
 losing it from the terminal you are watching.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  go test ./... 2>&1 | board log bb126",
+		Example: "  go test ./... 2>&1 | aboard log bb126",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {

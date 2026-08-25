@@ -35,7 +35,7 @@ stale: if this process dies, the button stops claiming anyone is listening.
 
 Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 		Args:    cobra.NoArgs,
-		Example: `  board wait --for "answer bb128" --note "waiting on the gate"`,
+		Example: `  aboard wait --for "answer bb128" --note "waiting on the gate"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {
@@ -66,7 +66,7 @@ func newPokeCmd(opts Options) *cobra.Command {
 		Use:   "poke",
 		Short: "Release every session waiting on this board",
 		Long: `Do what the human's notify button does: release every session currently blocked
-on ` + "`board wait`" + `, and tell them who released them and why.
+on ` + "`aboard wait`" + `, and tell them who released them and why.
 
 Nothing here starts an agent. A session is released only if it had already
 decided to listen; a board with nobody waiting is simply not listening, and this

@@ -36,6 +36,6 @@
   "gestures": [],
   "keys": [],
   "notes": [
-    "Reads /journal, not board.json, so the history is not something an agent can quietly rewrite."
+    "Reads /journal, not aboard.json, so the history is not something an agent can quietly rewrite."
   ]
 }

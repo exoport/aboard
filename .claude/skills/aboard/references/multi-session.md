@@ -1,6 +1,6 @@
 # Two sessions, one project
 
-The default is that sessions **share** a board: one server, one `board.json`, one
+The default is that sessions **share** a board: one server, one `aboard.json`, one
 browser tab, both sessions reading and writing. That is usually what you want —
 the user sees one board regardless of which session drew on it.
 
@@ -13,7 +13,7 @@ the same port and two checkouts never collide. Whichever session starts the
 server, the other finds it.
 
 ```sh
-./board -status          # running? where? whose?
+aboard status          # running? where? whose?
 ./restart.sh             # starts it, or prints the URL of the one already running
 ./restart.sh -force      # actually restart — only when you mean it
 ```
@@ -33,7 +33,7 @@ saying so, since it briefly drops the other session's browser connection (the
 page reconnects on its own — `retry: 1000` on the SSE stream — but it is still a
 visible blip).
 
-## 2. Never write board.json directly
+## 2. Never write aboard.json directly
 
 This is the one that actually loses work. Direct `Edit`/`Write` has no
 compare-and-set. Two sessions reading the same snapshot and both writing means the
@@ -56,21 +56,21 @@ B retries  -> applied; both changes present
 So always:
 
 ```sh
-./board -apply -by "agent-1" < /tmp/next-board.json
+aboard apply --by "agent-1" < /tmp/next-aboard.json
 ```
 
 A `409` is not an error to route around. It means a real change landed while you
-were thinking. Re-read `board.json`, redo your edit on the fresh copy, apply
+were thinking. Re-read `aboard.json`, redo your edit on the fresh copy, apply
 again.
 
 ## 3. Say who you are
 
-`-by` lands in `lastEditedBy` and on every tab you touched. Use `agent-1`,
+`--by` lands in `lastEditedBy` and on every tab you touched. Use `agent-1`,
 `agent-2`, or `agent-<role>` — never `claude`, which reads as one participant
 when several may be writing:
 
 ```sh
-./board -apply -by "agent-1" < /tmp/next-board.json
+aboard apply --by "agent-1" < /tmp/next-aboard.json
 ```
 
 Why it matters: it is what the browser's change banner shows ("agent-1 changed
@@ -80,18 +80,18 @@ have not read yet.
 
 ## Discovery
 
-`.board/instance.json` is the source of truth for "what is running here":
+`.aboard/instance.json` is the source of truth for "what is running here":
 
 ```json
-{ "app": "board", "project": "/home/you/proj", "port": 46624,
-  "url": "http://localhost:46624", "state": "board.json", "pid": 577548 }
+{ "app": "aboard", "project": "/home/you/proj", "port": 46624,
+  "url": "http://localhost:46624", "state": "aboard.json", "pid": 577548 }
 ```
 
 Read it rather than assuming a port. `GET /health` returns the same record, which
 is how the binary tells its own board apart from an unrelated process squatting on
 the port. A record whose `pid` is dead is stale — `./restart.sh` clears it.
 
-Named boards get their own record: `.board/instance.<name>.json`.
+Named boards get their own record: `.aboard/instance.<name>.json`.
 
 ## When sessions should NOT share
 
@@ -101,7 +101,7 @@ A side investigation that must not disturb the main board:
 ./restart.sh -name review
 ```
 
-That gives a different derived port, `board.review.json` as its state file, and
+That gives a different derived port, `aboard.review.json` as its state file, and
 its own instance record. The two boards cannot interfere. Tell the user which URL
 belongs to which, since they now have two tabs to keep straight.
 

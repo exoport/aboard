@@ -5,17 +5,17 @@ Never compose a document from scratch — you would drop the tabs you are not
 touching.
 
 ```sh
-./board -status    # confirm it is running, get the URL
+aboard status    # confirm it is running, get the URL
 ```
 
 ```sh
 node -e "
 const fs = require('fs');
-const b = JSON.parse(fs.readFileSync('board.json', 'utf8'));
+const b = JSON.parse(fs.readFileSync('aboard.json', 'utf8'));
 // … mutate b.tabs …
-fs.writeFileSync('/tmp/next-board.json', JSON.stringify(b, null, 2));
+fs.writeFileSync('/tmp/next-aboard.json', JSON.stringify(b, null, 2));
 "
-./board -apply -by "agent-1" < /tmp/next-board.json
+aboard apply --by "agent-1" < /tmp/next-aboard.json
 ```
 
 If it refuses, re-read and redo. Do not reach for `Edit`.
@@ -167,17 +167,17 @@ upsertTab(b, 'sorter', () => ({
     html: [
       '<h3>Rank by risk</h3><ul id="l" style="list-style:none;padding:0"></ul>',
       '<script>',
-      '  var items = board.get().order || ["schema drift","auth rewrite"];',
+      '  var items = aboard.get().order || ["schema drift","auth rewrite"];',
       '  var l = document.getElementById("l");',
       '  function draw(){ l.textContent="";',
       '    items.forEach(function(t,i){',
       '      var li=document.createElement("li");',
       '      var up=document.createElement("button"); up.textContent="↑";',
       '      up.onclick=function(){ if(i>0){ var x=items[i-1]; items[i-1]=items[i]; items[i]=x;',
-      '        board.set({order:items}); draw(); } };',
+      '        aboard.set({order:items}); draw(); } };',
       '      var s=document.createElement("span"); s.textContent=" "+(i+1)+". "+t;',
       '      li.appendChild(up); li.appendChild(s); l.appendChild(li); });',
-      '    board.fit(); }',
+      '    aboard.fit(); }',
       '  draw();',
       '<\/script>',
     ].join('\n'),
@@ -187,7 +187,7 @@ upsertTab(b, 'sorter', () => ({
 ```
 
 The frame is sandboxed with no network access. It persists through
-`board.set(value)`, which lands in `state.data` — read it back from there.
+`aboard.set(value)`, which lands in `state.data` — read it back from there.
 
 ## Ask to remove a tab
 
@@ -209,8 +209,8 @@ worse for them, so write the reason.
 ## React to their edits
 
 ```js
-const now  = JSON.parse(require('fs').readFileSync('board.json','utf8'));
-const before = JSON.parse(require('fs').readFileSync('/tmp/next-board.json','utf8'));
+const now  = JSON.parse(require('fs').readFileSync('aboard.json','utf8'));
+const before = JSON.parse(require('fs').readFileSync('/tmp/next-aboard.json','utf8'));
 const map = (d) => Object.fromEntries(d.tabs.map((t) => [t.id, t]));
 const a = map(before), z = map(now);
 

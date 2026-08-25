@@ -5,7 +5,7 @@
 // document, and the only record was `lastEditedBy` — the last one wins and the
 // rest is gone.
 //
-// It reads the server's journal (journal.go), not board.json. That matters twice:
+// It reads the server's journal (journal.go), not aboard.json. That matters twice:
 // the history is not something an agent can quietly rewrite, and this tab costs
 // nothing in the state file — its own state is just how much to show.
 //

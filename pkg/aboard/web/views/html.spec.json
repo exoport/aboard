@@ -14,7 +14,7 @@
     },
     "data": {
       "type": "object",
-      "doc": "persisted by board.set()"
+      "doc": "persisted by aboard.set()"
     },
     "height": {
       "type": "string",
@@ -41,7 +41,7 @@
   "keys": [],
   "notes": [
     "sandbox=\"allow-scripts\" with connect-src ’none’: anything local, nothing over the network.",
-    "Bridge: board.get(), board.set(next), board.onData(fn), board.fit().",
+    "Bridge: aboard.get(), aboard.set(next), aboard.onData(fn), aboard.fit().",
     "PREFER `ui` unless the INTERACTION is the point.",
     "An html BLOCK inside a stack does not render — give a widget its own tab."
   ]

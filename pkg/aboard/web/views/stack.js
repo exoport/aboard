@@ -212,7 +212,7 @@ export function mountStack(root, ctx) {
       p.className = 'hint';
       p.textContent = `${block.type} block failed to load: ${err && err.message ? err.message : err}`;
       body.append(p);
-      console.error(`[board] stack block ${block.id} (${block.type}) failed`, err);
+      console.error(`[aboard] stack block ${block.id} (${block.type}) failed`, err);
     }
     mountedBlocks.set(block.id, { handle, body, type: block.type });
   }

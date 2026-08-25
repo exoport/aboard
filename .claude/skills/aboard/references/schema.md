@@ -1,4 +1,4 @@
-# board.json
+# aboard.json
 
 ```jsonc
 {
@@ -12,15 +12,15 @@
 
 Never set `version`, `updatedAt`, `lastEditedBy` or `nextId` yourself — the server
 manages all four. Leaving `updatedAt` exactly as you read it is what makes the
-conflict check work. `-apply` replaces the whole document, so always build from a
+conflict check work. `aboard apply` replaces the whole document, so always build from a
 fresh `Read`.
 
 `version` is in that list because it was NOT, and it cost a whole board: this file
 showed `"version": 2` long after the board moved to 3, an agent copied the example
-it was reading, and `-apply` wrote it through with `applied` and exit 0. The
+it was reading, and `aboard apply` wrote it through with `applied` and exit 0. The
 browser refuses to render a version it does not know, so the human got a blank
 board and a pink banner one round trip after being told it was ready. The server
-now stamps the field and `-apply` warns when a document names the wrong one — but
+now stamps the field and `aboard apply` warns when a document names the wrong one — but
 the reason it is documented here rather than only fixed in code is that a
 hand-written `version` is never right for longer than one schema change.
 
@@ -157,7 +157,7 @@ column width are per-viewer and never written. `readOnly` as on the kanban.
 ```
 
 Nothing executes here — a verdict is a record. Block on it with
-`./board -wait -for "answer <tabId>"`, or a stale queue lets the human believe
+`aboard wait --for "answer <tabId>"`, or a stale queue lets the human believe
 they gated something that already ran.
 
 ### log
@@ -166,7 +166,7 @@ they gated something that already ran.
 { "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
-The lines live in a sidecar file, NOT in this state: `<cmd> 2>&1 | ./board -log bb126`.
+The lines live in a sidecar file, NOT in this state: `<cmd> 2>&1 | aboard log bb126`.
 
 ### trace
 
@@ -174,7 +174,7 @@ The lines live in a sidecar file, NOT in this state: `<cmd> 2>&1 | ./board -log 
 { "limit": 200, "height": "44vh" }
 ```
 
-Reads the journal rather than `board.json`, so the history is not something an
+Reads the journal rather than `aboard.json`, so the history is not something an
 agent can quietly rewrite.
 
 ### vote
@@ -297,7 +297,7 @@ actors. Avoid `claude`: it reads as one participant when there may be many. Read
 ```jsonc
 { "html": "<h3>Rank these</h3><ul id=\"l\"></ul><script>…</script>",
   "data": { "order": ["schema drift", "auth rewrite"] },
-  "height": "62vh" }                     // optional; otherwise board.fit() sizes it
+  "height": "62vh" }                     // optional; otherwise aboard.fit() sizes it
 ```
 
 Served from `/tab/<id>/html` into an iframe with `sandbox="allow-scripts"` and a
@@ -308,13 +308,13 @@ CSS custom properties; override freely.
 Inside the frame a bridge is available:
 
 ```js
-board.get()            // the persisted data object
-board.set(next)        // persist it — the parent writes state.data
-board.onData(fn)       // called when it changed elsewhere
-board.fit()            // ask the parent to resize the frame to the content
+aboard.get()            // the persisted data object
+aboard.set(next)        // persist it — the parent writes state.data
+aboard.onData(fn)       // called when it changed elsewhere
+aboard.fit()            // ask the parent to resize the frame to the content
 ```
 
-So an interactive widget round-trips its state into `board.json` like any other
+So an interactive widget round-trips its state into `aboard.json` like any other
 tab. Write ordinary HTML — no build step, no framework, no imports.
 
 ### stack

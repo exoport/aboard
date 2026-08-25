@@ -39,7 +39,7 @@ func TestFindRootTwoLevelsUp(t *testing.T) {
 }
 
 func TestFindRootNotFound(t *testing.T) {
-	dir := t.TempDir() // no .board anywhere in it
+	dir := t.TempDir() // no .aboard anywhere in it
 
 	_, err := FindRoot(dir)
 	if !errors.Is(err, ErrNoRoot) {
@@ -52,7 +52,7 @@ func TestFindRootNotFound(t *testing.T) {
 }
 
 func TestFindRootStopsAtAFileNamedLikeTheDir(t *testing.T) {
-	// A FILE called .board must not be mistaken for the directory: the walk
+	// A FILE called .aboard must not be mistaken for the directory: the walk
 	// would stop at a project that has no board in it and every path derived
 	// from that root would be wrong.
 	dir := t.TempDir()
@@ -73,20 +73,20 @@ func TestRootPaths(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"Dir", root.Dir(), j(".board")},
-		{"RunDir", root.RunDir(), j(".board", "run")},
-		{"StateFile", root.StateFile(""), j(".board", "board.json")},
-		{"StateFile named", root.StateFile("review"), j(".board", "board.review.json")},
-		{"UploadsDir", root.UploadsDir(), j(".board", "uploads")},
-		{"UploadFile", root.UploadFile("a.png"), j(".board", "uploads", "a.png")},
-		{"InstanceFile", root.InstanceFile(""), j(".board", "run", "instance.json")},
-		{"InstanceFile named", root.InstanceFile("review"), j(".board", "run", "instance.review.json")},
-		{"JournalFile", root.JournalFile(), j(".board", "run", "journal.jsonl")},
-		{"LogsDir", root.LogsDir(), j(".board", "run", "logs")},
-		{"LogFile", root.LogFile("bb42"), j(".board", "run", "logs", "bb42.log")},
-		{"ShotsDir", root.ShotsDir(), j(".board", "run", "shots")},
+		{"Dir", root.Dir(), j(".aboard")},
+		{"RunDir", root.RunDir(), j(".aboard", "run")},
+		{"StateFile", root.StateFile(""), j(".aboard", "aboard.json")},
+		{"StateFile named", root.StateFile("review"), j(".aboard", "aboard.review.json")},
+		{"UploadsDir", root.UploadsDir(), j(".aboard", "uploads")},
+		{"UploadFile", root.UploadFile("a.png"), j(".aboard", "uploads", "a.png")},
+		{"InstanceFile", root.InstanceFile(""), j(".aboard", "run", "instance.json")},
+		{"InstanceFile named", root.InstanceFile("review"), j(".aboard", "run", "instance.review.json")},
+		{"JournalFile", root.JournalFile(), j(".aboard", "run", "journal.jsonl")},
+		{"LogsDir", root.LogsDir(), j(".aboard", "run", "logs")},
+		{"LogFile", root.LogFile("bb42"), j(".aboard", "run", "logs", "bb42.log")},
+		{"ShotsDir", root.ShotsDir(), j(".aboard", "run", "shots")},
 		{"DevDir", root.DevDir(), j("pkg", "aboard", "web")},
-		{"SkillReference", root.SkillReference(), j(".claude", "skills", "board", "references", "reference.generated.md")},
+		{"SkillReference", root.SkillReference(), j(".claude", "skills", "aboard", "references", "reference.generated.md")},
 		{"GeneratedControls", root.GeneratedControls(), j("pkg", "aboard", "web", "views", "controls.generated.js")},
 	}
 	for _, c := range cases {
@@ -132,7 +132,7 @@ func TestDerivePortInRange(t *testing.T) {
 }
 
 // The bug this pins: the spike hashed os.Getwd(), so the derived port changed
-// with the directory you happened to run from and `board status` reported a
+// with the directory you happened to run from and `aboard status` reported a
 // different port than the board it was describing.
 func TestDerivePortDependsOnRootNotCwd(t *testing.T) {
 	dir := t.TempDir()

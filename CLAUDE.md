@@ -1,12 +1,12 @@
-# board
+# aboard
 
 A shared visual board for a human and one or more Claude Code sessions. A Go
-binary serves a browser UI that docks inside VS Code; `board.json` on disk is live
+binary serves a browser UI that docks inside VS Code; `aboard.json` on disk is live
 state that both sides read and write. Tabs are *data*, not code: an agent opens
 one for whatever it needs to show — a graph, a chart, a question form, an
 annotated screenshot, a channel to another agent, a bespoke HTML widget.
 
-**Load the `board` skill before touching `board.json` or the UI.** It carries how
+**Load the `aboard` skill before touching `aboard.json` or the UI.** It carries how
 to choose a tab type, the full capability inventory, the schema, worked recipes,
 and multi-session etiquette. This file is orientation, hard rules, and current
 status only.
@@ -16,12 +16,12 @@ status only.
 Three commands, in this order, before anything else:
 
 ```sh
-./board -status         # running? which URL? and the caps beacon
-./board -capabilities   # what this board can actually do — 15 types, every state
+aboard status         # running? which URL? and the caps beacon
+aboard capabilities   # what this board can actually do — 15 types, every state
                         # field, every CONTROL in toolbar order, every colour name,
                         # every gesture, endpoint and flag, and every `ui`
                         # component with the props it reads
-./board -journal -limit 20   # who changed what recently, including other sessions
+aboard journal --limit 20   # who changed what recently, including other sessions
 ```
 
 **Then read the skill's first section, `## What the board is FOR`, before touching
@@ -33,9 +33,9 @@ the human first, which is the decision a document depends on, never a draft of t
 document. Those were argued out with the human over a long session and every one of
 them corrected something I had got wrong; do not re-derive them from scratch.
 
-`-capabilities` is the point of the manifest: **do not reconstruct the surface
-from memory or from this file — ask the binary.** `./board -capabilities kanban`
-is the cheap per-type version. If `-status` warns that the skill reference was
+`aboard capabilities` is the point of the manifest: **do not reconstruct the surface
+from memory or from this file — ask the binary.** `aboard capabilities kanban`
+is the cheap per-type version. If `aboard status` warns that the skill reference was
 generated for a different `capsHash`, the skill is describing a board that no
 longer exists: run `make caps`.
 
@@ -60,7 +60,7 @@ cleared on 2026-08-23 to hold only live work and one example per renderer:
 `bb32` Migration review (stack; its notes block is the markdown example, and its
 fifth block is an `html` widget — the proof that one renders inside a stack) ·
 `bb111` Table example · `bb72` HTML example (a canvas sketch pad — pointer
-capture, token-coloured strokes, persisted through `board.set`; the human has
+capture, token-coloured strokes, persisted through `aboard.set`; the human has
 drawn on it, so the whole bridge round trip is proven).
 `bb143` is the human's own scratch tab — leave it alone.
 
@@ -74,40 +74,40 @@ recreate it on the board.
 ./restart.sh          # start, or print the URL of the one already running
 ./restart.sh -force   # actually restart (after changing Go code or embedded assets)
 ./restart.sh -dev     # serve views/ and app.css from disk while iterating
-./board -status       # URL, pid, state file
-./board -capabilities            # what this board can do (no server needed)
-./board -capabilities <type>      # one type, cheap
-./board -wait -for "answer bb128" # block until the human decides (0 answered, 3 timed out)
-./board -poke                     # release every waiting session, as the button does
-./board -export <tab|key>         # a tab as markdown, for pasting into a spec (no server needed)
-./board -export <tab> -format csv # its rows
-./board -journal -limit 20        # who changed what, recently
-./board -watch                    # the same, as it happens (JSON lines)
-<cmd> 2>&1 | ./board -log bb126   # stream output into the Output tab
+aboard status       # URL, pid, state file
+aboard capabilities            # what this board can do (no server needed)
+aboard capabilities <type>      # one type, cheap
+aboard wait --for "answer bb128" # block until the human decides (0 answered, 3 timed out)
+aboard poke                     # release every waiting session, as the button does
+aboard export <tab|key>         # a tab as markdown, for pasting into a spec (no server needed)
+aboard export <tab> --format csv # its rows
+aboard journal --limit 20        # who changed what, recently
+aboard watch                    # the same, as it happens (JSON lines)
+<cmd> 2>&1 | aboard log bb126   # stream output into the Output tab
 make caps                         # regenerate the skill's generated reference
 ./test/smoke.sh                   # 98 checks: mounts, notify, caps drift, uploads, read-only
 ./test/shot.sh [tab]              # screenshots into .shots/
 ```
 
-`./board -apply` prints a warning on stderr when a write sets state no renderer
+`aboard apply` prints a warning on stderr when a write sets state no renderer
 reads — the fastest way to catch a guessed field name.
 
 The port is **derived from this directory's path** — currently `46624`, but read
-`.board/instance.json` rather than assuming.
+`.aboard/instance.json` rather than assuming.
 
 ## Two hard rules
 
-**1. Never write `board.json` with `Edit`/`Write` while a board is running.**
+**1. Never write `aboard.json` with `Edit`/`Write` while a board is running.**
 
 ```sh
-./board -apply -by "agent-1" < next.json
+aboard apply --by "agent-1" < next.json
 ```
 
 `Edit` bypasses compare-and-set, so a concurrent change from the browser or
 another session is destroyed with no error. Measured, not theoretical. A `409`
 means someone got there first: re-read, redo, apply again. Direct `Edit` is fine
-only when `-status` reports nothing running. Use `agent-1` / `agent-2` /
-`agent-<role>` for `-by`, never `claude` — it is shown to the user on every
+only when `aboard status` reports nothing running. Use `agent-1` / `agent-2` /
+`agent-<role>` for `--by`, never `claude` — it is shown to the user on every
 changed tab.
 
 **2. Never restart a healthy server.** Plain `./restart.sh` deliberately leaves
@@ -118,19 +118,19 @@ from the first. `-force` only when you mean it.
 
 | path | role |
 |---|---|
-| `board.json` | all state; the only file not compiled into the binary |
-| `main.go` | server: routes, compare-and-set POST, SSE, port derivation, `-apply` |
+| `aboard.json` | all state; the only file not compiled into the binary |
+| `main.go` | server: routes, compare-and-set POST, SSE, port derivation, `aboard apply` |
 | `tabs.go` | the four tab guarantees (see below) |
 | `ids.go` | the id allocator invariant |
-| `htmltab.go` | serves `html` tabs sandboxed, with the `board.*` bridge |
-| `wait.go` | the notify channel: `/wait` long poll, `/poke`, `/waiters`, `-wait`/`-poke`, predicates |
+| `htmltab.go` | serves `html` tabs sandboxed, with the `aboard.*` bridge |
+| `wait.go` | the notify channel: `/wait` long poll, `/poke`, `/waiters`, `aboard wait` / `aboard poke`, predicates |
 | `reload.go` | the UI signature that makes an open page reload itself on a code change |
-| `export.go` | `-export`: a tab as text to promote into the project's own documents |
-| `caps.go` | the board describes itself: `views/*.spec.json` → `-capabilities`, `/capabilities`, the generated skill reference, and `-apply`'s undeclared-key warning |
-| `journal.go` | every accepted write recorded and streamed: `/journal`, `/watch`, `-journal`, `-watch` |
-| `logs.go` | sidecar log files per tab: `/log`, `-log` — deliberately NOT in `board.json` |
+| `export.go` | `aboard export`: a tab as text to promote into the project's own documents |
+| `caps.go` | the board describes itself: `views/*.spec.json` → `aboard capabilities`, `/capabilities`, the generated skill reference, and `aboard apply`'s undeclared-key warning |
+| `journal.go` | every accepted write recorded and streamed: `/journal`, `/watch`, `aboard journal`, `aboard watch` |
+| `logs.go` | sidecar log files per tab: `/log`, `aboard log` — deliberately NOT in `aboard.json` |
 | `upload.go` | `/upload` — the human pastes or drops an image; lands in `uploads/`, not `assets/` |
-| `board.html` | shell: tab strip, dots, notices, `TYPES` registry, id allocator |
+| `aboard.html` | shell: tab strip, dots, notices, `TYPES` registry, id allocator |
 | `app.css` | the single token set everything is coloured from |
 | `views/*.js` | one renderer per tab type, `mount<Name>(root, ctx)` → `{refresh(), focus?(), onKey?(), destroy?()}` |
 | `views/controls.js` | the only way a view makes a button: `controlsFor(type)(id)` for declared controls, `button()` for agent content and shared chrome |
@@ -141,13 +141,13 @@ from the first. `-force` only when you mean it.
 | `views/heartbeat.js` | "is the agent minding this tab still there" strip, with age decay |
 | `views/inline.js` | the one inline editor: visible Save/Cancel, Enter/Esc, and a "saved" flash |
 | `views/*.spec.json` | what each renderer accepts, every control it draws **in toolbar order**, and what the human can do in it — the canonical declaration, rendered FROM rather than merely describing |
-| `.claude/skills/board/` | the skill: SKILL.md + 5 references, one of them generated |
+| `.claude/skills/aboard/` | the skill: SKILL.md + 5 references, one of them generated |
 | `_output/` | gitignored scratch. Holds `handoff-capability-manifest.md` — **will not survive a clone** |
 
 ## Current status
 
 - Schema **v3**, 16 tabs, `nextId` past 197. Both duplicate examples (`bb41`,
-  `bb43`) were removed by the human answering the requests. `board.html` declares
+  `bb43`) were removed by the human answering the requests. `aboard.html` declares
   `SCHEMA_VERSION = 3`; a mismatch shows the user a "reload" notice instead of
   breaking silently.
 - **15 renderers**, all mounting in the suite: `dag`, `kanban`, `diagram`, `form`,
@@ -167,14 +167,14 @@ from the first. `-force` only when you mean it.
   and a badge says why. It shapes the interface; it enforces nothing, since the
   server does not distinguish a browser write from an agent one. `bb71`
   ("Build queue") is the first user: the work list, three columns.
-- **The notify channel is live** (`wait.go`): a session blocks on `./board -wait`,
+- **The notify channel is live** (`wait.go`): a session blocks on `aboard wait`,
   the header button says *notify agent-1 · 12m* with a lit dot and a countdown,
   pressing it releases every waiter. Nobody waiting → the button is disabled. A
   waiter is an open connection, so the count cannot go stale. Predicates all
   work: `poke`, `change`, `tab <id>`, `answer <id>` (that tab changed AND a human
   did it), `node <id>=<status>`; an unknown one is refused up front rather than
-  blocking on something that will never fire. `-watch` streams every change as
-  JSON lines; `-journal` prints them.
+  blocking on something that will never fire. `aboard watch` streams every change as
+  JSON lines; `aboard journal` prints them.
 - Marks are badged **with their id** (`bb168`) on the image, not a per-image
   counter: the counters restarted on every image, so each one had a "1" and none
   agreed with the list. One identifier on the image, in the table, and in a
@@ -182,27 +182,27 @@ from the first. `-force` only when you mean it.
 - `./test/smoke.sh` → 98 checks, all passing. `go vet` clean, `gofmt` clean.
 - **The skill cannot silently disagree with the code.** Each renderer declares its
   surface in `views/<type>.spec.json`; the binary aggregates that into
-  `./board -capabilities` (no server needed), `GET /capabilities`, and the
-  generated `references/reference.generated.md`. `./board -status` prints a
+  `aboard capabilities` (no server needed), `GET /capabilities`, and the
+  generated `references/reference.generated.md`. `aboard status` prints a
   `capsHash` and warns when the committed reference was generated for a different
-  one; `make caps` regenerates it; the suite fails if it drifts. `./board -apply`
+  one; `make caps` regenerates it; the suite fails if it drifts. `aboard apply`
   warns on stderr when a write sets state no renderer reads — the one check no
   document can perform. Facts are generated, judgment stays authored.
 - **The write path detects what used to land on the human's screen instead**
   (2026-08-24, all four found by a session using the binary in another project —
   the portability claim earning its keep). The shape they shared was one thing:
-  **`ui` fails silently AND successfully.** `-apply` printed `applied`, exit 0,
+  **`ui` fails silently AND successfully.** `aboard apply` printed `applied`, exit 0,
   whatever you wrote, so every mistake was found by the human looking at the
   board rather than by the agent that made it — which is backwards, because the
   agent is the only one of the two still holding the context to fix it.
   - **`version` is now server-managed** (`main.go`), stamped alongside `nextId`,
     `updatedAt` and `lastEditedBy`. It was the one such field left to the caller,
     and `schema.md` showed `"version": 2` for a schema that had been 3 since
-    v3 shipped — so an agent copied the example it was reading, `-apply` wrote it
-    through, and `board.html` blanked the whole board in front of the human one
+    v3 shipped — so an agent copied the example it was reading, `aboard apply` wrote it
+    through, and `aboard.html` blanked the whole board in front of the human one
     round trip after being told it was ready. **Stamped rather than refused** (the
     content was fine; failing a good write over a field the caller should not set
-    is the worse trade), **plus a stderr warning** from `-apply` so the stale
+    is the worse trade), **plus a stderr warning** from `aboard apply` so the stale
     source still gets fixed. Both halves matter: the stamp saves the human, the
     warning reaches the agent.
   - **`writeWarnings` descends** (`caps.go`, was `unknownStateKeys`). It read each
@@ -213,7 +213,7 @@ from the first. `-force` only when you mean it.
     unknown component, an unknown prop on a known component, a wrong item shape,
     a bad block field, and a `{bind}` that resolves nowhere.
   - **`views/ui.spec.json` declares all 25 components and their props**, so
-    `./board -capabilities ui` finally answers "what does `kv` take?" — previously
+    `aboard capabilities ui` finally answers "what does `kv` take?" — previously
     only `views/ui.js` knew. Declaration stays canonical; the checker reads it.
     A prop list is not a lint rule invented in Go, and that is the point.
   - **`kv` resolves its values** (`views/ui.js`). It resolved the `pairs` array but
@@ -228,14 +228,14 @@ from the first. `-force` only when you mean it.
   through the parent's `state.blocks`, serving the block's own html, data and
   title. **The CSP and sandbox are byte-identical to a tab's** (asserted), and the
   bridge needed no change at all: `stack.js`'s `ctxForBlock` already hands down a
-  live `state` getter, so `board.set()` was always writing to the right place. Every
+  live `state` getter, so `aboard.set()` was always writing to the right place. Every
   wrong path now names what was wrong instead of 404ing blankly. `bb32`'s fifth
   block is the working example.
 - **Controls are declared, not described** (2026-08-24, a four-commit series). 50
   buttons across 12 renderers are declared in `views/<type>.spec.json` and drawn
   FROM that declaration by `views/controls.js`. The problem it solves was never
   matching prose — it was that **`gestures` had no consumer.** State fields never
-  drift far because `-apply` READS their declaration, so a wrong one produces a
+  drift far because `aboard apply` READS their declaration, so a wrong one produces a
   wrong warning and somebody fixes it; `gestures` only fed prose, so nothing broke
   when it went stale, and `table` shipped a delete-row button documented nowhere
   while `SKILL.md` advertised the feature.
@@ -246,7 +246,7 @@ from the first. `-force` only when you mean it.
     merely an affordance is a judgement no rule makes, so it is two calls and
     visible in review. The suite prints which files still use plain `button()` —
     currently `dag`, `markup`, `inline`, `menu`, `ui`, and all five are correct.
-    **`board.html`'s eight shell buttons go through it too** — they are chrome
+    **`aboard.html`'s eight shell buttons go through it too** — they are chrome
     with no spec, so they use plain `button()`, but routing them through the
     helper is what makes the lint total instead of "total except one file nobody
     remembers".
@@ -274,7 +274,7 @@ from the first. `-force` only when you mean it.
     pointer handlers. Fifteen entries that merely restated a button moved into
     that button's `doc`, so the unverifiable half is as small as the truth allows.
     The help panel gained a **Buttons** section so the human lost nothing.
-- **A 409 no longer discards the human's edit** (`board.html`). Compare-and-set is
+- **A 409 no longer discards the human's edit** (`aboard.html`). Compare-and-set is
   whole-document, so any concurrent write conflicts with any other; the browser
   used to reload and lose whatever had just been typed, and the human is the only
   actor whose work cannot be reconstructed. It now merges: fetch fresh, re-apply
@@ -289,17 +289,17 @@ from the first. `-force` only when you mean it.
 - **`git log` is a real source here, not noise.** Every commit message states the
   reasoning and the mistakes, including the ones found while fixing something else
   — read it before re-deriving a decision, and keep writing them that way.
-  `board.json` moves constantly, so commit it deliberately rather than expecting a
+  `aboard.json` moves constantly, so commit it deliberately rather than expecting a
   clean tree.
 - **Under git**, so a bad edit is recoverable.
-  `board.json` is tracked, which means it shows as modified constantly — that is
-  expected, it is live state. `.board/`, `.shots/`, `dist/` and the `board` binary
+  `aboard.json` is tracked, which means it shows as modified constantly — that is
+  expected, it is live state. `.aboard/`, `.shots/`, `dist/` and the `aboard` binary
   are ignored.
 
-## This repo commits `board.json`. A normal project must not.
+## This repo commits `aboard.json`. A normal project must not.
 
 The skill now states the posture: the board is a **local, persistent,
-non-authoritative channel** and `board.json` belongs in `.gitignore`. It also
+non-authoritative channel** and `aboard.json` belongs in `.gitignore`. It also
 carries the judgement that goes with it — **three tiers, matched by lifetime**:
 the agent's context dies at a context clear; the board survives clears and
 restarts but is local and unversioned; the repo survives everything and is
@@ -322,12 +322,12 @@ committed one would mean a whole-file JSON conflict on every merge, over a
 conversation that was never theirs.
 
 **This repo is the exception, deliberately**: here the board IS the product, so
-`board.json` is tracked because its tabs are the demo content and the working
+`aboard.json` is tracked because its tabs are the demo content and the working
 record of building it. That is why it shows as modified constantly. Do not
 "fix" that by ignoring it here, and do not copy the habit into a real project.
 
 The distinction that makes the rule bite: not versioned is not the same as
-disposable. A gate request waiting on the human, or a session parked on `-wait`,
+disposable. A gate request waiting on the human, or a session parked on `aboard wait`,
 has to survive a restart and a week away.
 
 ## What travels to another project, and what does not
@@ -337,14 +337,14 @@ from the browser:
 
 | layer | lives in | travels? |
 |---|---|---|
-| **behaviour** — every renderer, gesture, hover, menu | `views/*.js`, compiled in by `//go:embed` | **yes**, in the binary. Copy `board` into an empty directory with a `board.json` and every gesture works |
-| **its documentation for agents** | `views/*.spec.json`, also embedded | **yes** — `./board -capabilities` answers in a bare project with no skill, no server and no repo |
-| **content** — tabs, marks, images, cards | `board.json`, `uploads/`, `.board/` | **no**, and that is the point: it is that project's state |
-| **judgment** — when to use what, etiquette | `.claude/skills/board/` | only if you copy the skill in. `make caps` regenerates its generated half; `./board -status` warns when the copy is stale |
+| **behaviour** — every renderer, gesture, hover, menu | `views/*.js`, compiled in by `//go:embed` | **yes**, in the binary. Copy `board` into an empty directory with a `aboard.json` and every gesture works |
+| **its documentation for agents** | `views/*.spec.json`, also embedded | **yes** — `aboard capabilities` answers in a bare project with no skill, no server and no repo |
+| **content** — tabs, marks, images, cards | `aboard.json`, `uploads/`, `.aboard/` | **no**, and that is the point: it is that project's state |
+| **judgment** — when to use what, etiquette | `.claude/skills/aboard/` | only if you copy the skill in. `make caps` regenerates its generated half; `aboard status` warns when the copy is stale |
 
 So a fix made in a renderer is a fix everywhere the binary goes, and it documents
-itself on arrival. A fix made in `board.json` is a fix for this project only.
-`./board -capabilities -check` treats a MISSING skill reference as "nothing to
+itself on arrival. A fix made in `aboard.json` is a fix for this project only.
+`aboard capabilities --check` treats a MISSING skill reference as "nothing to
 check" rather than stale — a project that never copied the skill has nothing to
 be out of date.
 
@@ -356,7 +356,7 @@ be out of date.
   rename-based save, which a single-file OS watch does not.
 - **Tabs are data.** A tab is a name + a `type` + its own `state`. Adding a
   renderer means three lines, and all three are load-bearing: `TYPES` in
-  `board.html` (or it mounts nowhere), `MODULES` in `test/smoke.html` (or it is
+  `aboard.html` (or it mounts nowhere), `MODULES` in `test/smoke.html` (or it is
   tested nowhere), and `views/<type>.spec.json` (or no agent ever learns it
   exists, and the suite's spec/mount parity check fails).
 - **Four guarantees are server-enforced, not conventions** (`tabs.go`): an agent
@@ -369,7 +369,7 @@ be out of date.
 - **Nothing in the UI may START an agent session.** Stated by the human on
   2026-08-23: *"we don't want to trigger agent sessions from the ui."* So the
   board may ASK (a gate request, a form, an action strip, an intent) and a session
-  may choose to WAIT (`./board -wait`) — the notify button only releases a session
+  may choose to WAIT (`aboard wait`) — the notify button only releases a session
   that already decided to listen. What is ruled out: a server hook spawning
   `claude -p`, a cron or loop that wakes agents on a timer, and any "start an
   agent" affordance. I proposed the hook twice; do not propose it a third time.
@@ -399,7 +399,7 @@ be out of date.
   `/^[a-z]*(\d+)$/` — only writes carry the tag. Form *field* ids stay semantic.
 - **An id is enough coming FROM the human, and not enough going TO them.** The
   asymmetry is the point and it is easy to get backwards. They say `bb32` and you
-  are fine — you read `board.json` and know exactly what it is. You say `bb32` and
+  are fine — you read `aboard.json` and know exactly what it is. You say `bb32` and
   they may have nothing: they cannot grep the board from memory, and an id from
   yesterday, or from before a context clear, is a meaningless token they now have
   to go and look up. So **name the thing and put the id beside it** — "the
@@ -424,7 +424,7 @@ be out of date.
   **The visibility fix was then built** rather than left as a fallback: the
   palette each renderer accepts is declared (`tones` in `ui.spec.json`, `colors`
   in `markup.spec.json`), the renderers build their tone map and swatch row FROM
-  that declaration, and `-apply` warns when a write names a colour the board does
+  that declaration, and `aboard apply` warns when a write names a colour the board does
   not have. So the old word now produces a warning naming the available ones,
   which is the honest version of a rename: the break is clean AND it says so.
   The one place `claude` is still matched is `views/chat.js`, and deliberately:
@@ -433,7 +433,7 @@ be out of date.
 - **`html` tabs are sandboxed with `connect-src 'none'`.** The server has no auth,
   so anything that can reach it can rewrite the board — blocking network egress
   from the frame is what actually contains it. Do not relax that to "just fetch".
-- **Per-viewer UI state never goes in `board.json`** — selection, zoom, collapsed
+- **Per-viewer UI state never goes in `aboard.json`** — selection, zoom, collapsed
   blocks, marks-hidden, chat drafts.
 
 ## How the work has actually been organised
@@ -451,11 +451,11 @@ be out of date.
 - **A subagent cannot be resumed from a new session.** Spawn a fresh one with the
   same brief (own `bb71` only, `-by agent-scribe`, heartbeat first and last).
 - **More than one session has written here.** Two cards (`bb144`, `bb145`) were
-  authored by a different session stamped `agent-research`. `./board -journal` and
+  authored by a different session stamped `agent-research`. `aboard journal` and
   the Trace tab are how you tell who did what; `lastEditedBy` only names the last.
 - **The human uses the gate for real approvals.** Both commits were authorised
   there, and they tested `undo` on one. Ask through `bb128` rather than assuming —
-  and `./board -wait -for "answer bb128"` if you need the answer before continuing.
+  and `aboard wait --for "answer bb128"` if you need the answer before continuing.
 
 ## Nothing is open — and the three things that look like they are
 
@@ -485,7 +485,7 @@ why it isn't:
 ## Gotchas that cost real time
 
 - **Assets are compiled into the binary.** After editing `views/`, `app.css`,
-  `board.html` or `assets/`, run `./restart.sh -force` or use `-dev`, or your
+  `aboard.html` or `assets/`, run `./restart.sh -force` or use `-dev`, or your
   change appears to do nothing. The restart is still yours to run; only the
   browser-side reload is automatic now.
 - **An open page now reloads itself when its code changes** (`reload.go`). The
@@ -519,7 +519,7 @@ why it isn't:
   auto-fit and mermaid labels clipped by a font-weight override both passed every
   DOM and colour assertion and were obvious in a picture.
 - **A CLI warning can only reach the actor who runs the CLI.** Obvious once said,
-  and it killed a mechanism I had almost built: a `-apply` warning on a `gate`
+  and it killed a mechanism I had almost built: an `aboard apply` warning on a `gate`
   verdict with no reason would have fired only on an AGENT's write, while the human
   records verdicts in the BROWSER, where no terminal is listening. If the human
   does it in the UI, the affordance belongs in the UI. (That is why decided rows
@@ -529,7 +529,7 @@ why it isn't:
   that way is silently vacuous — mine passed for one run while testing nothing. Use
   `"$(cmd && echo 0 || echo 1)"`.
 - **`./test/smoke.sh` pokes the board**, because poking is what it tests — so it
-  releases any session genuinely blocked on `-wait`. Don't run the suite while an
+  releases any session genuinely blocked on `aboard wait`. Don't run the suite while an
   agent is waiting for something that matters. It notes what it released rather
   than failing, and measures from that baseline.
 - **Do not run `./test/smoke.sh` twice in one shell call, and never run
@@ -545,7 +545,7 @@ why it isn't:
   immediate parent. `htmlTabCSP` said `'self'`, and the board is normally viewed
   inside VS Code's Simple Browser, which renders it in a `vscode-webview://`
   document — so every html tab came up **blank in the docked browser** while
-  `board.html` (no framing header) loaded fine. Reproduced headlessly with a
+  `aboard.html` (no framing header) loaded fine. Reproduced headlessly with a
   cross-origin wrapper: the nested case is refused exactly like the direct one,
   and Chromium reports the blocked frame's ORIGIN, which makes it look as though
   the shell were the thing being blocked. The list is now
@@ -563,10 +563,10 @@ why it isn't:
   like a styling problem rather than a dead script. The suite now asserts a real
   `</script>` and the absence of the escaped form.
 - **A CLI flag in a doc is a claim, and this file got one wrong.** The resume
-  section said `./board -journal -l 20`; the flag is `-limit`, so the third
+  section said `aboard journal -l 20`; the flag is `--limit`, so the third
   command a post-context-clear session runs exited 2. Nothing tests the commands
   in this file — if you write one here, run it.
-- **`-apply` succeeding is not evidence that anything renders.** It prints
+- **`aboard apply` succeeding is not evidence that anything renders.** It prints
   `applied` and exits 0 for a document that draws an empty box; `ui` is the worst
   offender, because an unknown component type shows a marker but an unknown PROP
   shows nothing at all. So: **read the stderr warnings, then shoot the tab and
@@ -623,7 +623,7 @@ unproven.
 **html tabs render in the docked Simple Browser** — confirmed by the human on
 2026-08-23, who then drew on the sketch pad. `vscode-webview:` was the right
 origin, and their stroke is in `bb72`'s `state.data`: 141 normalised points,
-which proves the whole bridge round trip (canvas → `board.set()` → postMessage →
+which proves the whole bridge round trip (canvas → `aboard.set()` → postMessage →
 parent → compare-and-set → disk) as a side effect.
 
 **The 2026-08-24 work is machine-verified, not human-confirmed.** That now covers
@@ -645,7 +645,7 @@ html path, its containment, and its error messages; the `kv` fix.
 on 2026-08-25.** They pressed the tick button in the Migration review tab
 (`bb32`), and `blocks[].state.data` holds `{"ticks": 1}` with the journal showing
 `human` as the writer. That is the whole nested path proven end to end: click →
-`board.set()` → postMessage → parent → `ctxForBlock`'s live state getter →
+`aboard.set()` → postMessage → parent → `ctxForBlock`'s live state getter →
 `blocks[].state.data` → compare-and-set → disk. Worth recording WHY it needed a
 human: the block's write path was the part I expected to be broken when fixing the
 blank frame, and it turned out to need no change at all — the defect was one
@@ -653,14 +653,14 @@ lookup in `serveTabHTML`. A prediction that something is fine is not evidence th
 it is, which is why this stayed listed as a gap until someone clicked it.
 
 **The rename and what followed it** (`--claude` to `--agent`, the declared
-palettes, `board.html`'s buttons, controls-as-a-list) are asserted by the suite AND
+palettes, `aboard.html`'s buttons, controls-as-a-list) are asserted by the suite AND
 looked at, because a colour that stops resolving renders as NO colour and no DOM
 assertion catches that. Confirmed by eye: the theme probe reports `--agent`
 `#a7adf4`; the `tone: agent` notice, the change banner, the chat author palette
 and the READ-ONLY badge all come up periwinkle; markup's five swatches still draw,
 which they would not if the generated palette failed to load; and the help panel
 lists markup's twelve controls in toolbar order. The tab strip was the risky part
-of routing `board.html` through the helper, so it was screenshotted rather than
+of routing `aboard.html` through the helper, so it was screenshotted rather than
 trusted to the suite.
 
 What is still genuinely unproven is first-build residue, never touched since: the

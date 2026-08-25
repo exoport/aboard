@@ -52,7 +52,7 @@ func TestCommandTableMatchesCobraTree(t *testing.T) {
 
 func TestRootFlagsMatchCobraTree(t *testing.T) {
 	root := NewRootCmd(Options{Host: aboard.HostStandalone})
-	assertFlagsMatch(t, "board", aboard.RootFlags(), root.PersistentFlags())
+	assertFlagsMatch(t, "aboard", aboard.RootFlags(), root.PersistentFlags())
 }
 
 // A declared command must also state at least the success and failure codes, or

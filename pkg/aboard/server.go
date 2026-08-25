@@ -1,8 +1,8 @@
 // server.go — the HTTP surface.
 //
-//	GET  /             board.html, with the base path injected
-//	GET  /board.json   current state
-//	POST /board.json   write state to disk (compare-and-set)
+//	GET  /             aboard.html, with the base path injected
+//	GET  /aboard.json   current state
+//	POST /aboard.json   write state to disk (compare-and-set)
 //	GET  /events       SSE stream; pings whenever the state file changes on disk
 //	GET  /wait         block until the board is poked (wait.go)
 //	POST /poke         release every session waiting on this board (wait.go)
@@ -52,14 +52,14 @@ const maxBodyBytes = 8 << 20 // 8 MiB
 
 var (
 	serveDirs  = []string{"views", "lib", "assets", "test"}
-	serveFiles = []string{"app.css", "board.html"}
+	serveFiles = []string{"app.css", "aboard.html"}
 )
 
 // WebFS is the embedded web tree. Exported so a host can serve the same assets,
 // and so `--dev` has something to be an alternative TO.
 func WebFS() fs.FS { return web.FS }
 
-// Instance describes a running board. It is written under `.board/run/` so
+// Instance describes a running board. It is written under `.aboard/run/` so
 // restart.sh can stop exactly this project's board (not every board on the
 // machine), and so an agent can find the URL without being told.
 type Instance struct {
@@ -83,7 +83,7 @@ type Instance struct {
 	Started string `json:"started"`
 }
 
-// ServeConfig is everything `board serve` decided before the engine starts.
+// ServeConfig is everything `aboard serve` decided before the engine starts.
 type ServeConfig struct {
 	Root Root
 	Name string
@@ -93,7 +93,7 @@ type ServeConfig struct {
 	Dev       bool
 	// DevDir is the web tree to serve under Dev; empty means Root.DevDir().
 	DevDir string
-	// BasePath is a URL prefix such as "/board", or "" for the server root.
+	// BasePath is a URL prefix such as "/aboard", or "" for the server root.
 	BasePath string
 }
 
@@ -109,7 +109,7 @@ type server struct {
 
 	mu       sync.Mutex
 	clients  map[chan string]struct{}
-	watchers map[chan string]struct{} // `board watch` consumers (journal.go)
+	watchers map[chan string]struct{} // `aboard watch` consumers (journal.go)
 
 	// Sessions blocked on /wait, released by the human's notify button or by
 	// another session's poke (see wait.go).
@@ -154,7 +154,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	}
 	if _, err := os.Stat(stateFile); err != nil {
 		// Naming the path it looked for is the whole message: the commonest
-		// cause is a project that has a `.board/` but no document in it, and
+		// cause is a project that has a `.aboard/` but no document in it, and
 		// "no such file" without the path sends the reader to grep the source.
 		return fmt.Errorf("no board document at %s — create one before serving (a minimal board is {\"version\":%d,\"nextId\":1,\"tabs\":[]})", stateFile, SchemaVersion)
 	}
@@ -182,9 +182,9 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		}
 		// The one path join outside layout.go, and deliberately: --dev-dir names a
 		// tree that need not be under the project root at all, so Root has no
-		// opinion about it. Probing for board.html turns "--dev silently served
+		// opinion about it. Probing for aboard.html turns "--dev silently served
 		// nothing" into a message that names the directory it looked in.
-		if _, err := os.Stat(filepath.Join(dir, "board.html")); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, "aboard.html")); err != nil {
 			return fmt.Errorf("--dev found no web tree at %s (pass --dev-dir)", dir)
 		}
 		assets = os.DirFS(dir)
@@ -229,7 +229,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	if cfg.Name != "" {
 		label = "  [" + cfg.Name + "]"
 	}
-	logger.Printf("board  ->  %s%s   (%s, %s)", srv.instance.URL, label, mode, Version())
+	logger.Printf("aboard  ->  %s%s   (%s, %s)", srv.instance.URL, label, mode, Version())
 	logger.Printf("state  ->  %s", srv.stateFile)
 	logger.Printf("project->  %s", cfg.Root)
 	logger.Printf(`In VS Code: Ctrl/Cmd+Shift+P -> "Simple Browser: Show" -> paste the URL above.`)
@@ -296,7 +296,7 @@ func (s *server) listen(want int, root Root, name string) (net.Listener, int, er
 // base is the URL prefix the occupant is served under, "" for the server root.
 // It is a parameter and not an assumption because a board started with
 // --base-path answers at <base>/health and NOWHERE else: probing the bare root
-// made `board status` report a live prefixed board as a stale record, which is
+// made `aboard status` report a live prefixed board as a stale record, which is
 // the one sentence that sends a session off to restart a healthy server.
 func ProbeBoard(port int, base string) *Instance {
 	client := &http.Client{Timeout: 400 * time.Millisecond}
@@ -383,7 +383,7 @@ func RunningInstance(root Root, name string) (Instance, error) {
 	p := root.InstanceFile(name)
 	rec, err := os.ReadFile(p)
 	if err != nil {
-		return inst, fmt.Errorf("no running board found (%s); start it with `board serve`", p)
+		return inst, fmt.Errorf("no running board found (%s); start it with `aboard serve`", p)
 	}
 	if err := json.Unmarshal(rec, &inst); err != nil {
 		return inst, fmt.Errorf("unreadable instance file %s", p)
@@ -414,11 +414,11 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
-	case upath == "/" || upath == "/board.html":
+	case upath == "/" || upath == "/aboard.html":
 		s.serveShell(w, r)
-	case upath == "/board.json" && r.Method == http.MethodGet:
+	case upath == "/aboard.json" && r.Method == http.MethodGet:
 		s.getState(w)
-	case upath == "/board.json" && r.Method == http.MethodPost:
+	case upath == "/aboard.json" && r.Method == http.MethodPost:
 		s.postState(w, r)
 	case strings.HasPrefix(upath, "/tab/") && strings.HasSuffix(upath, "/html") && r.Method == http.MethodGet:
 		id := strings.TrimSuffix(strings.TrimPrefix(upath, "/tab/"), "/html")
@@ -535,7 +535,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	// a stale example. It used to be written through verbatim, and an agent that
 	// copied "version": 2 out of the skill's own schema.md got `applied`, exit 0,
 	// and a board that blanked itself in front of the human one round trip later:
-	// board.html refuses to render a document whose version it does not know. The
+	// aboard.html refuses to render a document whose version it does not know. The
 	// agent found out last, from the human, which is exactly backwards.
 	//
 	// Stamped rather than refused, for the same reason nextId is reconciled rather
@@ -584,7 +584,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 // Write via a temp file in the same directory, then rename. A reader (Claude
 // Code, or another browser) therefore never observes a half-written file.
 func (s *server) writeAtomic(body []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(s.stateFile), ".board-*.json")
+	tmp, err := os.CreateTemp(filepath.Dir(s.stateFile), ".aboard-*.json")
 	if err != nil {
 		return err
 	}
@@ -746,17 +746,17 @@ func (s *server) static(w http.ResponseWriter, r *http.Request, upath string) {
 	s.writeAsset(w, r, name, body)
 }
 
-// basePlaceholder is the line board.html ships with, and the only thing the
+// basePlaceholder is the line aboard.html ships with, and the only thing the
 // template step touches. A marker rather than a template engine: the shell is
 // 56 KB of hand-written HTML and the fewer things that rewrite it, the fewer
 // ways it can be rewritten wrongly.
 const basePlaceholder = `window.ABOARD_BASE = "";`
 
-// serveShell serves board.html with the base path injected, so every URL the
+// serveShell serves aboard.html with the base path injected, so every URL the
 // page builds — fetches, the SSE stream, an html tab's iframe — is prefixed
 // exactly the way the router expects to receive it.
 func (s *server) serveShell(w http.ResponseWriter, r *http.Request) {
-	body, err := fs.ReadFile(s.assets, "board.html")
+	body, err := fs.ReadFile(s.assets, "aboard.html")
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -765,12 +765,12 @@ func (s *server) serveShell(w http.ResponseWriter, r *http.Request) {
 	if !bytes.Contains(body, want) {
 		// Loud, because the page would otherwise come up looking fine and fail
 		// only under a base path, in a console nobody has open.
-		s.opts.Log().Printf("warning: board.html has no %s marker — the base path cannot be injected", basePlaceholder)
+		s.opts.Log().Printf("warning: aboard.html has no %s marker — the base path cannot be injected", basePlaceholder)
 	} else if s.base != "" {
 		body = bytes.Replace(body, want,
 			[]byte(`window.ABOARD_BASE = "`+s.base+`";`), 1)
 	}
-	s.writeAsset(w, r, "board.html", body)
+	s.writeAsset(w, r, "aboard.html", body)
 }
 
 // writeAsset sends one asset with the caching rules that suit how it can change.

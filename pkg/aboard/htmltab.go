@@ -24,7 +24,7 @@ import (
 //     the frame is what actually contains it. Inline script and style are
 //     allowed (that is the point); fetch, XHR, WebSocket and form posts are not.
 //
-// State still round-trips: a small bridge exposes `board.get()` / `board.set()`
+// State still round-trips: a small bridge exposes `aboard.get()` / `aboard.set()`
 // which postMessage to the parent, and the parent writes the tab's `state.data`
 // through the normal compare-and-set path.
 
@@ -51,7 +51,7 @@ const htmlTabCSP = "default-src 'none'; " +
 //
 // With 'self' alone the non-self GRANDPARENT blocks the frame, even though the
 // tab's immediate parent is the board itself — so every html tab came up blank in
-// the docked browser while board.html (which sends no framing header) loaded
+// the docked browser while aboard.html (which sends no framing header) loaded
 // fine. Confirmed headlessly with a cross-origin wrapper around the board: the
 // nested case is refused exactly like the direct one.
 //
@@ -69,17 +69,17 @@ const htmlTabFrameAncestors = "'self' vscode-webview: vscode-file: https://*.vsc
 
 const bridgeScript = `<script>
 (function () {
-  var current = window.__BOARD_DATA__ || {};
+  var current = window.__ABOARD_DATA__ || {};
   var listeners = [];
   function post(msg) { try { parent.postMessage(msg, '*'); } catch (e) {} }
-  window.board = {
+  window.aboard = {
     // The persisted object for this tab. Mutating the return value does nothing
     // until set() is called.
     get: function () { return JSON.parse(JSON.stringify(current)); },
     // Persist a new value. The parent writes it into the tab's state.data.
     set: function (next) {
       current = next;
-      post({ __board: 'set', data: next });
+      post({ __aboard: 'set', data: next });
     },
     // Fires when the value changed elsewhere (another viewer, or an agent).
     onData: function (fn) { if (typeof fn === 'function') listeners.push(fn); },
@@ -89,19 +89,19 @@ const bridgeScript = `<script>
         document.body ? document.body.scrollHeight : 0,
         document.documentElement ? document.documentElement.scrollHeight : 0
       );
-      post({ __board: 'height', height: h });
+      post({ __aboard: 'height', height: h });
     }
   };
   window.addEventListener('message', function (e) {
-    if (e.source !== parent || !e.data || e.data.__board !== 'data') return;
+    if (e.source !== parent || !e.data || e.data.__aboard !== 'data') return;
     current = e.data.data || {};
-    listeners.forEach(function (fn) { try { fn(window.board.get()); } catch (err) {} });
+    listeners.forEach(function (fn) { try { fn(window.aboard.get()); } catch (err) {} });
   });
   // Deliberately NOT observing the body: the parent resizes the frame in
   // response to fit(), which resizes the body, which would call fit() again —
   // an infinite loop that starves the widget's own rendering. The frame has a
   // generous default height, so fit() is a refinement a widget opts into.
-  window.addEventListener('load', function () { try { window.board.fit(); } catch (e) {} });
+  window.addEventListener('load', function () { try { window.aboard.fit(); } catch (e) {} });
 })();
 </script>`
 
@@ -155,7 +155,7 @@ func htmlBlock(parent *tab, blockID string) (struct {
 // reports the compound form — so an html block used to 404 and render as a blank
 // frame, with the static markup absent and no error anywhere. Everything else
 // about a block already worked: the bridge writes through the block's own ctx,
-// so board.set() lands in blocks[].state.data on its own.
+// so aboard.set() lands in blocks[].state.data on its own.
 func (s *server) serveTabHTML(w http.ResponseWriter, r *http.Request, tabID string) {
 	raw, err := os.ReadFile(s.stateFile)
 	if err != nil {
@@ -244,7 +244,7 @@ func (s *server) serveTabHTML(w http.ResponseWriter, r *http.Request, tabID stri
   code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   :focus-visible { outline:2px solid var(--focus); outline-offset:2px; }
 </style>
-<script>window.__BOARD_DATA__ = ` + data + `;</script>
+<script>window.__ABOARD_DATA__ = ` + data + `;</script>
 ` + bridgeScript + `
 </head><body>
 ` + body + `

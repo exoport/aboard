@@ -8,7 +8,7 @@
 // back. A pasted screenshot with two circles on it is the fastest bug report
 // there is.
 //
-// Uploads land in .board/uploads/ rather than in the embedded assets/, and that
+// Uploads land in .aboard/uploads/ rather than in the embedded assets/, and that
 // is not arbitrary: assets/ is compiled into the binary with //go:embed, so a
 // file written there at runtime is invisible until the next build. Uploads are
 // served from disk in both modes, and they are CONTENT — a markup tab references

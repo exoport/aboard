@@ -33,23 +33,23 @@ type Options = aboard.Options
 // NewRootCmd builds the board command tree.
 func NewRootCmd(opts Options) *cobra.Command {
 	root := &cobra.Command{
-		Use:   "board",
+		Use:   "aboard",
 		Short: "A shared visual board for a human and one or more agent sessions",
-		Long: `board serves a browser UI for a project and keeps its state in a file both
+		Long: `aboard serves a browser UI for a project and keeps its state in a file both
 sides read and write. Tabs are DATA, not code: an agent opens one for whatever it
 needs to show — a graph, a chart, a question form, an annotated screenshot, a
 channel to another session, a bespoke widget — and reads back what the human
 changed.
 
-State lives under .board/ at the project root, which is found by walking up from
+State lives under .aboard/ at the project root, which is found by walking up from
 --cwd. Each project gets its own port, derived from that root, so the URL is the
 same every time and two checkouts never collide.
 
 Start with:
 
-  board serve            run the server for this project
-  board status           what is running here, and on which port
-  board capabilities     what this board can do (no server needed)`,
+  aboard serve            run the server for this project
+  aboard status           what is running here, and on which port
+  aboard capabilities     what this board can do (no server needed)`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       aboard.Version(),
@@ -186,14 +186,14 @@ func looseRoot(cmd *cobra.Command) (aboard.Root, error) {
 
 // boardName resolves --name, falling back to the environment.
 //
-// BOARD_NAME rather than a flag on every command: only `serve` and `apply` take
+// ABOARD_NAME rather than a flag on every command: only `serve` and `apply` take
 // the flag, and the rest read the environment, so a session working on a named
 // board exports it once instead of repeating it.
 func boardName(explicit string) string {
 	if explicit != "" {
 		return explicit
 	}
-	return os.Getenv("BOARD_NAME")
+	return os.Getenv("ABOARD_NAME")
 }
 
 // envInt reads a positive integer from the environment, for the settings that

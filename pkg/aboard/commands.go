@@ -3,7 +3,7 @@
 // This replaces flag.VisitAll. The spike built the manifest's flag list by
 // walking the global flag registry at runtime, which worked exactly because
 // there was one flat flag set and one binary. Under cobra neither holds: flags
-// are per-command, the global registry is empty, and a `board capabilities` run
+// are per-command, the global registry is empty, and a `aboard capabilities` run
 // would have reported whatever happened to be registered on the path it took to
 // get there — a manifest whose contents depend on which subcommand printed it,
 // and therefore a capsHash that moves for no reason a reader could see.
@@ -74,7 +74,7 @@ func commonExits() []Exit {
 	}
 }
 
-// Commands is the declared command table. Order is the order `board --help`
+// Commands is the declared command table. Order is the order `aboard --help`
 // lists them, which is why it is a slice: it is read by a human top to bottom.
 func Commands() []Command {
 	return []Command{
@@ -82,12 +82,12 @@ func Commands() []Command {
 			Name: "serve",
 			Doc:  "run the board server for this project",
 			Flags: []Flag{
-				{Name: "base-path", Type: "string", Doc: "serve under a URL prefix, e.g. /board (default: the server root)"},
+				{Name: "base-path", Type: "string", Doc: "serve under a URL prefix, e.g. /aboard (default: the server root)"},
 				{Name: "dev", Type: "bool", Def: "false", Doc: "serve the web tree from disk instead of the embedded copy"},
 				{Name: "dev-dir", Type: "string", Doc: "with --dev, the web tree to serve (default: pkg/aboard/web under the root)"},
-				{Name: "name", Type: "string", Doc: "board name, for a second isolated board in the same project (env BOARD_NAME)"},
+				{Name: "name", Type: "string", Doc: "board name, for a second isolated board in the same project (env ABOARD_NAME)"},
 				{Name: "port", Type: "int", Def: "0", Doc: "port to listen on (0 derives one from the project root; env PORT)"},
-				{Name: "state", Type: "string", Doc: "state file to serve (default: .board/board.json under the root)"},
+				{Name: "state", Type: "string", Doc: "state file to serve (default: .aboard/aboard.json under the root)"},
 			},
 			Exits: commonExits(),
 		},
@@ -104,7 +104,7 @@ func Commands() []Command {
 			Doc:  "read a board document on stdin and write it through the running board (compare-and-set)",
 			Flags: []Flag{
 				{Name: "by", Type: "string", Def: "agent-1", Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
-				{Name: "name", Type: "string", Doc: "board name (env BOARD_NAME)"},
+				{Name: "name", Type: "string", Doc: "board name (env ABOARD_NAME)"},
 			},
 			Exits: commonExits(),
 		},

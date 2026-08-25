@@ -23,7 +23,7 @@
 //     meant an unreasoned decision stayed unreasoned forever. A late reason is
 //     stamped as late, because one written a week afterwards is reconstructed, not
 //     recorded, and it will read with more confidence than it has earned.
-//   - It pairs with waiting. `./board -wait -for "answer <tabId>"` blocks the
+//   - It pairs with waiting. `aboard wait --for "answer <tabId>"` blocks the
 //     asking session until a human writes here, so an approval is a real
 //     question rather than a note left on a shelf. Without that, a stale queue is
 //     worse than none: you would think you had gated something that already ran.
@@ -387,7 +387,7 @@ export function mountGate(root, ctx) {
     if (!waiting.length) {
       const empty = document.createElement('p');
       empty.className = 'gate-empty';
-      empty.textContent = 'Nothing to approve. An agent adds to state.pending and waits with: ./board -wait -for "answer ' +
+      empty.textContent = 'Nothing to approve. An agent adds to state.pending and waits with: aboard wait --for "answer ' +
         String((ctx.tab && ctx.tab.id) || '<tab>').split('/')[0] + '"';
       list.append(empty);
     } else {

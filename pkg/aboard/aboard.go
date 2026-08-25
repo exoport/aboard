@@ -3,7 +3,7 @@
 // subcommand is built from.
 //
 // It is a LIBRARY, not a program. The cobra tree lives in pkg/aboard/cli and the
-// process entry point in cmd/board, because this tree is meant to be mounted
+// process entry point in cmd/aboard, because this tree is meant to be mounted
 // inside another CLI as a subcommand. That embedding is what the constraints in
 // here are for, and each one is a thing a host binary cannot recover from:
 //
@@ -30,18 +30,18 @@ import (
 // user-facing prose. It describes the board, not the process serving it, so it
 // does not change when ape hosts the tree — which is what keeps capsHash
 // independent of the host.
-const AppName = "board"
+const AppName = "aboard"
 
 // The two identities a running board can have. They appear in /health and in the
 // instance file as `app`, so a client can tell whose port it just found, and
 // probeBoard accepts either.
 //
 // Standalone and hosted are distinguished rather than merged because the answer
-// to "how do I talk to this thing" differs: one is `board <cmd>`, the other is
-// `ape board <cmd>`. A single identity would make an error message guess.
+// to "how do I talk to this thing" differs: one is `aboard <cmd>`, the other is
+// `ape aboard <cmd>`. A single identity would make an error message guess.
 const (
-	HostStandalone = "board"
-	HostApe        = "ape-board"
+	HostStandalone = "aboard"
+	HostApe        = "ape-aboard"
 )
 
 // Options is what a host tells the engine about itself. Everything in here is

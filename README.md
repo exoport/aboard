@@ -1,6 +1,6 @@
-# board
+# aboard
 
-A shared board for a human and Claude Code. `board.json` is the single source of
+A shared board for a human and Claude Code. `aboard.json` is the single source of
 truth, on disk, in the repo. The browser is one editor of it; Claude Code is another.
 
 ## Run
@@ -33,22 +33,22 @@ board, it refuses to start a duplicate and points at the running one:
 this project's board is already running at http://localhost:46624 (pid 568001)
 ```
 
-The running board is recorded in `.board/instance.json` (gitignored):
+The running board is recorded in `.aboard/instance.json` (gitignored):
 
 ```json
-{ "app": "board", "project": "/home/you/proj", "port": 46624,
-  "url": "http://localhost:46624", "state": "board.json", "pid": 568001 }
+{ "app": "aboard", "project": "/home/you/proj", "port": 46624,
+  "url": "http://localhost:46624", "state": "aboard.json", "pid": 568001 }
 ```
 
 That file is the discovery mechanism. `restart.sh` reads it to stop *only this
-project's* board rather than every `./board` on the machine; the test scripts read
+project's* board rather than every `./aboard` on the machine; the test scripts read
 it instead of assuming a port; and Claude Code can read it to learn the URL
-without being told. `./board -status` prints it, and `GET /health` returns the
+without being told. `aboard status` prints it, and `GET /health` returns the
 same record so one board can identify another over the wire.
 
 ### Two sessions, one board
 
-This is the default and it works: **one server, one `board.json`, both sessions
+This is the default and it works: **one server, one `aboard.json`, both sessions
 reading and writing it, one browser tab showing everything.** The server is a
 single process on the project's port — whichever session starts it, the other
 finds it.
@@ -58,21 +58,21 @@ Two rules make it safe:
 - `./restart.sh` **leaves a healthy board alone** and just prints its URL. Only
   `-force` restarts. A second session therefore cannot yank the server out from
   under the first.
-- Write through `./board -apply`, not by editing the file. Direct writes have no
+- Write through `aboard apply`, not by editing the file. Direct writes have no
   compare-and-set, so concurrent edits are silently lost:
 
 ```sh
-./board -apply -by "agent-1" < edited.json
+aboard apply --by "agent-1" < edited.json
 ```
 
-`-apply` takes the `updatedAt` already inside the submitted document as its
+`aboard apply` takes the `updatedAt` already inside the submitted document as its
 base, so "read, edit, apply" is safe by construction. A stale write is refused:
 
 ```
-refused: the board changed since you read it (…) — re-read board.json, redo the edit, apply again
+refused: the board changed since you read it (…) — re-read aboard.json, redo the edit, apply again
 ```
 
-`-by` lands in `lastEditedBy`, so the browser's "Claude changed this" banner
+`--by` lands in `lastEditedBy`, so the browser's "Claude changed this" banner
 fires and each session can see who moved what. See `CLAUDE.md`.
 
 ### Two separate boards in one project
@@ -81,17 +81,17 @@ When sessions should *not* share — a side investigation that must not disturb 
 main board:
 
 ```sh
-./restart.sh -name review     # own port, own board.review.json, own instance record
+./restart.sh -name review     # own port, own aboard.review.json, own instance record
 ```
 
-`-name` derives a different port, uses `board.<name>.json` as state, and records
+`--name` derives a different port, uses `aboard.<name>.json` as state, and records
 itself separately, so the two never interfere.
 
-Overrides, in precedence order: `-port N`, then `PORT=N`, then the derived port.
+Overrides, in precedence order: `--port N`, then `PORT=N`, then the derived port.
 
 The UI is compiled into the binary with `//go:embed`, so deploying the board is
 copying one file — no Node, no `node_modules`, no asset directory to ship
-alongside. `board.json` deliberately stays on disk: it is the shared state both
+alongside. `aboard.json` deliberately stays on disk: it is the shared state both
 the browser and Claude Code read and write.
 
 Use `-dev` while changing `views/` or `app.css` — it reads those from the working
@@ -106,8 +106,8 @@ mermaid bundle revalidates as a `304` instead of being resent on every reload.
 ## The loop
 
 - **You edit** — in any of the five views below. Each gesture POSTs the new state
-  and the server writes `board.json`.
-- **Claude edits** — reads `board.json`, changes it, writes it back. The server
+  and the server writes `aboard.json`.
+- **Claude edits** — reads `aboard.json`, changes it, writes it back. The server
   watches the file and pushes an SSE ping; open boards reload and show a banner.
 - **Neither side clobbers the other** — a write carries the `updatedAt` it was
   based on. If the file moved on in between, the server answers `409` and the
@@ -117,7 +117,7 @@ mermaid bundle revalidates as a `304` instead of being resent on every reload.
 
 ## Tabs
 
-**Tabs are data, not code.** `board.json` carries a `tabs[]` array; each tab is a
+**Tabs are data, not code.** `aboard.json` carries a `tabs[]` array; each tab is a
 name, a `type` that picks a renderer, and its own `state`. An agent opens one for
 whatever it needs to show and names it accordingly — the types below are
 capabilities, not a fixed set of tabs.
@@ -136,7 +136,7 @@ capabilities, not a fixed set of tabs.
 
 A tab may set `stateFrom` to render another tab's state, so a `dag` and a
 `kanban` can be two readings of one dataset. A new capability is a line in the
-`TYPES` registry in `board.html`, not a new tab.
+`TYPES` registry in `aboard.html`, not a new tab.
 
 ### Change markers
 
@@ -159,7 +159,7 @@ Served from `/tab/<id>/html` into an iframe with `sandbox="allow-scripts"` (no
 do anything local — canvas, SVG, WebGL, animation — and nothing over the network.
 That matters because this server has no authentication: anything that can reach it
 can rewrite the whole board. State round-trips through a `postMessage` bridge
-(`board.get()` / `board.set()` / `board.onData()` / `board.fit()`), so an
+(`aboard.get()` / `aboard.set()` / `aboard.onData()` / `aboard.fit()`), so an
 interactive widget persists like any other tab.
 
 ## Dependencies
@@ -175,7 +175,7 @@ whole setup step, and the result is one file.
 | fonts | system stacks (`ui-sans-serif`, `ui-monospace`) — no webfonts |
 | network at runtime | none; the board works fully offline |
 
-The Go server watches `board.json` by polling its content hash every 200 ms
+The Go server watches `aboard.json` by polling its content hash every 200 ms
 rather than using `fsnotify`. That keeps the module count at zero, and it is also
 more robust than a single-file OS watch, which a rename-based save silently
 breaks.
@@ -192,26 +192,26 @@ The test scripts additionally expect a `chromium`-family browser and `curl` on
 
 ## For Claude Code
 
-`.claude/skills/board/` is a skill that teaches a session how to use this board:
-which tab suits which kind of explanation, the `board.json` schema, how to read
+`.claude/skills/aboard/` is a skill that teaches a session how to use this board:
+which tab suits which kind of explanation, the `aboard.json` schema, how to read
 the user's edits back, and how two sessions share one board without losing each
 other's writes. It is auto-discovered — no registration needed.
 
 `CLAUDE.md` carries only the two rules that must not wait for a skill load: write
-through `./board -apply`, and do not restart a healthy server.
+through `aboard apply`, and do not restart a healthy server.
 
 ## Files
 
 | path | role |
 |---|---|
-| `board.json` | all state: `nodes`, `columns`, `diagram`, `form`, `markup` — the only file not embedded |
+| `aboard.json` | all state: `nodes`, `columns`, `diagram`, `form`, `markup` — the only file not embedded |
 | `main.go` | the server: embedded UI, static serve, compare-and-set POST, poll → SSE |
 | `Makefile` | `run` / `dev` / `build` / `check` / `test` / `dist` |
 | `server.js` | the original Node server, kept as a no-Go fallback |
-| `board.html` | shell: tab router, save plumbing, live reload |
+| `aboard.html` | shell: tab router, save plumbing, live reload |
 | `app.css` | the single token set the whole UI is coloured from |
 | `views/*.js` | one ES module per tab, each exporting `mount<Name>(root, ctx)` |
-| `.claude/skills/board/` | the skill: when to use the board, schema, recipes, multi-session |
+| `.claude/skills/aboard/` | the skill: when to use the board, schema, recipes, multi-session |
 | `CLAUDE.md` | the two always-on safety rules |
 | `vendor/mermaid.min.js` | vendored so the Diagram tab works with no network |
 | `assets/` | images the Markup view can point at |
@@ -222,7 +222,7 @@ through `./board -apply`, and do not restart a healthy server.
 ./test/smoke.sh          # needs the server running, and a chromium-family browser
 ```
 
-It mounts every view against the real `board.json` in headless Chromium and fails
+It mounts every view against the real `aboard.json` in headless Chromium and fails
 if any module throws, exports the wrong name, or renders nothing — the failure a
 syntax check cannot catch. Then it loads the real shell once per tab and checks
 each one activates.
@@ -340,8 +340,8 @@ Diagram tab reads the same tokens at render time and feeds them to mermaid as
 Write `views/thing.js` exporting `mountThing(root, ctx)` where `ctx` gives you
 `state` (live), `save()` (debounced POST), and `refreshOthers(id)`. Return
 `{ refresh() }` — the shell calls it when the file changed underneath or the tab
-was re-activated. Then add it to the `VIEWS` array in `board.html`.
+was re-activated. Then add it to the `VIEWS` array in `aboard.html`.
 
 Two rules that matter: keep per-viewer UI state (selection, active tool, zoom) in
-local JS, never in `board.json`; and in `refresh()`, never clobber an input the
+local JS, never in `aboard.json`; and in `refresh()`, never clobber an input the
 human currently has focused.

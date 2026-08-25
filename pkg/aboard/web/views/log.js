@@ -1,4 +1,4 @@
-// Log view: output you can watch, with the stream living outside board.json.
+// Log view: output you can watch, with the stream living outside aboard.json.
 //
 // `chat` is for talk and there was nowhere for OUTPUT — so a ten-minute job was
 // either silent on the board or dumped into a notes tab that then had to be
@@ -7,9 +7,9 @@
 //
 //   state = { source: 'bb90', tail: 400, follow?: true, height?: '60vh' }
 //
-// An agent feeds it by piping:  go test ./... 2>&1 | ./board -log bb90
+// An agent feeds it by piping:  go test ./... 2>&1 | aboard log bb90
 //
-// Polled rather than streamed, deliberately: the SSE channel fires on board.json
+// Polled rather than streamed, deliberately: the SSE channel fires on aboard.json
 // changes, and a log write is not a board change — wiring it in would mean every
 // log line waking every open page's document reload. A 2s poll while the tab is
 // visible costs one small request and stops when you look away.
@@ -152,14 +152,14 @@ export function mountLog(root, ctx) {
     if (!source()) {
       const p = document.createElement('p');
       p.className = 'log-empty';
-      p.textContent = 'No source set — an agent sets state.source to a log id and pipes into ./board -log <id>.';
+      p.textContent = 'No source set — an agent sets state.source to a log id and pipes into aboard log <id>.';
       wrap.append(p);
       return;
     }
     if (!lines.length) {
       const p = document.createElement('p');
       p.className = 'log-empty';
-      p.textContent = `Nothing logged yet. Feed it with:  <command> 2>&1 | ./board -log ${source()}`;
+      p.textContent = `Nothing logged yet. Feed it with:  <command> 2>&1 | aboard log ${source()}`;
       wrap.append(p);
       return;
     }

@@ -1,4 +1,4 @@
-// Form view: Claude asks questions by writing `state.form` in board.json,
+// Form view: Claude asks questions by writing `state.form` in aboard.json,
 // the human answers here, and every edit writes straight back to disk.
 
 import { controlsFor } from './controls.js';
@@ -201,7 +201,7 @@ export function mountForm(root, ctx) {
   }
 
   // Pushes current state values into their DOM inputs. Skips inputs that
-  // currently have focus unless forced, so an external board.json change
+  // currently have focus unless forced, so an external aboard.json change
   // never clobbers text the human is mid-typing.
   function syncValues(force) {
     for (const field of getFields()) {

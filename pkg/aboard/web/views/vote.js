@@ -21,7 +21,7 @@
 //
 // The human votes as `human`; an agent writes its own key. Nobody can overwrite
 // another participant's ballot through this view — the columns are per actor, and
-// only the human's column is editable here. An agent doing it through board.json
+// only the human's column is editable here. An agent doing it through aboard.json
 // is a different question, and one the journal now answers.
 
 import { inlineEditor, flashSaved } from './inline.js';

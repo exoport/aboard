@@ -7,9 +7,9 @@ telling them what to try.
 This file carries JUDGMENT: when to reach for which type, what the human can do,
 what not to do. The FACTS — every state field, every control, every gesture, every
 endpoint, every flag — are emitted by the binary itself into
-[reference.generated.md](reference.generated.md), and `./board -status` warns when
+[reference.generated.md](reference.generated.md), and `aboard status` warns when
 that file no longer matches. So: read this for how to think, read the generated one
-(or `./board -capabilities <type>`) for what exists.
+(or `aboard capabilities <type>`) for what exists.
 
 Where the two disagree, the generated one is right and this one is stale.
 
@@ -34,13 +34,13 @@ the truth allows.
 ## Commands
 
 ```sh
-./board -status                            # is a board running here? URL, pid, state file
-./board -apply -by "agent-1" < next.json   # compare-and-set write (the only safe write)
-./board -wait -by "agent-1" -timeout 10m   # block until the human presses Notify (exit 0), or give up (exit 3)
-./board -poke -by "agent-1" -note "go"     # release every waiting session, as the button does
-./board -watch                             # every change as JSON lines, until interrupted
-./board -journal -limit 40                 # recent writes: when, who, which tabs
-<cmd> 2>&1 | ./board -log bb126            # stream output into a log tab
+aboard status                            # is a board running here? URL, pid, state file
+aboard apply --by "agent-1" < next.json   # compare-and-set write (the only safe write)
+aboard wait --by "agent-1" --timeout 10m  # block until the human presses Notify (exit 0), or give up (exit 3)
+aboard poke --by "agent-1" --note "go"   # release every waiting session, as the button does
+aboard watch                             # every change as JSON lines, until interrupted
+aboard journal --limit 40                 # recent writes: when, who, which tabs
+<cmd> 2>&1 | aboard log bb126            # stream output into a log tab
 ./restart.sh                               # start it, or print the URL of the running one
 ./restart.sh -force                        # actually restart (after changing Go or assets)
 ./restart.sh -dev                          # serve views/ and app.css from disk, no rebuild
@@ -50,10 +50,15 @@ the truth allows.
 make run | dev | build | check | test | status | dist
 ```
 
-Flags on the binary: `-port`, `-state`, `-name`, `-dev`, `-status`, `-apply`, `-by`,
-`-wait`, `-poke`, `-for`, `-timeout`, `-note`, `-watch`, `-journal`, `-limit`, `-log`.
+Commands and their flags, as the binary declares them (`aboard capabilities`
+prints this, so ask it rather than trusting this list):
+`aboard --cwd DIR <command>`; `serve --base-path --dev --dev-dir --name --port
+--state`; `status --output-format`; `apply --by --name`; `wait --by --for --note
+--timeout`; `poke --by --note`; `journal --limit --output-format`; `watch`;
+`log <tab>`; `export <tab|key> --format`; `capabilities [type] --check --format`;
+`version --output-format`.
 
-`-for` takes: `poke` (the human's Notify button), `change` (any write),
+`--for` takes: `poke` (the human's Notify button), `change` (any write),
 `tab <id>`, `answer <id>` (that tab changed AND a human did it), or
 `node <id>=<status>`. Anything else is refused immediately rather than blocking on
 something that will never fire.
@@ -63,9 +68,9 @@ something that will never fire.
 | route | purpose |
 |---|---|
 | `GET /` | the board UI |
-| `GET /board.json` | current state |
-| `POST /board.json` | write, compare-and-set (`__base`, `__origin`, `__by`) |
-| `GET /events` | SSE: `board.json` changed (`{origin}`), waiter count changed (`{waiters:n}`), and the UI signature (`{ui:{html,css,js}}`) — sent first on every connect so a page notices its own code changed and reloads |
+| `GET /aboard.json` | current state |
+| `POST /aboard.json` | write, compare-and-set (`__base`, `__origin`, `__by`) |
+| `GET /events` | SSE: `aboard.json` changed (`{origin}`), waiter count changed (`{waiters:n}`), and the UI signature (`{ui:{html,css,js}}`) — sent first on every connect so a page notices its own code changed and reloads |
 | `GET /health` | `{app, project, port, url, state, pid}` — who owns this port |
 | `GET /tab/<id>/html` | one `html` tab as a standalone sandboxed document |
 | `GET /wait` | long poll: blocks until poked (`?for=poke&timeout=<secs>&by=<label>&note=<why>`) |
@@ -78,7 +83,7 @@ something that will never fire.
 | `POST /upload` | an image body; answers `{url}`. Type sniffed from the bytes, 12 MiB cap, server names the file |
 | `GET /uploads/<file>` | serve one, always from disk (uploads arrive after the build) |
 
-`.board/instance.json` records the running board. Read it rather than assuming a
+`.aboard/instance.json` records the running board. Read it rather than assuming a
 port; the port is derived from the project path.
 
 ## Document
@@ -303,10 +308,10 @@ HTML — no build step, no imports, no framework.
 Inside the frame:
 
 ```js
-board.get()        // the persisted data object
-board.set(next)    // persist it — the parent writes state.data
-board.onData(fn)   // fires when it changed elsewhere (another agent, another viewer)
-board.fit()        // ask the parent to size the frame to the content
+aboard.get()        // the persisted data object
+aboard.set(next)    // persist it — the parent writes state.data
+aboard.onData(fn)   // fires when it changed elsewhere (another agent, another viewer)
+aboard.fit()        // ask the parent to size the frame to the content
 ```
 
 Reach for this when the interaction *is* the point: a custom sorter, a comparison
@@ -352,8 +357,8 @@ and acts. Pair it with a real wait, or a stale queue will have the human believi
 they gated something that already ran:
 
 ```sh
-./board -apply -by "agent-1" < next.json          # add to state.pending
-./board -wait -by "agent-1" -for "answer bb128"   # block until a human decides
+aboard apply --by "agent-1" < next.json          # add to state.pending
+aboard wait --by "agent-1" -for "answer bb128"   # block until a human decides
 ```
 
 ### log — output as it happens
@@ -362,12 +367,12 @@ they gated something that already ran:
 { "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
-The lines are NOT in `board.json` — they live in a sidecar file the server owns,
+The lines are NOT in `aboard.json` — they live in a sidecar file the server owns,
 because the document is rewritten whole on every write and tracked in git. Feed it
 by piping, and the tab picks it up within two seconds:
 
 ```sh
-go test ./... 2>&1 | ./board -log bb126
+go test ./... 2>&1 | aboard log bb126
 ```
 
 The human can follow (scrolling up pauses it, scrolling to the bottom resumes),
@@ -380,7 +385,7 @@ while the tab is off screen.
 { "limit": 200, "height": "44vh" }
 ```
 
-Reads the journal, not `board.json`: one lane per actor, a dot per accepted write,
+Reads the journal, not `aboard.json`: one lane per actor, a dot per accepted write,
 click a dot for the tabs it changed, click an actor chip to filter. That also means
 history is not something an agent can quietly rewrite. Useful the moment two
 sessions share a board — `lastEditedBy` only ever names the last one.
@@ -436,7 +441,7 @@ Usually the right answer when the shape is "look at this, then decide that": one
 composite tab beats three the user has to correlate.
 
 An `html` block works inside a `stack` like any other: the frame is served from
-`/tab/<tab>/<block>/html`, and `board.set()` writes to that block's own
+`/tab/<tab>/<block>/html`, and `aboard.set()` writes to that block's own
 `state.data`. It used to render blank, because the route required an exact tab of
 type `html` and a block's id is `"<tab>/<block>"`.
 
@@ -449,11 +454,11 @@ spacing, `markup` takes `layout`.
 ## Waiting for the human
 
 Asking on the board is only half a question — you also have to be there when the
-answer lands. Instead of polling `board.json`, block:
+answer lands. Instead of polling `aboard.json`, block:
 
 ```sh
-./board -apply -by "agent-1" < next.json      # ask (a form, a markup, a chat message)
-./board -wait  -by "agent-1" -timeout 15m     # then wait to be told to look
+aboard apply --by "agent-1" < next.json      # ask (a form, a markup, a chat message)
+aboard wait  -by "agent-1" -timeout 15m     # then wait to be told to look
 ```
 
 While you wait, the board's header shows **notify agent-1** with a lit dot: the
@@ -462,13 +467,13 @@ waiting means the button is disabled — a waiter is an open connection, so the
 count cannot lie or go stale.
 
 - exit **0** — poked. The event (`{event, at, by, note}`) is on stdout; re-read
-  `board.json` and act on what changed.
+  `aboard.json` and act on what changed.
 - exit **3** — timed out. Nobody came. Say so rather than pretending you waited.
-- Only `-for poke` exists. An unknown predicate is refused immediately rather
+- Only `--for poke` exists. An unknown predicate is refused immediately rather
   than blocking on something that will never fire.
 
 Tell the user you are waiting, and say what you are waiting for — a lit button
-with no explanation is a mystery. `./board -poke` is the same gesture from the
+with no explanation is a mystery. `aboard poke` is the same gesture from the
 other side, for handing off to another session (`agent-1` finishes, pokes,
 `agent-2` wakes).
 
@@ -491,22 +496,22 @@ Do not run the suite while another session is waiting for something that matters
 - **`nextId` never regresses** and always stays above every id in use.
 - **One server per project**, on a port derived from the project path.
 - **Live reload.** Your write pings every open board over SSE.
-- **A waiter cannot go stale.** `-wait` holds an open connection, so if the
+- **A waiter cannot go stale.** `aboard wait` holds an open connection, so if the
   session dies the count drops and the Notify button greys out by itself.
 
 ## Adding a capability
 
 A renderer is one ES module exporting `mount<Name>(root, ctx)` and returning
-`{ refresh() }`, plus one line in the `TYPES` registry in `board.html`. `ctx`
+`{ refresh() }`, plus one line in the `TYPES` registry in `aboard.html`. `ctx`
 gives you `state` (this tab's slice), `tab`, `save()`, `nextId()`, and — for a
 composite renderer — `types()`, `initFor()`, `mountType()`.
 
 Rules that keep the board coherent: colour only from the tokens in `app.css`
-(never a hex), keep per-viewer UI state in local JS (never in `board.json`),
+(never a hex), keep per-viewer UI state in local JS (never in `aboard.json`),
 never `innerHTML` with state values, never assign to `ctx.state` (it is a
 getter — mutate in place), and in `refresh()` never clobber an input the human
 has focus in.
 
 Assets are compiled into the binary, so after editing anything under `views/`,
-`app.css`, `board.html` or `assets/`, run `./restart.sh -force` — or `-dev` to
+`app.css`, `aboard.html` or `assets/`, run `./restart.sh -force` — or `-dev` to
 serve from disk while iterating.

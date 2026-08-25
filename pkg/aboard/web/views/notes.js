@@ -6,7 +6,7 @@
 // toggle. Opt-in per tab, because plain is right for a paste or a log and wrong
 // for a report: most of what an agent writes for a human is prose WITH
 // structure, and a wall of unrendered hashes and dashes is the worst of both.
-// The toggle is per-viewer state (never board.json) and the textarea is
+// The toggle is per-viewer state (never aboard.json) and the textarea is
 // untouched underneath — this changes how a note reads, not what it is.
 
 import { renderMarkdown, injectMarkdownStyle } from './markdown.js';
@@ -107,7 +107,7 @@ export function mountNotes(root, ctx) {
   toolbar.append(modeBtn);
 
   // Per-viewer, never persisted: which pane you are looking at is yours, and
-  // writing it to board.json would flip it for everyone else.
+  // writing it to aboard.json would flip it for everyone else.
   let editing = false;
 
   const textarea = document.createElement('textarea');

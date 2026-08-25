@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// versionReport is what `board version` knows about the binary running it.
+// versionReport is what `aboard version` knows about the binary running it.
 type versionReport struct {
 	App     string `json:"app"`
 	Host    string `json:"host"`

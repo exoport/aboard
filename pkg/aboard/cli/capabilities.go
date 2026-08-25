@@ -20,10 +20,10 @@ it describes, and this aggregates those with the declared command table and the
 route list. It needs no running server and no project: a fresh checkout, a copied
 binary, or another session holding the port all still answer.
 
-  board capabilities            the whole manifest, as JSON
-  board capabilities kanban     one type — cheap, for a mid-task lookup
-  board capabilities --format md    the markdown reference the skill commits
-  board capabilities --check    exit 1 if that committed reference is stale
+  aboard capabilities            the whole manifest, as JSON
+  aboard capabilities kanban     one type — cheap, for a mid-task lookup
+  aboard capabilities --format md    the markdown reference the skill commits
+  aboard capabilities --check    exit 1 if that committed reference is stale
 
 --check treats a MISSING reference as "nothing to check": a project that never
 copied the skill has nothing to be out of date.`,

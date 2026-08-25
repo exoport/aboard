@@ -16,7 +16,7 @@ const MIN_POINT_DIST = 0.005;   // thin pen points closer together than this
 
 // A pen stroke is stored as one "x,y x,y" string, not an array of pairs.
 // JSON.stringify with indentation puts every single number on its own line, so
-// one scribble turned 75% of board.json into coordinate noise — and this file
+// one scribble turned 75% of aboard.json into coordinate noise — and this file
 // exists to be read. Three decimals is sub-pixel on a 900px-wide image.
 const STROKE_DECIMALS = 3;
 
@@ -982,7 +982,7 @@ export function mountMarkup(root, ctx) {
     emptyEl.hidden = hasImages;
     imagesWrapEl.hidden = !hasImages;
     if (!hasImages) {
-      emptyEl.textContent = 'No image set. Add an "images" array (each with a "src" path relative to the board folder) to board.json.';
+      emptyEl.textContent = 'No image set. Add an "images" array (each with a "src" path relative to the board folder) to aboard.json.';
       return;
     }
     imagesWrapEl.dataset.layout = state.layout;
@@ -1496,7 +1496,7 @@ function encodePoints(points) {
 }
 
 // Accepts the compact string form and the older array-of-pairs form, so a
-// board.json written before this change still renders.
+// aboard.json written before this change still renders.
 function decodePoints(raw) {
   if (typeof raw === 'string') {
     return raw.trim().split(/\s+/).reduce((out, pair) => {

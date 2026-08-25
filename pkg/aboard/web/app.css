@@ -330,7 +330,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 
 .tab-dot--removal { background: var(--danger); box-shadow: none; }
 
-/* Notify button: a session blocked on `./board -wait` holds an open connection,
+/* Notify button: a session blocked on `aboard wait` holds an open connection,
    so a lit dot means something is genuinely listening. Nobody waiting, nothing
    to press — disabled is the honest state, not a hopeful one. */
 .poke-btn {

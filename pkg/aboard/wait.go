@@ -38,7 +38,7 @@ import (
 // How long a single -wait may block. A cap exists so a forgotten session cannot
 // hold a goroutine and a connection open forever.
 const (
-	// WaitDefault is how long `board wait` blocks when no timeout is given.
+	// WaitDefault is how long `aboard wait` blocks when no timeout is given.
 	WaitDefault = 10 * time.Minute
 	waitMax     = time.Hour
 )

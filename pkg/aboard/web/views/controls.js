@@ -26,7 +26,7 @@
 // button documented nowhere while SKILL.md advertised the feature.
 //
 // The deeper reason is drift. State fields do not silently disagree with their
-// spec, because -apply READS the declaration — it is load-bearing, so a wrong one
+// spec, because `aboard apply` READS the declaration — it is load-bearing, so a wrong one
 // produces a wrong warning and somebody fixes it. `gestures` had no consumer at
 // all, so nothing broke when it went stale. Rendering FROM the declaration gives
 // that half a consumer: get an id wrong and the button says so on screen.

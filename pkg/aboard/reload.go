@@ -2,7 +2,7 @@
 //
 // The problem this removes: an open board keeps running the JavaScript it
 // loaded. The live-reload stream refreshes DATA, never CODE, so after any change
-// to board.html, app.css or views/*.js the page had to be reloaded by hand — and
+// to aboard.html, app.css or views/*.js the page had to be reloaded by hand — and
 // in VS Code's Simple Browser that means the "Developer: Reload Webviews"
 // command, because a webview never sees Ctrl+R. Every UI change ended with
 // telling the user to do that, and forgetting meant debugging a page running
@@ -76,7 +76,7 @@ func (u *uiWatcher) signature(assets fs.FS) uiSig {
 
 func computeUISig(assets fs.FS) uiSig {
 	return uiSig{
-		HTML: hashFiles(assets, []string{"board.html"}),
+		HTML: hashFiles(assets, []string{"aboard.html"}),
 		CSS:  hashFiles(assets, []string{"app.css"}),
 		JS:   hashFiles(assets, listJS(assets)) + "-" + stampDirs(assets, vendorDirs),
 	}

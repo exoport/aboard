@@ -54,7 +54,7 @@
   "keys": [],
   "notes": [
     "Nothing here executes — a verdict is a record the asking agent reads.",
-    "Pair with `./board -wait -for \"answer <tabId>\"` or a stale queue lets the human believe they gated something that already ran.",
+    "Pair with `aboard wait --for \"answer <tabId>\"` or a stale queue lets the human believe they gated something that already ran.",
     "`ask` preserves the original request so an undo can restore it faithfully.",
     "A reason can be added after the verdict; `reasonAddedAt` marks it as reconstructed rather than recorded."
   ]

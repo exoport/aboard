@@ -6,7 +6,7 @@
 // htmltab.go for why that matters — this server has no auth). So a widget can
 // do anything HTML can do locally, and nothing to the board it was not handed.
 //
-// State round-trips through a postMessage bridge: the frame calls board.set(),
+// State round-trips through a postMessage bridge: the frame calls aboard.set(),
 // we write it into this tab's state.data and save it the normal way.
 
 import { controlsFor } from './controls.js';
@@ -29,7 +29,7 @@ const CSS = `
   width: 100%;
   border: 0;
   background: var(--bg);
-  /* A generous default rather than a small one grown by board.fit(): the fit is
+  /* A generous default rather than a small one grown by aboard.fit(): the fit is
      an async round-trip through postMessage, so relying on it for basic layout
      leaves the frame stubby whenever that is slow or blocked. state.height
      overrides; fit() still adjusts from here. */
@@ -134,7 +134,7 @@ export function mountHtml(root, ctx) {
   const hint = document.createElement('p');
   hint.className = 'hint';
   hint.textContent = 'The frame is sandboxed and cannot reach the network or this page. '
-    + 'It persists state by calling board.set(value); read it back with board.get().';
+    + 'It persists state by calling aboard.set(value); read it back with aboard.get().';
 
   editor.append(srcLabel, source, dataLabel, dataView, hint);
   panel.append(editor);
@@ -180,7 +180,7 @@ export function mountHtml(root, ctx) {
     const msg = e.data;
     if (!msg || typeof msg !== 'object') return;
 
-    if (msg.__board === 'set') {
+    if (msg.__aboard === 'set') {
       ctx.state.data = msg.data && typeof msg.data === 'object' ? msg.data : {};
       showData();
       clearTimeout(saveTimer);
@@ -189,7 +189,7 @@ export function mountHtml(root, ctx) {
       }, 250);
       return;
     }
-    if (msg.__board === 'height') {
+    if (msg.__aboard === 'height') {
       // An explicit state.height wins: the agent asked for a fixed size.
       if (fixedHeight()) return;
       const h = Number(msg.height);
@@ -243,7 +243,7 @@ export function mountHtml(root, ctx) {
       }
       showData();
       if (frame.contentWindow) {
-        frame.contentWindow.postMessage({ __board: 'data', data: ctx.state.data }, '*');
+        frame.contentWindow.postMessage({ __aboard: 'data', data: ctx.state.data }, '*');
       }
     },
   };

@@ -9,17 +9,17 @@
 #
 # Two gotchas this encodes:
 #  - a snap-confined chromium cannot write outside $HOME, so shots land in the
-#    project (.board/run/shots/) rather than /tmp;
+#    project (.aboard/run/shots/) rather than /tmp;
 #  - ?nosse=1 is required: the live-reload stream never closes, so a headless
 #    browser otherwise waits forever for network-idle and writes nothing.
 
 set -e
 cd "$(dirname "$0")/.."
-OUT=".board/run/shots"
+OUT=".aboard/run/shots"
 
 # Discover this project's port from the running instance rather than assuming
 # one: the port is derived per project, so it is not a fixed number any more.
-INSTANCE=".board/run/instance.json"
+INSTANCE=".aboard/run/instance.json"
 if [ -z "$PORT" ] && [ -f "$INSTANCE" ]; then
   PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$INSTANCE")
 fi
@@ -38,7 +38,7 @@ for c in chromium chromium-browser google-chrome google-chrome-stable; do
 done
 [ -z "$BROWSER" ] && { echo "no chromium-family browser found" >&2; exit 1; }
 
-if ! curl -sf -o /dev/null "$BASE/board.json"; then
+if ! curl -sf -o /dev/null "$BASE/aboard.json"; then
   echo "server not answering on $BASE — start it with ./restart.sh" >&2
   exit 1
 fi

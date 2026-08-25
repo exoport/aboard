@@ -15,12 +15,12 @@ package web
 
 import "embed"
 
-// FS is the embedded web tree, rooted so that "board.html", "app.css",
+// FS is the embedded web tree, rooted so that "aboard.html", "app.css",
 // "views/...", "lib/...", "assets/..." and "test/..." are the names the server
 // serves and the browser asks for.
 //
 // test/ is embedded on purpose: a shipped binary can then still self-check
 // against its own UI rather than against a working copy that may not exist.
 //
-//go:embed board.html app.css views lib assets test
+//go:embed aboard.html app.css views lib assets test
 var FS embed.FS

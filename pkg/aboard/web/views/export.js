@@ -165,9 +165,9 @@ export function download(filename, text, mime = 'text/plain') {
   }
 }
 
-/** A filename that will not surprise anyone: board-<tab>-<id>.<ext> */
+/** A filename that will not surprise anyone: aboard-<tab>-<id>.<ext> */
 export function exportName(tab, ext) {
   const slug = String(tab.name || tab.type || 'tab')
     .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'tab';
-  return `board-${slug}-${tab.id}.${ext}`;
+  return `aboard-${slug}-${tab.id}.${ext}`;
 }

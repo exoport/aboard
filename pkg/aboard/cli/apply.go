@@ -24,7 +24,7 @@ resolves nowhere, a colour name this board no longer has. They warn rather than
 refuse, because a spec can lag its renderer — but read them, because "applied"
 is not evidence that anything rendered.`,
 		Args:    cobra.NoArgs,
-		Example: "  board apply --by agent-1 < next.json",
+		Example: "  aboard apply --by agent-1 < next.json",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {
@@ -35,6 +35,6 @@ is not evidence that anything rendered.`,
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", "agent-1", "actor recorded in lastEditedBy and on every tab this write touched")
-	cmd.Flags().StringVar(&name, "name", "", "board name (env BOARD_NAME)")
+	cmd.Flags().StringVar(&name, "name", "", "board name (env ABOARD_NAME)")
 	return cmd
 }

@@ -23,14 +23,14 @@ func newServeCmd(opts Options) *cobra.Command {
 
 The port is derived from the discovered project root, so the URL is the same
 every run and two checkouts never collide; --port or PORT overrides it. The
-running instance is recorded in .board/run/instance.json, which is how every
+running instance is recorded in .aboard/run/instance.json, which is how every
 other command finds the board and how restart.sh stops the right process.
 
 --base-path serves the whole board under a URL prefix, for putting it behind a
 reverse proxy or inside another tool's routing. The prefix is injected into the
 shell, so every fetch, the SSE stream and an html tab's iframe all build from it.`,
 		Args:    cobra.NoArgs,
-		Example: "  board serve\n  board serve --dev\n  board serve --base-path /board",
+		Example: "  aboard serve\n  aboard serve --dev\n  aboard serve --base-path /aboard",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {
@@ -54,11 +54,11 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 			return aboard.Serve(cmd.Context(), opts, cfg)
 		},
 	}
-	cmd.Flags().StringVar(&basePath, "base-path", "", "serve under a URL prefix, e.g. /board (default: the server root)")
+	cmd.Flags().StringVar(&basePath, "base-path", "", "serve under a URL prefix, e.g. /aboard (default: the server root)")
 	cmd.Flags().BoolVar(&dev, "dev", false, "serve the web tree from disk instead of the embedded copy")
 	cmd.Flags().StringVar(&devDir, "dev-dir", "", "with --dev, the web tree to serve (default: pkg/aboard/web under the root)")
-	cmd.Flags().StringVar(&name, "name", "", "board name, for a second isolated board in the same project (env BOARD_NAME)")
+	cmd.Flags().StringVar(&name, "name", "", "board name, for a second isolated board in the same project (env ABOARD_NAME)")
 	cmd.Flags().IntVar(&port, "port", 0, "port to listen on (0 derives one from the project root; env PORT)")
-	cmd.Flags().StringVar(&state, "state", "", "state file to serve (default: .board/board.json under the root)")
+	cmd.Flags().StringVar(&state, "state", "", "state file to serve (default: .aboard/aboard.json under the root)")
 	return cmd
 }

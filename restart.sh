@@ -5,7 +5,7 @@
 #   ./restart.sh -force       # stop the running one and start fresh
 #   ./restart.sh -dev         # UI from disk, for iterating on pkg/aboard/web
 #   ./restart.sh -name review # a second, isolated board in the same project
-#   ./board status            # what is running here, and on which port
+#   ./aboard status           # what is running here, and on which port
 #
 # A healthy board is left alone. Two Claude Code sessions in one project are
 # meant to SHARE a board, so the second session running this script must not
@@ -13,13 +13,13 @@
 # when you actually want to restart (after rebuilding, say).
 #
 # Only the pid recorded for this project+name is ever stopped; killing every
-# process matching "./board" would take down other projects' boards too.
+# process matching "./aboard" would take down other projects' boards too.
 
 cd "$(dirname "$0")" || exit 1
 
 # Pull -name out of the arguments so we act on the matching instance, and strip
 # -force since it is ours, not the binary's. Anything else is passed through to
-# `board serve` as a long flag.
+# `aboard serve` as a long flag.
 NAME=""
 FORCE=0
 prev=""
@@ -39,12 +39,12 @@ for arg in "$@"; do
   esac
   prev="$arg"
 done
-[ -z "$NAME" ] && NAME="$BOARD_NAME"
+[ -z "$NAME" ] && NAME="$ABOARD_NAME"
 
 if [ -n "$NAME" ]; then
-  INSTANCE=".board/run/instance.$NAME.json"
+  INSTANCE=".aboard/run/instance.$NAME.json"
 else
-  INSTANCE=".board/run/instance.json"
+  INSTANCE=".aboard/run/instance.json"
 fi
 
 read_field() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\).*/\1/p" "$INSTANCE"; }
@@ -54,7 +54,7 @@ if [ -f "$INSTANCE" ]; then
   url=$(read_field url)
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
     if [ "$FORCE" -eq 0 ]; then
-      echo "board already running at $url (pid $pid)"
+      echo "aboard already running at $url (pid $pid)"
       echo "another session can just open that URL; pass -force to restart it"
       exit 0
     fi
@@ -69,6 +69,6 @@ if [ -f "$INSTANCE" ]; then
 fi
 
 command -v go >/dev/null 2>&1 || { echo "no go toolchain on PATH" >&2; exit 1; }
-go build -o board ./cmd/board || exit 1
+go build -o aboard ./cmd/aboard || exit 1
 # shellcheck disable=SC2086
-exec ./board serve $ARGS
+exec ./aboard serve $ARGS

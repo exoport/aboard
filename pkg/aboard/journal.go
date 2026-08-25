@@ -2,12 +2,12 @@
 //
 //	GET /journal?limit=100   recent entries, newest last
 //	GET /watch               the same entries as they happen, one JSON line each
-//	board journal            print recent entries
-//	board watch              follow them
+//	aboard journal            print recent entries
+//	aboard watch              follow them
 //
 // Why: with two sessions and a human writing one document, "who changed the plan
 // while I was thinking?" had no answer except git archaeology over a file that
-// changes constantly. git gives coarse history of board.json across commits; this
+// changes constantly. git gives coarse history of aboard.json across commits; this
 // gives per-write granularity, the author, and — for a tab that changed — the
 // state it held BEFORE, which is the unit you would actually want to restore.
 //
@@ -16,7 +16,7 @@
 // journal is not a thing that can happen.
 //
 // Bounded from the start, because an append-only file that nobody prunes is the
-// same bug as a log tab inside board.json: rotate at a size cap, keep one older
+// same bug as a log tab inside aboard.json: rotate at a size cap, keep one older
 // generation, and store only the tabs a write actually touched.
 package aboard
 

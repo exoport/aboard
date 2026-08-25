@@ -109,7 +109,7 @@
   "notes": [
     "Coordinates are normalized 0..1 against each image’s own box, never pixels.",
     "Marks are numbered continuously across the tab, so a number names one mark.",
-    "`color` is a token NAME from `colors` above, never a hex. An unrecognised one draws nothing at all, so `-apply` warns about it.",
+    "`color` is a token NAME from `colors` above, never a hex. An unrecognised one draws nothing at all, so `aboard apply` warns about it.",
     "`strokes[].points` is one \"x,y x,y\" string.",
     "Put agent-supplied images in assets/; pasted ones land in uploads/."
   ]

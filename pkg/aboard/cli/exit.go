@@ -3,7 +3,7 @@
 // Copied in shape from ape's internal/apecmd/report.go, on purpose: a developer
 // who knows one CLI in this tree should not have to learn a second exit
 // convention. The property that matters is that command bodies never call
-// os.Exit — they return an error, Execute maps it, and cmd/board/main.go is the
+// os.Exit — they return an error, Execute maps it, and cmd/aboard/main.go is the
 // only place a status leaves the process. That is also what makes the commands
 // testable in-process: os.Exit inside a RunE would kill the test binary on the
 // first assertion.

@@ -147,7 +147,7 @@ const CSS = `
 // Built FROM views/ui.spec.json rather than restated here, like the controls: the
 // list an agent is told about and the list this code accepts must not be two
 // lists. Every tone maps to the token of the same name, which is what makes a
-// bare array enough. `-apply` warns when a write names one that is not here.
+// bare array enough. `aboard apply` warns when a write names one that is not here.
 const TONES = Object.fromEntries((PALETTES.ui || []).map((name) => [name, `var(--${name})`]));
 
 function injectStyle() {
@@ -159,7 +159,7 @@ function injectStyle() {
 }
 
 // Which panel of a `tabs` component you had open. Per-viewer state, so it never
-// goes near board.json — but it must survive a re-render, and render() rebuilds
+// goes near aboard.json — but it must survive a re-render, and render() rebuilds
 // the whole tree on every board write. Held here, keyed by tab and component, and
 // mirrored into sessionStorage so it also survives the page reloading itself.
 const openPanels = new Map();
@@ -174,7 +174,7 @@ function panelKey(tabId, node, fallback) {
 function readPanel(key) {
   if (openPanels.has(key)) return openPanels.get(key);
   try {
-    const stored = sessionStorage.getItem('board.panel.' + key);
+    const stored = sessionStorage.getItem('aboard.panel.' + key);
     if (stored !== null) {
       const n = Number(stored);
       if (Number.isInteger(n) && n >= 0) { openPanels.set(key, n); return n; }
@@ -187,7 +187,7 @@ function readPanel(key) {
 
 function writePanel(key, index) {
   openPanels.set(key, index);
-  try { sessionStorage.setItem('board.panel.' + key, String(index)); } catch {}
+  try { sessionStorage.setItem('aboard.panel.' + key, String(index)); } catch {}
 }
 
 export function mountUi(root, ctx) {

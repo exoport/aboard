@@ -1,7 +1,7 @@
-# Build output. Anchored with a leading slash: a bare "board" pattern also
-# matches any DIRECTORY named board, which silently excluded
-# .claude/skills/board/ — the whole skill — from the repo.
-/board
+# Build output. Anchored with a leading slash: a bare "aboard" pattern also
+# matches any DIRECTORY named aboard, which silently excluded both
+# .claude/skills/aboard/ — the whole skill — and pkg/aboard/ from the repo.
+/aboard
 /dist/
 
 # Everything the board owns for this project: the state document, the images the
@@ -11,7 +11,7 @@
 # A board is a LOCAL, PERSISTENT, NON-AUTHORITATIVE channel. Committing it would
 # mean a whole-file JSON conflict on every merge, over a conversation that was
 # never the other developer's.
-/.board/
+/.aboard/
 
 # Local cross-module development (go.work). Never a committed replace directive.
 /go.work

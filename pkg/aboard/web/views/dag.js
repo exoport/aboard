@@ -143,7 +143,7 @@ const svgEl = (name, attrs = {}) => {
 export function mountDag(root, ctx) {
   injectStyle();
 
-  // Per-viewer UI state — deliberately NOT part of board.json.
+  // Per-viewer UI state — deliberately NOT part of aboard.json.
   let selectedId = null;
   let fitted = false;
   let view = { tx: 40, ty: 40, k: 1 };
@@ -301,7 +301,7 @@ export function mountDag(root, ctx) {
 
   // Tidy-tree layout. Leaves consume sequential horizontal slots; a parent sits
   // at the midpoint of its children. `visited` also guards against a cycle in
-  // the parent links, which a bad hand-edit of board.json could introduce.
+  // the parent links, which a bad hand-edit of aboard.json could introduce.
   function layout() {
     const all = nodes();
     const pos = new Map();

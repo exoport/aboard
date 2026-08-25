@@ -1,7 +1,7 @@
 {
   "type": "log",
   "label": "Log",
-  "blurb": "Output you can watch. Lines live in a sidecar file, fed by ./board -log <id>.",
+  "blurb": "Output you can watch. Lines live in a sidecar file, fed by aboard log <id>.",
   "since": 1,
   "init": {
     "source": "",
@@ -45,7 +45,7 @@
   ],
   "keys": [],
   "notes": [
-    "The lines are NOT in board.json: `<cmd> 2>&1 | ./board -log <id>`.",
+    "The lines are NOT in aboard.json: `<cmd> 2>&1 | aboard log <id>`.",
     "Polled every 2s only while the tab is on screen."
   ]
 }

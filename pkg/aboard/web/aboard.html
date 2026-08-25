@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Board</title>
+<title>aboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="app.css">
 <!-- The URL prefix this board is served under, injected by the server from
@@ -15,7 +15,7 @@
 <div class="board-head">
 
 <div class="topbar">
-  <h1>Board</h1>
+  <h1>aboard</h1>
   <span class="meta" id="meta">loading…</span>
   <span class="spacer"></span>
   <span class="meta" id="save-state"></span>
@@ -97,7 +97,7 @@ import { api } from './views/api.js';
 
 const CLIENT_ID = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
-// The board.json layout this code understands. An open page keeps running the
+// The aboard.json layout this code understands. An open page keeps running the
 // JavaScript it loaded, so when the schema moves under a page that is already
 // open, the live-reload fetches a document this code cannot read. Saying so
 // beats rendering an empty board and letting the user guess.
@@ -159,7 +159,7 @@ const TYPES = {
              init: () => ({ pending: [], decided: [] }) },
   vote:    { label: 'Vote',     mount: mountVote,    blurb: 'Several participants score the same options; the disagreement is visible.',
              init: () => ({ question: 'Score the options', scale: 5, options: [], ballots: {} }) },
-  log:     { label: 'Log',      mount: mountLog,     blurb: 'Output you can watch. Lines live in a sidecar file, fed by ./board -log <id>.',
+  log:     { label: 'Log',      mount: mountLog,     blurb: 'Output you can watch. Lines live in a sidecar file, fed by aboard log <id>.',
              init: () => ({ source: '', tail: 400, follow: true }) },
   trace:   { label: 'Trace',    mount: mountTrace,   blurb: 'Who wrote what, when — one lane per actor, read from the journal.',
              init: () => ({ limit: 200 }) },
@@ -305,7 +305,7 @@ const stashedTabs = new Map();   // tab id -> the human's version of that tab
 async function mergeOntoFresh() {
   let fresh;
   try {
-    const res = await fetch(api('/board.json'), { cache: 'no-store' });
+    const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
     if (!res.ok) return null;
     fresh = await res.json();
   } catch {
@@ -347,7 +347,7 @@ async function pushDoc({ retries = 1 } = {}) {
   const payload = { ...doc, __origin: CLIENT_ID, __base: doc.updatedAt, __by: 'human' };
   let res;
   try {
-    res = await fetch(api('/board.json'), {
+    res = await fetch(api('/aboard.json'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -593,7 +593,7 @@ function openHelp() {
   $helpBody.append(rest);
 
   $helpBody.append(helpSection('This board', [
-    ['notify', 'wakes a session blocked on ./board -wait — disabled when nothing is waiting'],
+    ['notify', 'wakes a session blocked on aboard wait — disabled when nothing is waiting'],
     ['read-only', 'that tab is maintained by an agent; nothing there is yours to rearrange'],
     ['heartbeat', 'when an agent maintains a tab, how long ago it last said anything'],
     ['this tab is for', "the tab's note: why it exists, in your words. Editable, and an agent reads it"],
@@ -679,7 +679,7 @@ function onUiSignature(sig) {
 
 /* ---------- notify waiting sessions ---------- */
 
-// A session blocked on `./board -wait` is an open connection to this server, so
+// A session blocked on `aboard wait` is an open connection to this server, so
 // the count below cannot go stale: if the session dies, the connection dies and
 // the button greys out on its own. That is what makes it honest to claim someone
 // is listening — and why the button is disabled rather than hopeful when the
@@ -713,7 +713,7 @@ function paintPoke(note) {
   if (note !== undefined) { $pokeLabel.textContent = note; return; }
   if (!n) {
     $pokeLabel.textContent = 'no session waiting';
-    $poke.title = 'Nothing is waiting on this board.\nA session waits with:  ./board -wait -by agent-1';
+    $poke.title = 'Nothing is waiting on this board.\nA session waits with:  aboard wait --by agent-1';
     return;
   }
   // The soonest deadline is the one that matters: it is how long you have before
@@ -1154,7 +1154,7 @@ function ensureMounted(id) {
     p.className = 'hint';
     p.textContent = `${spec.label} view failed to load: ${err && err.message ? err.message : err}`;
     body.append(p);
-    console.error(`[board] ${tab.type} mount failed`, err);
+    console.error(`[aboard] ${tab.type} mount failed`, err);
   }
 }
 
@@ -1164,7 +1164,7 @@ function activate(id) {
   setTimeout(renderTabNote, 0);
   if (!tabById(id)) return;
   activeId = id;
-  localStorage.setItem('board.tab', id);
+  localStorage.setItem('aboard.tab', id);
   for (const btn of $tabs.children) {
     btn.setAttribute('aria-selected', String(btn.dataset.id === id));
   }
@@ -1259,7 +1259,7 @@ function schemaNotice(found) {
 }
 
 async function load({ announce = false } = {}) {
-  const res = await fetch(api('/board.json'), { cache: 'no-store' });
+  const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
   doc = await res.json();
   baseline = snapshot(doc);
   return repaint({ announce });
@@ -1294,7 +1294,7 @@ function repaint({ announce = false } = {}) {
     }
   }
   if (!tabById(activeId)) {
-    activeId = localStorage.getItem('board.tab');
+    activeId = localStorage.getItem('aboard.tab');
     if (!tabById(activeId)) activeId = tabs()[0] ? tabs()[0].id : null;
   }
 
@@ -1332,7 +1332,7 @@ if (!new URLSearchParams(location.search).has('nosse')) {
 // Deep links. `?tab=` has always worked; `#tab=bb71&node=bb57` addresses a node
 // INSIDE a tab, which is what a reference in prose or a chat message actually
 // needs — "the node called auth" becomes a click. The fragment is per-viewer
-// navigation state, so it stays in the URL and never touches board.json.
+// navigation state, so it stays in the URL and never touches aboard.json.
 function readTarget() {
   const hash = new URLSearchParams(location.hash.replace(/^#/, ''));
   // #help opens the panel — so a link can hand someone the help, and so the

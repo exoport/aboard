@@ -16,7 +16,7 @@
 window.ABOARD_BASE = location.pathname.replace(/\/test\/smoke\.html$/, '');
 </script>
 <script type="module">
-// Mounts every tab in the real board.json through the same contract the shell
+// Mounts every tab in the real aboard.json through the same contract the shell
 // uses, so a renderer that parses but throws on mount is caught here.
 const log = [];
 const out = document.getElementById('out');
@@ -54,9 +54,9 @@ const capability = {
   mountType: (type, el, sub) => (registry[type] ? registry[type](el, sub) : null),
 };
 
-const doc = await (await fetch('../board.json', { cache: 'no-store' })).json();
+const doc = await (await fetch('../aboard.json', { cache: 'no-store' })).json();
 const tabs = Array.isArray(doc.tabs) ? doc.tabs : [];
-log.push(`tabs in board.json: ${tabs.length}`);
+log.push(`tabs in aboard.json: ${tabs.length}`);
 
 const byId = (id) => tabs.find((t) => t.id === id);
 function stateOf(tab) {

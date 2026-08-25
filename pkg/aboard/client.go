@@ -83,7 +83,7 @@ func Apply(root Root, name, by string, assets fs.FS, in io.Reader, out, errOut i
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(inst.URL+"/board.json", "application/json", strings.NewReader(string(payload)))
+	resp, err := http.Post(inst.URL+"/aboard.json", "application/json", strings.NewReader(string(payload)))
 	if err != nil {
 		return fmt.Errorf("posting to %s: %w", inst.URL, err)
 	}
@@ -110,7 +110,7 @@ const (
 	SkillAbsent  = "absent"
 )
 
-// StatusReport is what `board status` knows. A struct rather than printed prose
+// StatusReport is what `aboard status` knows. A struct rather than printed prose
 // because --output-format json has to say the same things the human form does,
 // and the only way to guarantee that is for both to render the same value.
 type StatusReport struct {
@@ -140,7 +140,7 @@ type StatusReport struct {
 	SkillCapsHash string `json:"skillCapsHash,omitempty"`
 }
 
-// Status collects everything `board status` reports.
+// Status collects everything `aboard status` reports.
 func Status(root Root, name string, assets fs.FS) StatusReport {
 	rep := StatusReport{
 		Project:      root.String(),
@@ -194,9 +194,9 @@ func (r StatusReport) Human() string {
 		fmt.Fprintf(&b, "it would use port %d\n", r.WouldUsePort)
 	case !r.Running:
 		fmt.Fprintf(&b, "stale record: %s (pid %d) is not answering\n", r.URL, r.PID)
-		fmt.Fprintf(&b, "start a fresh one with `board serve`\n")
+		fmt.Fprintf(&b, "start a fresh one with `aboard serve`\n")
 	default:
-		fmt.Fprintf(&b, "board running at %s\n", r.URL)
+		fmt.Fprintf(&b, "aboard running at %s\n", r.URL)
 		fmt.Fprintf(&b, "  project %s\n  state   %s\n  pid     %d\n  since   %s\n",
 			r.Project, r.State, r.PID, r.Started)
 		if r.App != "" && r.App != HostStandalone {

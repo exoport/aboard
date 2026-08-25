@@ -1,8 +1,8 @@
-// logs.go — output that a human can watch, kept OUT of board.json.
+// logs.go — output that a human can watch, kept OUT of aboard.json.
 //
 //	POST /log?tab=<id>          append what an agent piped in
 //	GET  /log?tab=<id>&tail=n   the last n lines
-//	board log <tabId>           read stdin and append it, line by line
+//	aboard log <tabId>           read stdin and append it, line by line
 //
 // The design constraint came from the human, and it was right: the board document
 // is rewritten whole on every write, so an appending log
@@ -127,7 +127,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 // logCLI streams stdin into a tab's log, a line at a time, so a long-running
 // command shows up on the board as it happens rather than when it finishes:
 //
-//	go test ./... 2>&1 | board log bb42
+//	go test ./... 2>&1 | aboard log bb42
 func Log(root Root, name, tab string, in io.Reader, out io.Writer) error {
 	inst, err := RunningInstance(root, name)
 	if err != nil {

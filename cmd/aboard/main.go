@@ -1,4 +1,4 @@
-// Command board serves a project's shared visual board and drives it from the
+// Command aboard serves a project's shared visual board and drives it from the
 // terminal.
 //
 // This file is deliberately the whole of the process layer: it is the only place

@@ -14,14 +14,14 @@
 //
 // The split under the root is between CONTENT and MACHINE-LOCAL RUNTIME:
 //
-//	.board/board.json          the board itself — the thing a human curates
-//	.board/uploads/            images they pasted; content too
-//	.board/run/instance.json   port, pid, url — true only for this machine, now
-//	.board/run/journal.jsonl   the write log
-//	.board/run/logs/<tab>.log  sidecar command output
-//	.board/run/shots/          screenshots from test/shot.sh
+//	.aboard/aboard.json         the board itself — the thing a human curates
+//	.aboard/uploads/            images they pasted; content too
+//	.aboard/run/instance.json   port, pid, url — true only for this machine, now
+//	.aboard/run/journal.jsonl   the write log
+//	.aboard/run/logs/<tab>.log  sidecar command output
+//	.aboard/run/shots/          screenshots from test/shot.sh
 //
-// A project ignores `.board/` wholesale and loses nothing it wanted to keep.
+// A project ignores `.aboard/` wholesale and loses nothing it wanted to keep.
 package aboard
 
 import (
@@ -35,7 +35,7 @@ import (
 
 // DirName is the marker directory an aboard project is recognised by, and the
 // container for everything the board owns.
-const DirName = ".board"
+const DirName = ".aboard"
 
 // runDirName separates machine-local runtime files from content. Nested inside
 // DirName rather than beside it so a project ignores one path, not two.
@@ -45,12 +45,12 @@ const runDirName = "run"
 // contains a DirName directory.
 var ErrNoRoot = errors.New("no " + DirName + " directory found")
 
-// Root is a project root: the directory that contains `.board/`. It is always
+// Root is a project root: the directory that contains `.aboard/`. It is always
 // absolute — FindRoot resolves it — so anything derived from it is stable
 // regardless of where the process was started.
 type Root string
 
-// FindRoot walks up from start looking for a directory that contains `.board/`,
+// FindRoot walks up from start looking for a directory that contains `.aboard/`,
 // stopping at the filesystem's fixed point (filepath.Dir is its own fixed point
 // at a volume root, on every platform, which is this loop's only exit).
 //
@@ -88,7 +88,7 @@ func NewRoot(dir string) (Root, error) {
 // String is the absolute project directory.
 func (r Root) String() string { return string(r) }
 
-// Dir is the board's own directory: `<root>/.board`.
+// Dir is the board's own directory: `<root>/.aboard`.
 func (r Root) Dir() string { return filepath.Join(string(r), DirName) }
 
 // RunDir holds everything true only for this machine and this moment.
@@ -98,9 +98,9 @@ func (r Root) RunDir() string { return filepath.Join(r.Dir(), runDirName) }
 // boards in one project never share state.
 func (r Root) StateFile(name string) string {
 	if name == "" {
-		return filepath.Join(r.Dir(), "board.json")
+		return filepath.Join(r.Dir(), "aboard.json")
 	}
-	return filepath.Join(r.Dir(), "board."+name+".json")
+	return filepath.Join(r.Dir(), "aboard."+name+".json")
 }
 
 // UploadsDir holds images the human pasted or dropped. Content, not runtime:
@@ -149,7 +149,7 @@ func (r Root) DevDir() string { return filepath.Join(string(r), "pkg", "aboard",
 // SkillReference is the generated half of the committed skill: facts, emitted
 // from the manifest, checked for staleness by `capabilities --check`.
 func (r Root) SkillReference() string {
-	return filepath.Join(string(r), ".claude", "skills", "board", "references", "reference.generated.md")
+	return filepath.Join(string(r), ".claude", "skills", "aboard", "references", "reference.generated.md")
 }
 
 // GeneratedControls is the control module the renderers import, emitted from the
@@ -176,7 +176,7 @@ const (
 //
 // Hashing the DISCOVERED ROOT rather than the working directory is what makes
 // the URL the same whichever subdirectory you run the command from — the spike
-// hashed os.Getwd(), so `cd views && board -status` reported a different port
+// hashed os.Getwd(), so `cd views && aboard status` reported a different port
 // than the board it was looking at.
 func DerivePort(root Root, name string) int {
 	sum := sha256.Sum256([]byte(string(root) + "\x00" + name))
@@ -187,7 +187,7 @@ func DerivePort(root Root, name string) int {
 // relative path against the project root rather than the working directory.
 //
 // The root is what every other path in this file hangs off, so a `--state
-// board.json` typed from a subdirectory has to mean the same file it would mean
+// aboard.json` typed from a subdirectory has to mean the same file it would mean
 // from the root. Interpreting it against the process's cwd is exactly the bug
 // this file exists to remove.
 func (r Root) Resolve(p string) string {
