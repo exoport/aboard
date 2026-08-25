@@ -189,6 +189,20 @@ if [ -n "$HTML_TAB" ]; then
       if (!ok) process.exitCode = 1;
     });
   "
+  # The bridge is a NAME contract, in both directions: the widget calls it as a
+  # bare global and the parent matches on the envelope property. Rename one half
+  # and the frame posts messages the parent silently drops — no error anywhere.
+  BODY=$(curl -s "$BASE/tab/$HTML_TAB/html")
+  MISSING=""
+  for want in 'window.aboard' '__ABOARD_DATA__'; do
+    case "$BODY" in *"$want"*) ;; *) MISSING="$MISSING $want" ;; esac
+  done
+  check "the bridge is served under its aboard names" "${MISSING:-none}" "none"
+  STALE=""
+  for gone in 'window.board' '__BOARD_DATA__' '__board'; do
+    case "$BODY" in *"$gone"*) STALE="$STALE $gone" ;; esac
+  done
+  check "no pre-rename bridge name survives in the served frame" "${STALE:-none}" "none"
 else
   echo "  skip no html tab on this board"
 fi

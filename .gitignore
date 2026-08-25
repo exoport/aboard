@@ -1,18 +1,62 @@
-# Build output. Anchored with a leading slash: a bare "aboard" pattern also
-# matches any DIRECTORY named aboard, which silently excluded both
-# .claude/skills/aboard/ — the whole skill — and pkg/aboard/ from the repo.
-/aboard
+# Go binaries and build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary built with `go test -c`
+*.test
+
+# Coverage output
+*.out
+coverage.out
+
+# Vendor directory (we don't vendor). The mermaid bundle is committed verbatim
+# so `go install` produces a self-contained binary with no toolchain, but it
+# lives at pkg/aboard/web/lib/ — NOT vendor/, which Go treats specially and
+# would try to resolve as module vendoring.
+/vendor/
+
+# goreleaser output
 /dist/
 
-# Everything the board owns for this project: the state document, the images the
-# human pasted, and the machine-local runtime files (instance record, journal,
-# sidecar logs, screenshots). One path, because there is one directory.
+# Local binary output (e.g., from `make build`). Anchored with a leading slash
+# on purpose: a bare `aboard` pattern also matches any DIRECTORY named aboard,
+# which silently excluded both .claude/skills/aboard/ — the whole skill — and
+# pkg/aboard/ from the repo. Measured, not theoretical.
+/aboard
+/bin/
+
+# The board itself. State, uploads, project recipes and every machine-local
+# runtime file live under .aboard/ — the state file, the instance files clients
+# discover the port through, the journal, per-tab logs and screenshots.
 #
-# A board is a LOCAL, PERSISTENT, NON-AUTHORITATIVE channel. Committing it would
-# mean a whole-file JSON conflict on every merge, over a conversation that was
-# never the other developer's.
+# This is a REAL project's posture and it is the one this repo follows: a board
+# is a local, persistent, non-authoritative channel. Several developers on one
+# repo each get their own; a committed one would mean a whole-file JSON conflict
+# on every merge, over a conversation that was never theirs. The example board
+# `aboard init --example` seeds is compiled into the binary at
+# pkg/aboard/example/ instead, where it is a fixture rather than a log of
+# somebody's afternoon.
 /.aboard/
 
-# Local cross-module development (go.work). Never a committed replace directive.
-/go.work
-/go.work.sum
+# test/shot.sh writes to .aboard/run/shots/, which /.aboard/ already covers.
+# This entry is for the older path and for anything pointed at it by hand.
+/.shots/
+
+# Local cross-module development against a checkout of a dependency. Never a
+# committed `replace` — that breaks `go install` for everyone else.
+go.work
+go.work.sum
+
+# Editor / IDE
+.vscode/
+.VSCodeCounter
+
+# Local logs / scratch
+/logs/
+*.db
+
+# _output/ is scratch with its own .gitignore (it keeps the directory but
+# ignores its contents), so there is deliberately no entry for it here.

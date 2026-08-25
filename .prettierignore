@@ -1,0 +1,17 @@
+.bingo/
+.claude/
+.github/
+.vscode/
+node_modules/
+_output/
+output/
+.VSCodeCounter
+CHANGELOG.md
+
+# The embedded UI and the fixtures are byte-sensitive: capsHash is computed over
+# views/*.spec.json, controls.generated.js is written by the binary, and the
+# example board is compared as bytes. Prettier reformatting any of them would
+# move a hash or fail a fixture, not just change whitespace.
+pkg/aboard/web/
+pkg/aboard/example/
+testdata/

@@ -1,58 +1,192 @@
-# aboard — single-binary shared whiteboard
+.DEFAULT_GOAL := help
 
-BINARY := aboard
-LDFLAGS := -s -w
+BIN          := aboard
+INSTALL_DIR  ?= /usr/local/bin
+COVER_FILE   := coverage.out
 
-.PHONY: run dev build check test smoke shot status caps dist clean
+# Tooling pinned via bingo. See .bingo/Variables.mk for $(GOLANGCI_LINT),
+# $(GOFUMPT), $(GORELEASER), $(GOVULNCHECK), $(BINGO) — each variable expands
+# to a version-stamped binary path under $(GOBIN), and the included rules
+# (re)build the tool when its .mod file changes. Update versions with
+# `bingo get <module>@<version>`.
+include .bingo/Variables.mk
 
-run: build          ## build and serve with the embedded UI
-	./$(BINARY) serve
+# Version stamping. The same three variables goreleaser sets (see the ldflags
+# block in .goreleaser.yaml) so a `make build` binary and a released one report
+# identity by identical rules; pkg/aboard falls back to debug.ReadBuildInfo when
+# they are unset, which is what `go install` and `go run` get.
+#
+# DATE is the COMMIT's date, not `date -u` now: a wall-clock stamp changes every
+# second, so every build would relink and Go's build cache would never hit —
+# and `make caps`, which builds twice on purpose, would pay for it twice.
+VERSION_PKG := github.com/exoport/aboard/pkg/aboard
+VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GIT_COMMIT  ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+BUILD_DATE  ?= $(shell git log -1 --format=%cI 2>/dev/null || echo unknown)
+GO_LDFLAGS  := -X $(VERSION_PKG).Version=$(VERSION) \
+               -X $(VERSION_PKG).BuildDate=$(BUILD_DATE) \
+               -X $(VERSION_PKG).GitCommit=$(GIT_COMMIT)
 
-dev: build          ## serve the UI from disk, so edits need no rebuild
-	./$(BINARY) serve --dev
+# What `make caps` regenerates. Named here so the recipe can write through a
+# temp file: a bare `> file` truncates before the command runs, so a failed
+# generator leaves an EMPTY controls module in the tree and the next build
+# embeds it.
+CAPS_JS      := pkg/aboard/web/views/controls.generated.js
+CAPS_MD      := .claude/skills/aboard/references/reference.generated.md
+CAPS_RECIPES := .claude/skills/aboard/references/recipes.md
 
-build:              ## build the binary for this machine
-	go build -o $(BINARY) ./cmd/aboard
+.PHONY: help
+help:              ## Show this help.
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort \
+	  | awk 'BEGIN {FS = ":[^#]*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
-check:              ## vet + gofmt check
+.PHONY: build
+build:             ## Build the aboard binary into ./aboard.
+	go build -ldflags '$(GO_LDFLAGS)' -o $(BIN) ./cmd/aboard
+
+.PHONY: install
+install:           ## Build and install aboard to INSTALL_DIR (default: /usr/local/bin).
+	@go build -ldflags '$(GO_LDFLAGS)' -o $(BIN) ./cmd/aboard
+	@install -m 755 $(BIN) $(INSTALL_DIR)/$(BIN)
+	@rm -f $(BIN)
+	@echo "installed $(BIN) to $(INSTALL_DIR)/"
+
+.PHONY: test
+test:              ## Run all Go tests with the race detector.
+	go test -race ./...
+
+.PHONY: test-cover
+test-cover:        ## Run tests and produce a coverage profile.
+	go test -race -coverprofile=$(COVER_FILE) ./...
+	@echo "view coverage: go tool cover -html=$(COVER_FILE)"
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Run golangci-lint (pinned via bingo).
+	$(GOLANGCI_LINT) run ./...
+
+.PHONY: fmt
+fmt: $(GOFUMPT)    ## Format Go source with gofumpt (pinned via bingo).
+	$(GOFUMPT) -l -w .
+
+# The zero-dependency gate, carried over from the split's Makefile. `lint` is
+# the real one, but it needs bingo to have fetched golangci-lint; this one runs
+# in a bare checkout with nothing but the Go toolchain, which is what a first
+# `git clone && make check` has.
+.PHONY: check
+check:             ## vet + gofmt check — the gate that needs no tools fetched.
 	go vet ./...
 	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
 	@echo "check ok"
 
-test:               ## the Go tests
-	go test -race ./...
+.PHONY: pre-commit
+pre-commit:        ## Run pre-commit hooks across all files.
+	pre-commit run --all-files
 
-smoke:              ## headless browser smoke suite (server must be running)
-	./test/smoke.sh
+.PHONY: snapshot
+snapshot: $(GORELEASER) ## Build release snapshot artifacts via goreleaser (no upload, no sign).
+	# --skip=sign avoids the cosign OIDC device flow in local runs.
+	# Real releases sign via release.yml, which runs on a GitHub Actions
+	# runner whose ambient OIDC token is automatically exchanged with
+	# Fulcio. Locally we just want to verify the archive layout.
+	$(GORELEASER) release --snapshot --clean --skip=publish --skip=sign
 
-shot:               ## screenshot tabs into .aboard/run/shots/
-	./test/shot.sh
+.PHONY: govulncheck
+govulncheck: $(GOVULNCHECK) ## Scan for known vulnerabilities (pinned via bingo); allow-lists documented unfixable advisories.
+	python3 scripts/govulncheck-gate.py $(GOVULNCHECK) ./...
 
-status: build       ## what is running for this project, and on which port
-	./$(BINARY) status
+.PHONY: tools
+tools: $(GOLANGCI_LINT) $(GOFUMPT) $(GORELEASER) $(GOVULNCHECK) ## Pre-install all bingo-pinned tools.
+	@echo "tools installed under $(GOBIN)"
 
-dist:               ## cross-compile release binaries into dist/
-	@mkdir -p dist
-	@for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do \
-		os=$${t%/*}; arch=$${t#*/}; ext=""; \
-		[ "$$os" = "windows" ] && ext=".exe"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -ldflags="$(LDFLAGS)" \
-			-o dist/$(BINARY)-$$os-$$arch$$ext ./cmd/aboard && echo "  dist/$(BINARY)-$$os-$$arch$$ext"; \
+.PHONY: tidy
+tidy:              ## Update go.mod and go.sum.
+	go mod tidy
+
+# Screenshots are deliberately NOT removed here: test/shot.sh writes them to
+# .aboard/run/shots/ (Root.ShotsDir), and everything under .aboard/ is the
+# board's own — state, uploads, journal, instance record. A `make clean` that
+# reached in there would delete a human's work to save a few kilobytes.
+.PHONY: clean
+clean:             ## Remove build artifacts. Never touches .aboard/ — that is board STATE.
+	rm -f $(BIN) $(COVER_FILE)
+	rm -rf dist/
+
+.PHONY: xcompile-windows
+xcompile-windows:  ## Cross-compile + cross-vet for Windows; catches portability compile errors.
+	@echo "==> GOOS=windows go vet ./..."
+	@GOOS=windows GOARCH=amd64 go vet ./...
+	@echo "==> GOOS=windows go build ./..."
+	@GOOS=windows GOARCH=amd64 go build ./...
+	@echo "==> GOOS=windows go test -c (per package, output discarded)"
+	@for pkg in $$(go list ./...); do \
+		GOOS=windows GOARCH=amd64 go test -c -o /dev/null $$pkg \
+		  || { echo "FAIL: $$pkg"; exit 1; }; \
 	done
 
-clean:
-	rm -rf $(BINARY) dist
+.PHONY: docs-cli
+docs-cli:          ## Regenerate docs/reference/cli.md from the cobra command tree.
+	go run ./cmd/aboard gen-docs --out docs/reference/cli.md
 
-# Regenerate what the binary emits from its own manifest: the skill's reference,
-# and the control module the renderers import. The authored files carry judgment;
-# these carry facts, and facts drift.
+.PHONY: docs-check
+docs-check:        ## Verify docs/ links resolve and every doc is reachable from docs/README.md.
+	python3 scripts/check-docs-links.py docs
+
+# Regenerate what the binary emits from its own manifest: the controls module
+# the renderers import, the skill's generated reference, and the skill's recipe
+# index. The authored files carry judgment; these carry facts, and facts drift.
 #
 # Built TWICE on purpose. pkg/aboard/web is embedded, so the first binary emits
 # the module from the current specs and the second one embeds the module it just
-# wrote — otherwise the server keeps serving the previous copy and the change
-# appears to do nothing, which is this repo's oldest gotcha.
-caps: build
-	./$(BINARY) capabilities --format js > pkg/aboard/web/views/controls.generated.js
-	./$(BINARY) capabilities --format md > .claude/skills/aboard/references/reference.generated.md
-	go build -o $(BINARY) ./cmd/aboard
-	@./$(BINARY) capabilities --check
+# wrote — otherwise the server keeps serving the previous controls while your
+# spec edit appears to do nothing. That is the spike's oldest gotcha; it costs
+# one link to avoid.
+#
+# `capabilities --check` is last, and it is the assertion: it fails when the
+# committed reference was generated for a different capsHash. Run this after
+# ANY edit to a views/*.spec.json or a builtin recipe, and commit what it writes.
+.PHONY: caps
+caps: build        ## Regenerate the generated controls module, skill reference and recipe index.
+	@./$(BIN) capabilities --format js > $(CAPS_JS).tmp && mv $(CAPS_JS).tmp $(CAPS_JS)
+	@./$(BIN) capabilities --format md > $(CAPS_MD).tmp && mv $(CAPS_MD).tmp $(CAPS_MD)
+	@./$(BIN) recipes index > $(CAPS_RECIPES).tmp && mv $(CAPS_RECIPES).tmp $(CAPS_RECIPES)
+	go build -ldflags '$(GO_LDFLAGS)' -o $(BIN) ./cmd/aboard
+	@./$(BIN) capabilities --check
+	@echo "caps regenerated — check 'git diff' and commit the generated files"
+
+# The browser suite. Local only, never in CI: it drives a headless chromium
+# against a REAL running server, so it needs a board to exist. Two things it
+# will do that a Go test never does — it pokes the notify channel (releasing any
+# session genuinely blocked on `aboard wait`), and it takes ~50s, so do not run
+# it twice in one shell call and never start the server in the foreground of a
+# call that might time out.
+.PHONY: smoke
+smoke:             ## Headless browser suite against a RUNNING server (local only; see comment).
+	./test/smoke.sh
+
+# SHOT_TABS is passed straight through: `make shot SHOT_TABS="bb133 bb22#help"`.
+# With none, shot.sh shoots its default set. LOOK at the pictures — every visual
+# regression this project has shipped passed the DOM assertions first.
+.PHONY: shot
+shot:              ## Screenshot tabs into .aboard/run/shots/ (SHOT_TABS="bb1 bb22#help"); a running server is required.
+	./test/shot.sh $(SHOT_TABS)
+
+.PHONY: dev
+dev:               ## Serve the UI from disk, so edits to pkg/aboard/web need no rebuild.
+	go run ./cmd/aboard serve --dev
+
+.PHONY: run
+run: build         ## Build and serve with the embedded UI.
+	./$(BIN) serve
+
+.PHONY: status
+status: build      ## What is running for this project, on which port, and is the skill stale.
+	./$(BIN) status
+
+.PHONY: ci-local
+ci-local: test lint govulncheck docs-check xcompile-windows snapshot ## Run every gate CI + release would run (Linux + Windows cross-compile + snapshot).
+	@echo
+	@echo "Local CI gates green. Safe to push + tag."
+	@echo "Catches: Linux test failures, lint, vuln, doc links, Windows compile-time portability bugs, release-config regressions."
+	@echo "Does NOT catch: Windows runtime behaviour (use a push-to-branch + GitHub Actions Windows runner for that)."
+	@echo "Does NOT catch: anything only a browser sees. Run 'make caps' and check git diff is clean, then"
+	@echo "                'make smoke' and 'make shot' against a running server — and look at the pictures."

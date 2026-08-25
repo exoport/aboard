@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Only final-semver tags trigger the public release. The job-level guard
+      # below keeps the workflow safe even if a pre-release tag slips past the
+      # glob — the glob is not end-anchored.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+  id-token: write   # required for keyless cosign signing via Sigstore Fulcio
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    # Belt-and-suspenders: the push.tags glob isn't end-anchored so a
+    # tag like v0.0.20-rc1 still matches `v[0-9]+.[0-9]+.[0-9]+`.
+    # Skip the job for any tag containing a dash.
+    if: "!contains(github.ref_name, '-')"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          # Pinned to the same goreleaser the Makefile runs (.bingo/goreleaser.mod).
+          # `latest` would mean `make snapshot` and the real release are two
+          # different programs, and the difference only ever shows up in the run
+          # that publishes. Move this and the .bingo pin together.
+          version: v2.15.4
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

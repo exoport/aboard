@@ -1,0 +1,195 @@
+version: "2"
+run:
+  issues-exit-code: 1
+linters:
+  default: all
+  disable:
+    - cyclop
+    - embeddedstructfieldcheck
+    - err113
+    - exhaustruct
+    - forbidigo
+    - funcorder
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - godot
+    - godox
+    - ireturn
+    - lll
+    - nlreturn
+    - noinlineerr
+    - nonamedreturns
+    - paralleltest
+    # testpackage: pkg/aboard is tested white-box — the tests reach into
+    # unexported helpers (compare-and-set, id reconciliation, the four tab
+    # guarantees, root discovery, port derivation, writeWarnings). Renaming to
+    # _test packages would force exporting the SUT or scattering bridge files;
+    # the lint is a style preference, not a correctness rule.
+    - testpackage
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - wsl_v5
+  settings:
+    depguard:
+      rules:
+        main:
+          files:
+            - $all
+            - "!$test"
+          deny:
+            - pkg: io/ioutil
+              desc: ioutil is deprecated starting with Go 1.16
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by standard lib errors package
+        test:
+          files:
+            - $test
+          deny:
+            - pkg: io/ioutil
+              desc: ioutil is deprecated starting with Go 1.16
+            - pkg: github.com/pkg/errors
+              desc: Should be replaced by standard lib errors package
+    errcheck:
+      check-type-assertions: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        # hugeParam: pointer-vs-value is a deliberate API choice — the board
+        # document and its tabs are passed by value where a copy is the point
+        # (compare-and-set works on a snapshot); chasing every 80-byte
+        # threshold would churn the surface for negligible perf benefit.
+        - hugeParam
+    gomoddirectives:
+      replace-local: true
+    mnd:
+      # File-mode bits + the small integer constants that pervade Go
+      # idiomatic code (buffer sizes, channel capacities, byte limits,
+      # standard durations like 30/60/120/300 seconds, HTTP status
+      # ranges). Naming every literal would just substitute one form
+      # of opacity for another. Anything genuinely domain-specific
+      # gets a named const at its call site instead — the port-derivation
+      # constants (the base, the span, the probe depth) are the example:
+      # they are named in layout.go rather than allow-listed here.
+      ignored-numbers:
+        - "0o666"
+        - "0o644"
+        - "0o600"
+        - "0o755"
+        - "0o750"
+        - "0o700"
+        - "2"
+        - "3"
+        - "5"
+        - "7"
+        - "8"
+        - "10"
+        - "15"
+        - "16"
+        - "20"
+        - "24"
+        - "30"
+        - "32"
+        - "60"
+        - "64"
+        - "100"
+        - "120"
+        - "128"
+        - "200"
+        - "256"
+        - "300"
+        - "500"
+        - "1000"
+        - "1024"
+    nolintlint:
+      require-explanation: false
+      require-specific: true
+    tagliatelle:
+      case:
+        rules:
+          avro: snake
+          bson: camel
+          env: upperSnake
+          json: camel
+          mapstructure: camel
+          xml: camel
+          yaml: camel
+        use-field-name: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - gocyclo
+          - gosec
+          # noctx: tests use http.Get/Post and net.Dial/Listen as the
+          # simplest reach-and-poke shape; the SUT enforces context
+          # discipline, not the test client.
+          - noctx
+        path: _test\.go
+      - linters:
+          - gocritic
+        text: commentedOutCode
+      - linters:
+          - gocritic
+        text: whyNoLint
+      - linters:
+          - gocritic
+        text: unnecessaryBlock
+      - linters:
+          - gocritic
+        text: todoCommentWithoutDetail
+      - linters:
+          - govet
+        text: declaration of "(err|ctx)" shadows declaration at
+      # Recipe frontmatter is snake_case and that is the external contract:
+      # `when_to_use`, `min_schema` are what a recipe author types at the top of
+      # a .md file, and what the built-in recipes on disk already say. A wire
+      # format we do not own is not ours to camelCase.
+      - linters:
+          - tagliatelle
+        path: pkg/aboard/recipes\.go
+    paths:
+      # NOTE: pkg/aboard/web is deliberately NOT excluded. It is mostly JS, CSS
+      # and HTML, which golangci never looks at anyway — but it holds the real
+      # //go:embed declaration, and excluding the directory would take that file
+      # out of lint along with the JS.
+      - .bingo
+      - .github
+      - .vscode
+      - bin
+      - dist
+      - doc
+      - docs
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - .bingo
+      - .github
+      - .vscode
+      - bin
+      - dist
+      - doc
+      - docs

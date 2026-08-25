@@ -1,0 +1,78 @@
+version: 2
+
+project_name: aboard
+dist: dist
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  # One binary. The whole UI — aboard.html, app.css, views/, the mermaid bundle,
+  # assets/ and test/ — is embedded from pkg/aboard/web by //go:embed, so the
+  # archive is the binary plus its licence: there is nothing to install
+  # alongside it and no toolchain to have.
+  - id: aboard
+    main: ./cmd/aboard
+    binary: aboard
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -X github.com/exoport/aboard/pkg/aboard.Version={{.Version}}
+      - -X github.com/exoport/aboard/pkg/aboard.BuildDate={{.Date}}
+      - -X github.com/exoport/aboard/pkg/aboard.GitCommit={{.Commit}}
+
+archives:
+  - format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - README.md
+      - LICENSE
+      # NOTICE ships because the embedded UI carries third-party code
+      # (the mermaid bundle under pkg/aboard/web/lib, MIT) and Apache-2.0
+      # §4(d) puts the attribution obligation on the distributed archive,
+      # not on the repository.
+      - NOTICE
+
+checksum:
+  name_template: '{{ .ProjectName }}_checksums.txt'
+  algorithm: sha256
+
+# Keyless cosign signing of the checksums file via Sigstore Fulcio, emitted as
+# a self-contained Sigstore bundle (--new-bundle-format): the Fulcio cert,
+# the signature, the certificate-transparency SCT, and the Rekor inclusion
+# proof in one aboard_checksums.txt.bundle file. Verify with:
+#
+#   cosign verify-blob aboard_checksums.txt \
+#     --bundle aboard_checksums.txt.bundle --new-bundle-format \
+#     --certificate-identity https://github.com/exoport/aboard/.github/workflows/release.yml@refs/tags/vX.Y.Z \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+#
+# No keys to provision — the GitHub Actions OIDC token is exchanged for a
+# short-lived Fulcio cert at sign time and recorded in Rekor. That is why
+# release.yml needs `id-token: write`, and why `make snapshot` passes
+# --skip=sign: locally there is no ambient OIDC token, only a device flow.
+signs:
+  - cmd: cosign
+    signature: '${artifact}.bundle'
+    args:
+      - 'sign-blob'
+      - '--yes'
+      - '--new-bundle-format'
+      - '--bundle=${signature}'
+      - '${artifact}'
+    artifacts: checksum
+
+release:
+  github:
+    owner: exoport
+    name: aboard
+  prerelease: auto
+
+changelog:
+  use: github
+  sort: asc

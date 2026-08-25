@@ -1,0 +1,7 @@
+CHANGELOG.md
+.claude/
+.github/
+.vscode/
+node_modules/
+_output/
+pkg/aboard/web/

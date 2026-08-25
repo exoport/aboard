@@ -1,0 +1,20 @@
+# The embedded UI is hashed, not just served. `capsHash` is computed over the
+# bytes of pkg/aboard/web/views/*.spec.json, and `aboard capabilities --check`
+# fails when the committed skill reference was generated for a different hash.
+# A line-ending conversion (a Windows autocrlf checkout rewriting LF -> CRLF)
+# changes those bytes, so the check would fail on the Windows CI runner for a
+# tree that is byte-identical to the one that passed on Linux. Treat the whole
+# embedded tree as text git must not touch.
+pkg/aboard/web/** -text
+
+# Same reason, plus these are fixtures compared byte-for-byte: the recipe
+# precedence trees under testdata/, and the example board `aboard init
+# --example` seeds from, which is embedded at pkg/aboard/example/ rather than
+# living in testdata/ so that a `go install` binary carries it.
+testdata/** -text
+pkg/aboard/example/** -text
+
+# The generated files are written by the binary and diffed against the working
+# tree by `make caps`. A rewritten line ending would show as a diff on every
+# checkout on the other platform.
+.claude/skills/aboard/references/*.generated.md -text

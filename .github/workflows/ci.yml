@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel in-progress runs for the same ref when a new commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        # bash is available on both runners (MSYS2-provided on Windows). Pin it
+        # so `./aboard version` and Makefile invocations work uniformly across
+        # the matrix.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: make build
+
+      # Windows runs the SAME target as Linux: every package here is portable
+      # (an http server, a JSON document, a path resolver), and the path/port
+      # code is precisely what a Windows run exists to exercise — root discovery
+      # walks upward through separators, and the state file is written through a
+      # same-directory temp + rename, which behaves differently on Windows.
+      - name: Test
+        run: make test
+
+      - name: Smoke — ./aboard version
+        # Catches //go:build constraint regressions that would let a package
+        # compile but produce a binary that errors on first invocation under the
+        # matrix OS. The MSYS2 bash on windows-latest resolves `./aboard` to the
+        # literal output of `go build -o aboard`, no .exe suffix.
+        run: ./aboard version
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run golangci-lint
+        run: make lint
+
+  vuln:
+    name: Vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run govulncheck
+        run: make govulncheck

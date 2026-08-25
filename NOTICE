@@ -1,0 +1,15 @@
+ABOARD — a shared visual board for a human and their agents
+Copyright 2026 EXO S.A.
+
+This product includes software developed by EXO S.A. (https://exo.com.ar).
+
+Third-party components
+----------------------
+
+pkg/aboard/web/lib/mermaid.min.js
+  Mermaid (https://github.com/mermaid-js/mermaid), MIT License.
+  Committed verbatim rather than fetched from a CDN so a diagram tab renders
+  with no network. The bundle inlines its own dependency tree (d3, dagre,
+  elkjs, cytoscape, DOMPurify, marked, khroma, dayjs, roughjs, lodash helpers,
+  uuid), each under its own permissive licence; see the header of the bundle
+  and pkg/aboard/web/lib/README.md for the version and checksum on record.
