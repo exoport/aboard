@@ -198,6 +198,10 @@ Chromium, which flaked once and would again.
 
 ### 10b. The human's answers to four §10 questions  ☑ `5999eaa`
 
+### 10c-bis. `aboard boards` over /proc, and gomodguard_v2  ☑ `2bd572c` (the human reversed the drop the same day with a design: Linux only, honest elsewhere, no registry)
+
+### 10d. The user-facing docs audit and gap fill  ☐ (brief `brief-13-docs.md`: second board, reverse proxy, promote a tab, the VS Code extension, how aboard runs, the audit)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
