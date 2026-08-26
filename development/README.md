@@ -17,17 +17,12 @@ Two folders, split by **who the document is addressed to**:
   rationale — read that line first, because a superseded handoff still holds the
   reasoning and none of the instructions.
 
-**Order of the live handoffs**, decided with the human on 2026-08-25:
-
-1. the review fixes — `development/research/review-d6c2f84-20260825.md`, the two highs and the
-   behaviour mediums, each with a test that fails before and passes after;
-2. [`handoffs/handoff-e2e-browser-suite.md`](handoffs/handoff-e2e-browser-suite.md) — the real
-   browser suite, which is what makes everything after it verifiable;
-3. [`handoffs/handoff-json-hot-paths.md`](handoffs/handoff-json-hot-paths.md) — structural JSON
-   fixes, then json/v2, no per-tab resources unless a measurement reopens it;
-4. `handoff-13-features.md`, then `handoff-board-for-vscode-panel.md`.
-
-`handoff-phase-e-finish.md` is the record of the port and is done.
+**The order of everything still owed is in
+[`planning/plan-2_finish-line.md`](planning/plan-2_finish-line.md)** — decided with the human on
+2026-08-25: review fixes, the end-to-end browser suite, the JSON hot paths, the eleven reviewed
+features, the panel prerequisites, the VS Code extension (implemented, not installed), then close
+the books. Its Status line says which item is next; each handoff's own Status line says whether
+it is live, done, or superseded. `handoff-phase-e-finish.md` is the record of the port and is done.
 
 `git log` is a real source here too. Commit messages in this repo carry the reasoning
 and the mistakes found on the way, so a decision you are about to re-derive is often
