@@ -51,7 +51,7 @@ what the tab is FOR, and it carries intent the contents cannot.
 | `pkg/aboard/recipes.go` + `recipes/builtin/` | Recipe discovery, frontmatter, precedence and template extraction; the built-in recipes, embedded.                         |
 | `pkg/aboard/web/`                 | `package web`: the whole browser tree as an `embed.FS` — `aboard.html`, `app.css`, `views/`, `lib/`, `assets/`, `test/`.              |
 | `pkg/aboard/cli/`                 | `package cli`: the cobra tree. One command per file, plus `exit.go` (typed exit errors) and `format.go` (`--output-format`).          |
-| `test/smoke.sh` · `test/shot.sh`  | The local browser suite and the screenshot tool. Never in CI — they drive a real headless chromium against a running server.          |
+| `test/smoke.sh` · `test/shot.sh`  | The local browser suite and the screenshot tool. Never in CI — they drive a real headless chromium against a running server. `PROJECT=<dir>` says which board: required by the suite, which writes; optional for shots, which do not. |
 | `restart.sh`                      | Dev convenience only: start this project's board or print the URL of the one already running, and `-force` to actually replace it. `aboard serve` refuses a duplicate on its own; this adds the deliberate restart. |
 | `pkg/aboard/example/`             | The example board `aboard init --example` seeds from, embedded so a `go install` binary carries it; also the fixture the Go tests read. |
 | `.claude/skills/aboard/`          | The skill: SKILL.md + references. Hand-copied into a project; its generated half is rebuilt by `make caps`.                           |
@@ -79,7 +79,8 @@ make caps          # regenerate the controls module, skill reference and recipe 
 make docs-cli      # regenerate docs/reference/cli.md from the cobra tree
 make docs-check    # docs/ links resolve and every doc is reachable from docs/README.md
 make smoke         # LOCAL ONLY: the browser suite, against a RUNNING server (~50s)
-make shot          # LOCAL ONLY: screenshots (SHOT_TABS="<tab-id> <tab-id>#help")
+                   #   PROJECT=<dir> is REQUIRED — it writes, so give it a scratch board
+make shot          # LOCAL ONLY: screenshots (PROJECT=<dir> SHOT_TABS="<tab-id> <tab-id>#help")
 make snapshot      # goreleaser snapshot (no upload, no sign)
 make govulncheck   # scan for known vulnerabilities (pinned via bingo)
 make xcompile-windows  # cross-compile + cross-vet for Windows
@@ -167,11 +168,13 @@ session parked on `aboard wait`, has to survive a restart and a week away.
 - **`make caps` builds twice, and neither build is redundant.** `pkg/aboard/web` is embedded, so the first binary emits `views/controls.generated.js` from the current specs and the second embeds the module it just wrote. Drop one and the server serves the previous controls while your spec edit appears to do nothing.
 - **`test/` is embedded too** — the browser suite's page lives at `pkg/aboard/web/test/smoke.html`. Editing it and re-running the suite tests the OLD copy, silently, and a new probe just never appears in the log. Rebuild before running the suite, not after.
 - **Do not run `make smoke` twice in one shell call, and never start the server in the foreground of a call that might time out.** The suite takes ~50s, so two runs blow a two-minute tool timeout — and a killed call takes the backgrounded server with it. It also POKES the board, releasing any session genuinely blocked on `aboard wait`.
+- **`make smoke` needs `PROJECT=<dir>` and refuses without one.** It is not a read-only observer — it applies documents, renames a tab, uploads an image and pokes the notify channel — and the repo root is where this project's own board lives. Seed a scratch project once with `aboard init --example --gitignore`, serve it detached from there, then `PROJECT=/tmp/probe make smoke`. Both scripts pointed at the repo root unconditionally until 2026-08-25, and `test/smoke.sh` also ran `aboard apply` with the repo as its cwd, so an isolated run was not merely undocumented — half of it wrote to the wrong board with nothing able to tell. There is no default now because a default the project's own rules forbid is a trap: a bare run during this very fix read the repo's board while talking to the scratch server's port, and survived only by dying early. `test/shot.sh` takes the same `PROJECT` but keeps its default, because it reads the board and writes only pictures.
+- **A failing `$(...)` aborts a `set -e` script with no message at all.** `sh` is `dash` here, so `BASE=$(sed … missing-file)` ended `test/smoke.sh` instantly and `make smoke` printed nothing but its own error line — it read as "the suite is broken", not "the file is missing". Every command substitution whose failure is survivable needs `|| true`; this is the same family as `$(cmd; echo $?)` reading empty.
 - **A headless screenshot needs `?nosse=1`.** The SSE stream never closes, so chromium never reaches network-idle and writes no file at all — exit 2, no message. `test/shot.sh` appends it; a hand-rolled chromium command does not.
 - **Headless chromium does not reliably paint iframe content**, so verify an `html` tab by shooting `/tab/<id>/html` directly. `--virtual-time-budget` also starves cross-process `postMessage`, which makes frame auto-sizing look broken when it is fine in a real browser.
 - **A CLI command in a doc is a claim. Run it.** The spike's resume section said `-journal -l 20` when the flag was `-limit`, so the third command a resuming session ran exited 2. Nothing tests the commands in prose; if you write one, execute it once.
 - **`apply` succeeding is not evidence that anything renders.** It prints `applied` and exits 0 for a document that draws an empty box — `ui` is the worst offender, because an unknown component shows a marker but an unknown PROP shows nothing at all. Read the stderr warnings, then shoot the tab and **look at the picture**.
-- **Screenshots land under `.aboard/run/shots/`** because a snap-confined chromium cannot write outside `$HOME`.
+- **Screenshots land under the target project's `.aboard/run/shots/`** because a snap-confined chromium cannot write outside `$HOME`. That constraint and `PROJECT=/tmp/...` pull against each other: if `make shot` writes nothing at all against a scratch project under `/tmp`, the confinement is why, and a scratch project under `$HOME` is the way out.
 
 ## Documentation
 

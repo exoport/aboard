@@ -159,16 +159,27 @@ caps: build        ## Regenerate the generated controls module, skill reference 
 # session genuinely blocked on `aboard wait`), and it takes ~50s, so do not run
 # it twice in one shell call and never start the server in the foreground of a
 # call that might time out.
+#
+# PROJECT says WHICH board, and it is REQUIRED, because the suite writes to it —
+# it applies documents, renames a tab and uploads an image. Aiming it at the repo
+# root means aiming it at whatever board lives there, so there is no default and
+# a bare `make smoke` prints how to make a scratch one.
+#
+#   aboard init --example --gitignore   # in /tmp/probe, once
+#   PROJECT=/tmp/probe make smoke       # server already serving that directory
 .PHONY: smoke
-smoke:             ## Headless browser suite against a RUNNING server (local only; see comment).
-	./test/smoke.sh
+smoke:             ## Headless browser suite against a RUNNING server (PROJECT=<dir>, required; local only).
+	PROJECT="$(PROJECT)" ./test/smoke.sh
 
 # SHOT_TABS is passed straight through: `make shot SHOT_TABS="bb133 bb22#help"`.
 # With none, shot.sh shoots its default set. LOOK at the pictures — every visual
 # regression this project has shipped passed the DOM assertions first.
+# PROJECT picks the board, as for `make smoke`, but here it is optional and
+# defaults to this checkout: shot.sh only reads the board and writes pictures
+# into its .aboard/run/shots/, where smoke.sh writes to the board itself.
 .PHONY: shot
-shot:              ## Screenshot tabs into .aboard/run/shots/ (SHOT_TABS="bb1 bb22#help"); a running server is required.
-	./test/shot.sh $(SHOT_TABS)
+shot:              ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="bb1 bb22#help"); a running server is required.
+	PROJECT="$(PROJECT)" ./test/shot.sh $(SHOT_TABS)
 
 .PHONY: dev
 dev:               ## Serve the UI from disk, so edits to pkg/aboard/web need no rebuild.

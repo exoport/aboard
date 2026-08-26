@@ -1,28 +1,85 @@
 #!/usr/bin/env sh
-# Headless smoke test: mounts every view against the real aboard.json and checks
+# Headless smoke test: mounts every view against a real running board and checks
 # each one actually rendered something. Catches the failure mode a syntax check
 # cannot — a module that parses fine but throws on mount.
 #
-# Usage:  ./test/smoke.sh          (server must already be running)
-#         PORT=41234 ./test/smoke.sh   (override the discovered port)
+# Usage:  ./test/smoke.sh                          (server must already be running)
+#         PROJECT=/tmp/probe ./test/smoke.sh       (which board to run against)
+#         PORT=41234 ./test/smoke.sh               (override the discovered port)
 
 set -e
 cd "$(dirname "$0")/.."
+REPO=$PWD
 
-# Discover this project's port from the running instance rather than assuming
-# one: the port is derived per project, so it is not a fixed number any more.
-INSTANCE=".aboard/run/instance.json"
-STATE=".aboard/aboard.json"
+# PROJECT is the board this suite runs against — a directory containing
+# `.aboard/`. It used to be the repo root, unconditionally and invisibly, and
+# there was no way to say otherwise: the paths were literals, not overrides.
+#
+# This suite WRITES. It applies documents, renames a tab, uploads an image and
+# pokes the notify channel, releasing any session genuinely blocked on `aboard
+# wait`. The repo root is where this project's own board lives, so it is the last
+# board it should be aimed at, and the rule everywhere else here is that a board
+# for testing goes in a scratch project.
+#
+#   cd /tmp/probe && aboard init --example --gitignore && aboard serve &
+#   PROJECT=/tmp/probe make smoke
+#
+# There is deliberately NO default. Defaulting to the repo root would leave the
+# forbidden target one forgotten variable away, and that is not hypothetical: it
+# happened while this very change was being tested — a bare run against the repo
+# read the repo's board over HTTP from the scratch server's port, and only died
+# early, by luck, before its first write. A default the project's own rules
+# forbid is not a default, it is a trap. Say `PROJECT=.` if you really mean this
+# checkout.
+if [ -z "$PROJECT" ]; then
+  cat >&2 <<'USAGE'
+PROJECT is required: it says which board to run against, and this suite WRITES to it
+(applies documents, renames a tab, uploads an image, pokes the notify channel).
+
+  mkdir -p /tmp/probe && cd /tmp/probe
+  aboard init --example --gitignore
+  aboard serve &                       # detached, from that directory
+  PROJECT=/tmp/probe make smoke        # from the repo
+
+Use PROJECT=. only if you really mean this checkout's own board.
+USAGE
+  exit 2
+fi
+case "$PROJECT" in
+  /*) ;;
+  *) PROJECT="$REPO/$PROJECT" ;;
+esac
+if [ ! -d "$PROJECT/.aboard" ]; then
+  echo "no .aboard/ in $PROJECT — run 'aboard init --example --gitignore' there first" >&2
+  exit 2
+fi
+
+# Every `aboard` subcommand that touches CONTENT goes through this, because the
+# CLI resolves a project root from its working directory and this script's cwd is
+# the repo. Without it the HTTP half of the suite talked to the server under test
+# while `aboard apply` wrote to the repo's own board — two boards in one run, and
+# not one assertion able to tell.
+ab() { ./aboard --cwd "$PROJECT" "$@"; }
+
+# Discover the port from the running instance rather than assuming one: the port
+# is derived per project, so it is not a fixed number any more.
+INSTANCE="$PROJECT/.aboard/run/instance.json"
+STATE="$PROJECT/.aboard/aboard.json"
 if [ -z "$PORT" ] && [ -f "$INSTANCE" ]; then
   PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$INSTANCE")
 fi
 if [ -z "$PORT" ]; then
-  echo "no running board found ($INSTANCE missing) — start it with ./restart.sh" >&2
+  echo "no running board found ($INSTANCE missing) — start it with 'aboard serve'" >&2
   exit 1
 fi
 # A board served under --base-path answers only under that prefix, so build every
 # URL from the instance record rather than from the port alone.
-BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null)
+#
+# The `|| true` is load-bearing under `set -e`: a command substitution that exits
+# non-zero aborts the whole script, and with PORT supplied by hand there may be no
+# instance file for sed to read. It aborted SILENTLY — no message, exit 1, and a
+# `make smoke` whose entire output was the make error line.
+BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null || true)
 [ -z "$BASE" ] && BASE="http://localhost:$PORT"
 # The web tree moved into the Go package that embeds it; the static greps below
 # read source, so they need the real directory rather than the URL path.
@@ -39,7 +96,7 @@ if [ -z "$BROWSER" ]; then
 fi
 
 if ! curl -sf -o /dev/null "$BASE/aboard.json"; then
-  echo "server not answering on $BASE — start it with ./restart.sh" >&2
+  echo "server not answering on $BASE — start it with 'aboard serve' in $PROJECT" >&2
   exit 1
 fi
 
@@ -140,16 +197,16 @@ echo "== a tab can be promoted into the project's own documents =="
 # conclusion.
 if [ -x ./aboard ]; then
   check "a tab exports as markdown with no server" \
-    "$(./aboard export decisions 2>/dev/null | head -1 | cut -c1-1)" "#"
+    "$(ab export decisions 2>/dev/null | head -1 | cut -c1-1)" "#"
   check "a rows tab exports as csv" \
-    "$(./aboard export table-example --format csv 2>/dev/null | head -1 | cut -d, -f1)" "id"
+    "$(ab export table-example --format csv 2>/dev/null | head -1 | cut -d, -f1)" "id"
   # `set -e` aborts a subshell the moment the command inside it fails, so
   # `; echo $?` never runs and the check reads empty. Handle the failure inline.
   check "an unknown tab is refused, not silently empty" \
-    "$(./aboard export definitely-not-a-tab >/dev/null 2>&1 && echo 0 || echo 1)" "1"
+    "$(ab export definitely-not-a-tab >/dev/null 2>&1 && echo 0 || echo 1)" "1"
   # A gate export is only worth pasting if the REASON travels with the verdict.
   check "a gate export carries the reasons" \
-    "$(./aboard export decisions 2>/dev/null | grep -c 'Why:' | awk '{print ($1>0)?"yes":"no"}')" "yes"
+    "$(ab export decisions 2>/dev/null | grep -c 'Why:' | awk '{print ($1>0)?"yes":"no"}')" "yes"
 else
   echo "  skip no ./aboard binary — run make build"
 fi
@@ -254,6 +311,11 @@ echo "== the board describes itself (and the skill cannot silently disagree) =="
 # The manifest must answer with NO server: a fresh checkout, a copied binary, or
 # another session holding the port must all still be able to ask what this board
 # can do.
+#
+# These calls are the one group that stays on the REPO, not on $PROJECT: --check
+# compares the binary's self-description against the skill reference committed
+# here, and it treats a missing reference as "nothing to check", so aiming it at
+# a scratch project would turn the drift check into a guaranteed pass.
 if [ -x ./aboard ]; then
   check "the manifest answers with no server needed" \
     "$(PORT= ./aboard capabilities 2>/dev/null | node -e "
@@ -408,7 +470,7 @@ if [ -x ./aboard ]; then
     ]}}];
     fs.writeFileSync(process.argv[1], JSON.stringify(d));
   " "$BADDOC"
-  WARN=$(./aboard apply --by "smoke" < "$BADDOC" 2>&1 >/dev/null || true)
+  WARN=$(ab apply --by "smoke" < "$BADDOC" 2>&1 >/dev/null || true)
   rm -f "$BADDOC"
 
   want_warning() {
@@ -529,7 +591,7 @@ if [ -x ./aboard ]; then
         t.name=process.argv[2];
         fs.writeFileSync(process.argv[3], JSON.stringify(d));
       " "$PROBE_ID" "$1" "$DOC"
-      ./aboard apply --by "smoke" < "$DOC" >/dev/null 2>&1
+      ab apply --by "smoke" < "$DOC" >/dev/null 2>&1
       rc=$?
       rm -f "$DOC"
       return $rc
@@ -606,7 +668,7 @@ rm -f "$PNG"
 # $UP is a URL path ("uploads/<file>"); on disk it lives under .aboard/, which is
 # where the board keeps its content now. Removing the URL relative to the cwd
 # quietly removed nothing and left the probe image behind on every run.
-[ -n "$UP" ] && rm -f ".aboard/$UP"
+[ -n "$UP" ] && rm -f "$PROJECT/.aboard/$UP"
 
 echo "== an action strip records an intent instead of acting =="
 ACT_TAB=$(node -e "
@@ -716,7 +778,7 @@ check "an unknown predicate is refused, not silently awaited" \
 if [ -x ./aboard ]; then
   WANT=$((BASE_WAIT + 1))
   WAITLOG=$(mktemp)
-  ( ./aboard wait --by smoke-waiter --timeout 30s --note "checking the notify channel" > "$WAITLOG" 2>&1; echo "exit=$?" >> "$WAITLOG" ) &
+  ( ab wait --by smoke-waiter --timeout 30s --note "checking the notify channel" > "$WAITLOG" 2>&1; echo "exit=$?" >> "$WAITLOG" ) &
   WAITPID=$!
 
   # Registration is a round trip, so poll rather than sleep a guessed amount.

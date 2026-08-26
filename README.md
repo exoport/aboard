@@ -216,6 +216,9 @@ walks upward through path separators and the state file is written through a
 same-directory temp + rename, and both behave differently there. The browser suite (`make smoke`) and the screenshot tool
 (`make shot`) are **local only** — they drive a real headless chromium against a running
 server, so a CI run could only skip them, and a gate that always skips reads as a pass.
+Both take `PROJECT=<dir>` to say which board to run against. The suite writes to that
+board, so it insists on being told: give it a scratch project
+(`aboard init --example --gitignore`) rather than your own.
 Working conventions, hard rules and the gotcha list are in [CLAUDE.md](CLAUDE.md).
 
 ## License

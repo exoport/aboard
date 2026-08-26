@@ -15,21 +15,48 @@
 
 set -e
 cd "$(dirname "$0")/.."
-OUT=".aboard/run/shots"
+REPO=$PWD
+
+# Which board to shoot, same override as test/smoke.sh: a directory containing
+# `.aboard/`, defaulting to the repo root. Shots land inside THAT project, which
+# is what "shots land in the project rather than /tmp" was always supposed to
+# mean — the paths below were repo-root-relative, so pointing this at a scratch
+# board wrote its pictures into the repo.
+#
+# Unlike test/smoke.sh, this one keeps a default, and the difference is not an
+# oversight: smoke.sh WRITES to the board it is pointed at, so its default was a
+# trap and is now an error; this only reads the board and writes pictures into
+# it. The rule is "does it write", not consistency for its own sake.
+#
+# One tension to know about: a snap-confined chromium cannot write outside $HOME,
+# which is the whole reason shots go into the project rather than /tmp — so a
+# scratch project under /tmp and a snap chromium do not mix, and the symptom is
+# every shot reported FAILED with no other error. Put the scratch project under
+# $HOME in that case.
+PROJECT=${PROJECT:-$REPO}
+case "$PROJECT" in
+  /*) ;;
+  *) PROJECT="$REPO/$PROJECT" ;;
+esac
+OUT="$PROJECT/.aboard/run/shots"
 
 # Discover this project's port from the running instance rather than assuming
 # one: the port is derived per project, so it is not a fixed number any more.
-INSTANCE=".aboard/run/instance.json"
+INSTANCE="$PROJECT/.aboard/run/instance.json"
 if [ -z "$PORT" ] && [ -f "$INSTANCE" ]; then
   PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$INSTANCE")
 fi
 if [ -z "$PORT" ]; then
-  echo "no running board found ($INSTANCE missing) — start it with ./restart.sh" >&2
+  echo "no running board found ($INSTANCE missing) — start it with 'aboard serve'" >&2
   exit 1
 fi
 # A board served under --base-path answers only under that prefix, so build every
 # URL from the instance record rather than from the port alone.
-BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null)
+#
+# `|| true` under `set -e`: a failing command substitution aborts the script with
+# no message at all, which is how a hand-supplied PORT with no instance file
+# produced a silent exit 1 (see the same line in test/smoke.sh).
+BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null || true)
 [ -z "$BASE" ] && BASE="http://localhost:$PORT"
 
 BROWSER=""
@@ -39,13 +66,26 @@ done
 [ -z "$BROWSER" ] && { echo "no chromium-family browser found" >&2; exit 1; }
 
 if ! curl -sf -o /dev/null "$BASE/aboard.json"; then
-  echo "server not answering on $BASE — start it with ./restart.sh" >&2
+  echo "server not answering on $BASE — start it with 'aboard serve' in $PROJECT" >&2
   exit 1
 fi
 
 TABS="$*"
 [ -z "$TABS" ] && TABS="kanban dag diagram form markup"
 mkdir -p "$OUT"
+
+# Said ONCE, up front, because the browser's own message for it is a lie. A
+# confined chromium refusing to write outside $HOME reports "No such file or
+# directory" for a directory that plainly exists, so the reader goes looking for
+# a path bug that is not there. Checked rather than assumed: the confinement is
+# real on some installs and absent on others, and the only cheap discriminator is
+# where the file is going.
+case "$OUT" in
+  "$HOME"/*) ;;
+  *) echo "note $OUT is outside \$HOME — if every shot below FAILS, that is a confined" >&2
+     echo "     chromium refusing to write there (it will say 'No such file or directory'," >&2
+     echo "     which is not true). Put the project under \$HOME and re-run." >&2 ;;
+esac
 
 for tab in $TABS; do
   # A target may carry a fragment — `./test/shot.sh bb22#help` shoots the help
@@ -65,7 +105,7 @@ for tab in $TABS; do
   esac
   timeout 90 "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars \
     --window-size="${WIDTH:-1280},${HEIGHT:-940}" --virtual-time-budget=10000 \
-    --screenshot="$(pwd)/$OUT/$name.png" \
+    --screenshot="$OUT/$name.png" \
     "$url" 2>/dev/null || true
   if [ -s "$OUT/$name.png" ]; then
     echo "  $OUT/$name.png"
