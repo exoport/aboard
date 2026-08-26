@@ -195,7 +195,7 @@ Chromium, which flaked once and would again.
 
 ### 10a. The make targets are the gate  ☑ `b1dc79c` (added 2026-08-26 on the human's instruction: pinned tools updated, the pre-commit hook and CI run `make lint`/`make fmt-check`)
 
-### 10b. The human's answers to four §10 questions  ☑ (brief `brief-11-human-decisions.md`: `bb372` dropped; example prose says "the agent"; notify acknowledgement is a toast; `JournalEntry.Before` carries the whole tab — the four dispositions are recorded under §10 below)
+### 10b. The human's answers to four §10 questions  ☑ `5999eaa`
 
 ### 10. Gated on the human — do not start without an answer
 
