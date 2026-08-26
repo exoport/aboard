@@ -206,6 +206,8 @@ Chromium, which flaked once and would again.
 
 ### 10f. The extension after its first real run (aboard_vscode)  ☑ `fc886c1` (the human ran M6 once on 2026-08-26: the dot SVGs were malformed XML, the framed board was a pre-`?chrome=` binary; both fixed, plus a backoff that never backed off)
 
+### 10g. The board never calls a native dialog  ☑ `2875113` (a VS Code webview swallows confirm/prompt/alert; found by the human clicking Remove in the panel)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
