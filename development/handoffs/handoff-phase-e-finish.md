@@ -1,5 +1,10 @@
 # Handoff — resume the aboard port at Phase E (the finishing pass)
 
+**Status: DONE — Phase E landed as `c331dfc` on 2026-08-25** (lint 0, smoke 101/101, ci-local
+green, snapshot verified). Kept for the record of the port and for the "still unproven" and
+"open judgement calls" lists below, which remain true. The live queue starts at
+`handoff-json-hot-paths.md`.
+
 Written 2026-08-25 when the human asked to pause cleanly after Phase D. Everything below is
 what a session needs to pick the work up without re-deriving it.
 
