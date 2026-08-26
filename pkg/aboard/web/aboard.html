@@ -275,7 +275,20 @@ function stampMeta(note) {
 // The document as it was when we last loaded or successfully saved. It is what
 // tells "the human changed this tab" apart from "an agent changed this tab", which
 // is the whole basis of recovering from a conflict.
-let baseline = null;
+//
+// ONE CANONICAL STRING PER TAB, not a second copy of the document. It used to be
+// `JSON.parse(JSON.stringify(doc))` — a deep clone of the whole board, rebuilt on
+// every load, every merge and every accepted save, and then canonicalised AGAIN
+// on both sides of every comparison it existed for. That is two full
+// serialisations of the board to answer a per-tab yes/no, and on a big board it
+// is the browser's share of the same mistake the server made: work proportional
+// to the document for a question about one tab.
+//
+// A string also cannot alias. The clone was necessary partly BECAUSE the baseline
+// held live tab objects that a view would go on to mutate in place; strings are
+// immutable, so the merge can capture the server's copy and then rearrange the
+// very array it captured it from.
+let baseline = null;   // { rev, tabs: Map<id, canonical string> }
 
 const snapshot = (d) => JSON.parse(JSON.stringify(d));
 
@@ -301,18 +314,23 @@ function canon(v) {
   }
   return v;
 }
-const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+const canonKey = (v) => JSON.stringify(canon(v));
+
+// The baseline of a document: its revision, and one canonical string per tab.
+const snapshotTabs = (d) => ({
+  rev: d ? d.rev : undefined,
+  tabs: new Map((d && Array.isArray(d.tabs) ? d.tabs : []).map((t) => [t.id, canonKey(t)])),
+});
 
 // Tabs the human has changed locally since the baseline, and tabs they created.
 function localEdits() {
   if (!baseline) return { changed: [], added: [] };
-  const before = new Map(baseline.tabs.map((t) => [t.id, t]));
   const changed = [];
   const added = [];
   for (const tab of tabs()) {
-    const prev = before.get(tab.id);
-    if (!prev) added.push(tab);
-    else if (!same(prev, tab)) changed.push(tab);
+    const before = baseline.tabs.get(tab.id);
+    if (before === undefined) added.push(tab);
+    else if (before !== canonKey(tab)) changed.push(tab);
   }
   return { changed, added };
 }
@@ -356,16 +374,20 @@ function withoutRemoved(fresh) {
   return fresh;
 }
 
-// Returns { merged, server, collided }, or null when the fresh copy could not be
-// read. `server` is the document EXACTLY as the server has it, before any of our
-// tabs were laid back over it — it is the new baseline, and it is a separate
+// Returns { merged, next, collided }, or null when the fresh copy could not be
+// read. `next` is the baseline of the document EXACTLY as the server has it,
+// taken before any of our tabs are laid back over it — and it is a separate
 // value for a reason: `merged` contains edits the server has never seen, and
 // making those the baseline would classify them as "already saved" and drop them
 // at the next merge, silently and with nothing stashed.
+//
+// `cache: 'no-cache'` and not `no-store`: revalidate every time, but let the
+// browser keep the copy it has, so a reload of a board nobody has written to
+// costs a 304 and no body instead of the whole document again.
 async function mergeOntoFresh() {
   let fresh;
   try {
-    const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
+    const res = await fetch(api('/aboard.json'), { cache: 'no-cache' });
     if (!res.ok) return null;
     fresh = await res.json();
   } catch {
@@ -373,23 +395,21 @@ async function mergeOntoFresh() {
   }
   if (!Array.isArray(fresh.tabs)) return null;
 
-  // `server` is the server's copy untouched, because it becomes the baseline and
-  // the baseline has to be what the other side actually holds. The MERGED
-  // document is what goes on screen, and that is where a pending removal applies.
-  const server = snapshot(fresh);
+  // The server's copy, captured as strings BEFORE anything below rearranges
+  // `fresh` — which is exactly what the whole-document clone used to buy, at the
+  // price of a second copy of the board.
+  const next = snapshotTabs(fresh);
   withoutRemoved(fresh);
   const { changed, added } = localEdits();
-  if (!changed.length && !added.length) return { merged: fresh, server, collided: [] };
+  if (!changed.length && !added.length) return { merged: fresh, next, collided: [] };
 
-  const beforeById = new Map((baseline ? baseline.tabs : []).map((t) => [t.id, t]));
   const freshById = new Map(fresh.tabs.map((t) => [t.id, t]));
   const collided = [];
 
   for (const mine of changed) {
     const serverCopy = freshById.get(mine.id);
     if (!serverCopy) continue;                       // gone: a removal answered elsewhere
-    const beforeCopy = beforeById.get(mine.id);
-    if (same(serverCopy, beforeCopy)) {
+    if (canonKey(serverCopy) === baseline.tabs.get(mine.id)) {
       // The server has not touched this tab since we loaded it — our edit is the
       // only change to it, so it survives.
       fresh.tabs = fresh.tabs.map((t) => (t.id === mine.id ? mine : t));
@@ -407,7 +427,7 @@ async function mergeOntoFresh() {
   }
   // The counter must never regress, whichever side allocated further.
   fresh.nextId = Math.max(Number(fresh.nextId) || 1, Number(doc.nextId) || 1);
-  return { merged: fresh, server, collided };
+  return { merged: fresh, next, collided };
 }
 
 // adopt installs a merge result: the merged document on screen, and the SERVER's
@@ -417,9 +437,9 @@ async function mergeOntoFresh() {
 // adopted from the server look like a fresh human edit on the next conflict —
 // so a second 409 stashed the agent's text as "yours" and the notice offered it
 // back under the human's name.
-function adopt({ merged, server }) {
+function adopt({ merged, next }) {
   doc = merged;
-  baseline = snapshot(server);
+  baseline = next;
   repaint();
 }
 
@@ -469,7 +489,7 @@ async function pushDoc({ retries = 1 } = {}) {
   removedTabs.clear();
   // Accepted: this is now the state both sides agree on, so it becomes the
   // baseline any future conflict is measured against.
-  baseline = snapshot(doc);
+  baseline = snapshotTabs(doc);
   stampMeta('saved');
   return true;
 }
@@ -1404,9 +1424,9 @@ async function load({ announce = false, merge = false } = {}) {
       return undefined;
     }
   }
-  const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
+  const res = await fetch(api('/aboard.json'), { cache: 'no-cache' });
   doc = withoutRemoved(await res.json());
-  baseline = snapshot(doc);
+  baseline = snapshotTabs(doc);
   return repaint({ announce });
 }
 
@@ -1541,7 +1561,7 @@ if (new URLSearchParams(location.search).get('probe') === '1') {
     get saveArmed() { return saveTimer !== null; },
     get stashed() { return stashedTabs; },
     get removed() { return removedTabs; },
-    snapshot, localEdits, load, save, pushDoc, mergeOntoFresh, repaint,
+    snapshot, snapshotTabs, canonKey, localEdits, load, save, pushDoc, mergeOntoFresh, repaint,
     // The renderer registry itself. `init` is a FUNCTION here and a literal in
     // views/<type>.spec.json, and the two must start a new tab with the same
     // keys — markup's returned { image, caption, regions, strokes }, four keys

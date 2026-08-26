@@ -1,9 +1,10 @@
 package aboard
 
 import (
-	"encoding/json"
 	"regexp"
 	"strconv"
+
+	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // Ids are board-wide monotonic, not per-container.
@@ -45,42 +46,116 @@ import (
 // here, nor in any renderer, since they all parse ids with the same shape.
 var idSuffix = regexp.MustCompile(`^[a-z]*(\d+)$`)
 
+// idKey is the one field name an id can live under. Named because the walk below
+// and the root scan both have to agree on it, and a rule spelled twice is a rule
+// that can differ once.
+const idKey = "id"
+
 // reconcileNextID returns the value of nextId to persist: never lower than what
 // either document already had, and always above every numeric id in use in
 // either of them.
 //
-// Both arguments are RAW JSON on purpose. The caller has by then replaced the
-// tabs entry with a typed []tab, which a generic walker cannot see into — an
-// earlier version of this took the decoded map and silently found no ids at all.
-// Scanning the bytes keeps the walk honest and shape-agnostic.
+// The byte-level form, and the one the invariant is specified against: the table
+// in ids_test.go is the statement of what "the counter never goes backwards"
+// means, and it is written in documents rather than in structs. The write path
+// calls nextIDFrom with the documents it already holds parsed.
 func reconcileNextID(incomingRaw, currentRaw []byte) int {
-	high := 0
+	inc, incErr := decodeDocument(incomingRaw)
+	if incErr != nil {
+		inc = nil
+	}
+	cur, curErr := decodeDocument(currentRaw)
+	if curErr != nil {
+		cur = nil
+	}
+	return nextIDFrom(inc, cur)
+}
 
-	for _, raw := range [][]byte{incomingRaw, currentRaw} {
-		if len(raw) == 0 {
+// nextIDFrom is the same rule over two documents already in memory.
+//
+// This used to walk both whole documents for "id" keys on every single write —
+// two recursive passes over everything, to answer a question only the tabs a
+// write TOUCHED can change the answer to. Each document now carries the largest
+// id per tab, worked out when that tab's state was accepted and carried forward
+// untouched otherwise, so the walk costs the edit rather than the board.
+func nextIDFrom(incoming, current *stateDoc) int {
+	high := 0
+	for _, doc := range []*stateDoc{incoming, current} {
+		if doc == nil {
 			continue
 		}
-		var doc map[string]any
-		if json.Unmarshal(raw, &doc) != nil {
-			continue
+		if doc.nextID > high {
+			high = doc.nextID
 		}
-		// Whatever that document recorded.
-		if n, ok := toInt(doc["nextId"]); ok && n > high {
-			high = n
-		}
-		// And always above every id actually present, so a document that was
-		// hand-edited or predates the counter still allocates safely. A tab the
-		// server is about to restore lives in the current doc, not the incoming
-		// one, which is why both are scanned.
-		if used := maxUsedID(doc); used >= high {
+		if used := doc.maxUsed(); used >= high {
 			high = used + 1
 		}
 	}
-
 	if high < 1 {
 		high = 1
 	}
 	return high
+}
+
+// maxUsed is the largest numeric id anywhere in the document.
+func (d *stateDoc) maxUsed() int {
+	highest := d.rootMax()
+	for i := range d.tabs {
+		if n := d.tabs[i].idHigh(); n > highest {
+			highest = n
+		}
+	}
+	return highest
+}
+
+// rootMax covers the root keys other than "tabs". There are none carrying an id
+// today — version, rev, nextId, updatedAt, lastEditedBy — but the walker this
+// replaced scanned the whole document, and narrowing that silently is how a
+// future root field starts handing out an id somebody already has.
+func (d *stateDoc) rootMax() int {
+	if d.fieldSet {
+		return d.fieldMax
+	}
+	highest := 0
+	for name, raw := range d.fields {
+		if name == idKey {
+			if n := idCounter(rawString(raw)); n > highest {
+				highest = n
+			}
+			continue
+		}
+		var v any
+		if jsonv2.Unmarshal(raw, &v) != nil {
+			continue
+		}
+		if n := maxUsedID(v); n > highest {
+			highest = n
+		}
+	}
+	d.fieldMax, d.fieldSet = highest, true
+	return highest
+}
+
+// idHigh is the largest numeric id this tab uses: its own, and every "id" inside
+// its state. The other tab fields cannot carry one — `touched`, `pendingRemoval`
+// and `seen` hold actors and timestamps — so the walk is the state blob, which is
+// also the only part a write can put a new object into.
+func (t *docTab) idHigh() int {
+	if t.maxID >= 0 {
+		return t.maxID
+	}
+	highest := idCounter(t.ID)
+	if len(t.State) > 0 {
+		idWalks.Add(1)
+		var v any
+		if jsonv2.Unmarshal(t.State, &v) == nil {
+			if n := maxUsedID(v); n > highest {
+				highest = n
+			}
+		}
+	}
+	t.maxID = highest
+	return highest
 }
 
 // idCounter reads the numeric tail of an id value, or 0 for anything that is not
@@ -102,17 +177,20 @@ func idCounter(v any) int {
 	return n
 }
 
-// maxUsedID walks the whole document for "<prefix><digits>" ids and returns the
+// maxUsedID walks a decoded value for "<prefix><digits>" ids and returns the
 // largest number seen. It scans generically rather than knowing each renderer's
 // shape, so a new tab type gets this for free.
-func maxUsedID(doc map[string]any) int {
+//
+// A key named "id" is READ and not descended into, which is deliberate and is
+// what the "a semantic form field id does not raise the counter" row depends on.
+func maxUsedID(v any) int {
 	highest := 0
 	var walk func(any)
 	walk = func(v any) {
 		switch t := v.(type) {
 		case map[string]any:
 			for k, child := range t {
-				if k == "id" {
+				if k == idKey {
 					if n := idCounter(child); n > highest {
 						highest = n
 					}
@@ -126,7 +204,7 @@ func maxUsedID(doc map[string]any) int {
 			}
 		}
 	}
-	walk(doc)
+	walk(v)
 	return highest
 }
 

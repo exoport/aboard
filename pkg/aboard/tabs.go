@@ -1,12 +1,13 @@
 package aboard
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"maps"
 	"time"
+
+	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // Tabs are data, not code. A tab names a purpose, picks a renderer by `type`,
@@ -31,11 +32,22 @@ import (
 //     window on something already acted on. Acks are carried forward.
 
 type tab struct {
-	ID    string          `json:"id"`
-	Key   string          `json:"key,omitempty"` // optional stable handle for idempotent upsert
-	Name  string          `json:"name"`
-	Type  string          `json:"type"`
-	State json.RawMessage `json:"state,omitempty"`
+	ID   string `json:"id"`
+	Key  string `json:"key,omitempty"` // optional stable handle for idempotent upsert
+	Name string `json:"name"`
+	Type string `json:"type"`
+	// STILL a json.RawMessage, and deliberately, even though the codec is now
+	// encoding/json/v2: v2 special-cases encoding/json.RawMessage onto exactly the
+	// same raw-value fast path as its own jsontext.Value — measured at 4.5 ms
+	// against 5.0 ms decoding 5 000 tabs, i.e. no difference worth a type change
+	// that would ripple into every fixture in the tests.
+	//
+	// `omitzero` and not `omitempty`, which under v2 means something else: v2
+	// omits a value that ENCODES to empty, so a tab holding a deliberate
+	// `"state": {}` would silently lose the key. `omitzero` omits the zero value —
+	// no state at all — which is what v1's `omitempty` did for a []byte and what
+	// every reader of this file already assumes.
+	State json.RawMessage `json:"state,omitzero"`
 
 	// StateFrom lets a tab render another tab's state with a different type —
 	// a kanban and a DAG over one set of nodes, for instance.
@@ -101,174 +113,202 @@ func isHuman(by string) bool { return by == actorHuman }
 // reconcileTabs applies the guarantees above and stamps `touched` on every
 // tab an agent actually changed. Returns the tab list to persist.
 //
+// The byte-level form: the tests specify the guarantees against two documents,
+// which is the right level for a rule about what a WRITE may do. The write path
+// itself calls reconcileDoc with the documents it already holds parsed — the
+// current one has not been re-read or re-parsed since it was accepted (see
+// document.go).
+//
 // `logger` is an argument rather than a package-level log.Printf because a host
 // embedding this tree chooses where its logs go (Options.Logger, see aboard.go),
 // and the one line this function writes — an agent tried to delete a tab — is
 // exactly the line that host wants. Options.Log() is never nil, so callers pass
 // it straight through.
 func reconcileTabs(currentRaw, incomingRaw []byte, by string, logger *log.Logger) ([]tab, error) {
-	var cur, inc board
-	if len(currentRaw) > 0 {
-		if err := json.Unmarshal(currentRaw, &cur); err != nil {
-			return nil, fmt.Errorf("current board unreadable: %w", err)
-		}
+	cur, err := decodeDocument(currentRaw)
+	if err != nil {
+		return nil, fmt.Errorf("current board unreadable: %w", err)
 	}
-	if err := json.Unmarshal(incomingRaw, &inc); err != nil {
+	inc, err := decodeDocument(incomingRaw)
+	if err != nil {
 		return nil, fmt.Errorf("incoming board unreadable: %w", err)
 	}
+	return reconcileDoc(cur, inc, by, logger).tabList(), nil
+}
 
-	// A human write is taken as-is: they may dismiss markers, answer removal
-	// requests, delete tabs, anything.
-	if isHuman(by) {
-		return inc.Tabs, nil
+// reconcilePlan is one pass over an incoming write: the tabs to persist, each
+// carrying whether this write changed it.
+//
+// That flag is the whole reason the plan exists. reconcileTabs and changeSummary
+// used to make the SAME comparison independently — canonicalising every tab's
+// state on the board, twice per write — and the comment on each said so, because
+// a change that gets one without the other is a change the human can see but not
+// trace, or trace but not see. One comparison, one flag, both consumers.
+type reconcilePlan struct {
+	tabs []docTab
+}
+
+func (p *reconcilePlan) tabList() []tab {
+	out := make([]tab, len(p.tabs))
+	for i := range p.tabs {
+		out[i] = p.tabs[i].tab
 	}
+	return out
+}
 
+func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcilePlan {
+	human := isHuman(by)
 	now := time.Now().UTC().Format(time.RFC3339)
-	before := map[string]tab{}
-	order := []string{}
-	for i := range cur.Tabs {
-		before[cur.Tabs[i].ID] = cur.Tabs[i]
-		order = append(order, cur.Tabs[i].ID)
-	}
-	after := map[string]tab{}
-	for i := range inc.Tabs {
-		after[inc.Tabs[i].ID] = inc.Tabs[i]
-	}
 
-	out := make([]tab, 0, len(inc.Tabs)+2)
-
-	for i := range inc.Tabs {
-		t := inc.Tabs[i]
-		prev, existed := before[t.ID]
+	out := make([]docTab, 0, len(inc.tabs)+2)
+	for i := range inc.tabs {
+		t := inc.tabs[i]
+		j, existed := cur.byID[t.ID]
 
 		if !existed {
-			// A brand new tab: mark it so the human sees it arrived.
-			if t.Touched == nil {
-				t.Touched = &touchMark{By: by, At: now, Note: "new tab"}
-			} else {
-				t.Touched.By, t.Touched.At = by, now
+			if !human {
+				// A brand new tab: mark it so the human sees it arrived.
+				if t.Touched == nil {
+					t.Touched = &touchMark{By: by, At: now, Note: "new tab"}
+				} else {
+					t.Touched.By, t.Touched.At = by, now
+				}
+				// Guarantee 4 applies to a tab being CREATED as much as to one
+				// being changed, and this branch skipped it entirely: a new tab
+				// could arrive carrying `seen: {"human": "…"}`, so the dot the
+				// human relies on to notice it was pre-extinguished by the write
+				// that made it. There is no previous map by definition, which is
+				// exactly why the filter has to run rather than be short-circuited.
+				t.Seen = mergeSeen(nil, t.Seen, by)
 			}
-			// Guarantee 4 applies to a tab being CREATED as much as to one being
-			// changed, and this branch skipped it entirely: a new tab could
-			// arrive carrying `seen: {"human": "…"}`, so the dot the human relies
-			// on to notice it was pre-extinguished by the write that made it.
-			// There is no previous map by definition, which is exactly why the
-			// filter has to run rather than be short-circuited.
-			t.Seen = mergeSeen(nil, t.Seen, by)
+			t.changed = true
 			out = append(out, t)
 			continue
 		}
 
-		// Guarantee 2: only the human clears a marker. Carry the old one forward
-		// if this write tried to drop it.
-		if t.Touched == nil && prev.Touched != nil {
-			t.Touched = prev.Touched
+		prev := &cur.tabs[j]
+		if !human {
+			// Guarantee 2: only the human clears a marker. Carry the old one
+			// forward if this write tried to drop it.
+			if t.Touched == nil && prev.Touched != nil {
+				t.Touched = prev.Touched
+			}
+
+			// Guarantee 1, the other half: only the human answers a removal
+			// request. The restore branch below covers a tab an agent DROPPED;
+			// this covers the far commoner case of an agent carrying the whole
+			// document through a read-modify-write with the field simply absent,
+			// because nothing it did was about that tab. `pendingRemoval` was
+			// taken verbatim, so a routine write by agent-2 cancelled agent-1's
+			// request and the human's banner vanished with no record that it had
+			// ever been raised — the same shape as `touched`, and it is carried
+			// forward for the same reason.
+			if t.PendingRemoval == nil && prev.PendingRemoval != nil {
+				t.PendingRemoval = prev.PendingRemoval
+			}
+
+			// Guarantee 4: an agent may move its OWN read stamp and nobody
+			// else's. Most writes drop `seen` entirely, having never looked at
+			// it, and that must not erase what the other actors recorded — with
+			// two sessions and a human on one board, "changed since I last
+			// looked" is a per-actor question and one actor's answer is not
+			// another's to clear.
+			//
+			// This is where mergeSeen had zero call sites: the function was
+			// written, tested by eye and never wired in, so the guarantee existed
+			// in the comment at the top of this file and nowhere in the code.
+			// That is the worst shape a guarantee can have — documented, believed,
+			// and absent.
+			t.Seen = mergeSeen(prev.Seen, t.Seen, by)
 		}
 
-		// Guarantee 1, the other half: only the human answers a removal request.
-		// The restore branch below covers a tab an agent DROPPED; this covers the
-		// far commoner case of an agent carrying the whole document through a
-		// read-modify-write with the field simply absent, because nothing it did
-		// was about that tab. `pendingRemoval` was taken verbatim, so a routine
-		// write by agent-2 cancelled agent-1's request and the human's banner
-		// vanished with no record that it had ever been raised — the same shape as
-		// `touched`, and it is carried forward for the same reason.
-		if t.PendingRemoval == nil && prev.PendingRemoval != nil {
-			t.PendingRemoval = prev.PendingRemoval
-		}
-
-		// Guarantee 4: an agent may move its OWN read stamp and nobody else's.
-		// Most writes drop `seen` entirely, having never looked at it, and that
-		// must not erase what the other actors recorded — with two sessions and a
-		// human on one board, "changed since I last looked" is a per-actor
-		// question and one actor's answer is not another's to clear.
-		//
-		// This is where mergeSeen had zero call sites: the function was written,
-		// tested by eye and never wired in, so the guarantee existed in the
-		// comment at the top of this file and nowhere in the code. That is the
-		// worst shape a guarantee can have — documented, believed, and absent.
-		t.Seen = mergeSeen(prev.Seen, t.Seen, by)
+		same := sameState(prev, &t)
 
 		// Guarantee 3: an agent cannot un-read a message. A chat message carries
 		// an ack once a session has consumed it, and the human's edit/delete
 		// window closes at that point — so an agent that dropped the ack could
 		// reopen a window on a message it had already acted on. Carried forward
 		// for the same reason as `touched`.
-		if state, changed := carryAcks(prev.State, t.State); changed {
-			t.State = state
+		//
+		// Only for a tab that looks changed, and that ordering is deliberate: a
+		// tab whose state is identical cannot have dropped an ack, so the whole
+		// walk is skipped for every tab a write did not touch. The comparison is
+		// then made AGAIN on the restored state, because a write whose only
+		// difference was a missing ack has, after the carry, changed nothing —
+		// and must not raise a dot saying it did.
+		if !human && !same {
+			if state, carried := carryAcks(prev.State, t.State); carried {
+				t.State, t.norm, t.maxID = state, nil, -1
+				same = sameState(prev, &t)
+			}
 		}
 
-		// `note` is in the comparison for the same reason it is in changeSummary:
+		// `note` is in the comparison for the same reason it is in the journal:
 		// it is human-authored intent — what this tab is FOR, in their words — and
 		// an agent rewriting it is exactly the kind of change the dot exists to
-		// announce. The two comparisons are kept identical on purpose; when they
-		// disagreed, a note-only write was journaled and left no marker, so the
-		// human's own sentence could be replaced with nothing on screen to say so.
-		changed := !jsonEqual(prev.State, t.State) ||
-			prev.Name != t.Name ||
-			prev.Type != t.Type ||
-			prev.StateFrom != t.StateFrom ||
-			prev.Note != t.Note
+		// announce. When the two comparisons disagreed, a note-only write was
+		// journaled and left no marker, so the human's own sentence could be
+		// replaced with nothing on screen to say so.
+		meta := prev.Name == t.Name &&
+			prev.Type == t.Type &&
+			prev.StateFrom == t.StateFrom &&
+			prev.Note == t.Note
 
-		if changed {
+		if !human && (!same || !meta) {
 			note := ""
 			if t.Touched != nil {
 				note = t.Touched.Note
 			}
 			t.Touched = &touchMark{By: by, At: now, Note: note}
 		}
+
+		// What the JOURNAL records, which is wider than what raises a dot by
+		// exactly one field: a write that drops a tab changes nothing else about
+		// it, so an agent asking to delete something used to produce a banner on
+		// the human's screen and not one line anywhere else.
+		t.changed = !same || !meta || !sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval)
+
+		// Nothing that could hold an id moved, so the largest one is the largest
+		// one it had. This is what stops the id allocator walking the board.
+		if same {
+			t.maxID = prev.idHigh()
+		}
 		out = append(out, t)
 	}
 
+	// A human write is taken as-is: they may dismiss markers, answer removal
+	// requests, delete tabs, anything.
+	if human {
+		return &reconcilePlan{tabs: out}
+	}
+
 	// Guarantee 1: restore anything the agent dropped, as a request instead.
-	for _, id := range order {
-		if _, kept := after[id]; kept {
+	for i := range cur.tabs {
+		id := cur.tabs[i].ID
+		if _, kept := inc.byID[id]; kept {
 			continue
 		}
-		gone := before[id]
+		gone := cur.tabs[i]
+		asked := gone.PendingRemoval
 		if gone.PendingRemoval == nil {
 			gone.PendingRemoval = &removalAsk{By: by, At: now, Reason: "removal requested by an agent write"}
 		}
 		if gone.Touched == nil {
 			gone.Touched = &touchMark{By: by, At: now, Note: "removal requested"}
 		}
+		gone.changed = !sameRemovalAsk(asked, gone.PendingRemoval)
 		logger.Printf("tab %q (%s) was dropped by %s — restored as a removal request", gone.Name, id, by)
-		out = insertAt(out, gone, indexOf(order, id))
+		out = insertAt(out, gone, i)
 	}
 
-	return out, nil
+	return &reconcilePlan{tabs: out}
 }
 
-func jsonEqual(a, b json.RawMessage) bool {
-	if len(a) == 0 && len(b) == 0 {
-		return true
-	}
-	var x, y any
-	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
-		return string(a) == string(b)
-	}
-	ab, err1 := json.Marshal(x)
-	bb, err2 := json.Marshal(y)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	return bytes.Equal(ab, bb)
-}
-
-func indexOf(ids []string, id string) int {
-	for i, v := range ids {
-		if v == id {
-			return i
-		}
-	}
-	return len(ids)
-}
-
-func insertAt(list []tab, t tab, at int) []tab {
+func insertAt(list []docTab, t docTab, at int) []docTab {
 	if at > len(list) {
 		at = len(list)
 	}
-	list = append(list, tab{})
+	list = append(list, docTab{})
 	copy(list[at+1:], list[at:])
 	list[at] = t
 	return list
@@ -285,7 +325,7 @@ func carryAcks(prevRaw, nextRaw json.RawMessage) (json.RawMessage, bool) {
 		return nextRaw, false
 	}
 	var prev, next any
-	if json.Unmarshal(prevRaw, &prev) != nil || json.Unmarshal(nextRaw, &next) != nil {
+	if jsonv2.Unmarshal(prevRaw, &prev) != nil || jsonv2.Unmarshal(nextRaw, &next) != nil {
 		return nextRaw, false
 	}
 
@@ -299,7 +339,10 @@ func carryAcks(prevRaw, nextRaw json.RawMessage) (json.RawMessage, bool) {
 	if !changed {
 		return nextRaw, false
 	}
-	out, err := json.Marshal(next)
+	// writeOptions, because this result is written to the state file: v2 shuffles
+	// map keys unless told not to, and a state blob whose keys moved on every
+	// ack carry would read as a change nobody made.
+	out, err := jsonv2.Marshal(next, writeOptions)
 	if err != nil {
 		return nextRaw, false
 	}

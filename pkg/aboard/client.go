@@ -18,6 +18,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	jsonv2 "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 // replyReadLimit caps what a reply body may cost us. Every response this file
@@ -59,8 +62,20 @@ func Apply(ctx context.Context, root Root, name, by string, force bool, assets f
 		return fmt.Errorf("reading stdin: %w", err)
 	}
 
+	// Parsed with encoding/json/v2, which is what the server parses with, and
+	// that is the whole point of doing it here: v2 refuses a duplicate object
+	// name and invalid UTF-8, where v1 took the last value and replaced the bad
+	// bytes. A v1 parse here would have SILENTLY COLLAPSED a duplicate before the
+	// server ever saw it — apply would re-marshal the map it decoded, the write
+	// would land, and the field the agent thought it set would be the other one.
+	// Refusing it in the caller's own terminal is the only place the agent that
+	// wrote the document is still listening.
 	var doc map[string]any
-	if err := json.Unmarshal(body, &doc); err != nil {
+	if err := jsonv2.Unmarshal(body, &doc); err != nil {
+		if errors.Is(err, jsontext.ErrDuplicateName) {
+			return fmt.Errorf("stdin json has a duplicate key (%w) — one object sets the same name twice, "+
+				"and which one wins is not something to leave to a parser; remove the one you did not mean", err)
+		}
 		return fmt.Errorf("stdin is not valid json: %w", err)
 	}
 	if _, ok := doc["tabs"].([]any); !ok {

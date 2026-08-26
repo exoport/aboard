@@ -164,7 +164,56 @@ func appendJournalLines(out []json.RawMessage, path string, limit int) []json.Ra
 // changeSummary compares the document on disk with the one about to replace it.
 // Reported by /watch, recorded in the journal, and evaluated against waiting
 // sessions' predicates — three features off one comparison.
+//
+// The byte-level form, kept because the tests state "the marker and the journal
+// agree on what changed" against two documents. The write path does not call it:
+// reconcileDoc has already made this comparison and recorded the answer on each
+// tab, so summarise only has to read the flag. Making it twice cost a full
+// canonicalisation of every tab's state on the board, per write.
 func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntry {
+	cur, err := decodeDocument(currentRaw)
+	if err != nil {
+		cur = emptyDoc()
+	}
+	tabs := make([]docTab, len(next))
+	for i := range next {
+		tabs[i] = docTab{tab: next[i], maxID: -1}
+		tabs[i].changed = changedAgainst(cur, &tabs[i])
+	}
+	return summarise(cur, tabs, by, origin)
+}
+
+// changedAgainst is the journal's question about one tab.
+//
+// `note` was missing from it. A note is the human's own sentence about what a tab
+// is for, an agent can overwrite it in a normal write, and the journal — the thing
+// you go to when you ask "who changed this while I was thinking?" — had no record
+// of it at all.
+//
+// `pendingRemoval` was missing too, and it was worse: a write that DROPS a tab
+// changes nothing else about it, so an agent asking to delete something produced
+// a banner on the human's screen and not one line anywhere else. `aboard journal`
+// said nothing, `aboard watch` emitted nothing, and `aboard wait --for "tab bb126"`
+// waited for a change that had already happened. Found by dropping a tab with a
+// bare POST and looking at the journal afterwards.
+func changedAgainst(cur *stateDoc, t *docTab) bool {
+	j, existed := cur.byID[t.ID]
+	if !existed {
+		return true
+	}
+	prev := &cur.tabs[j]
+	return !sameState(prev, t) ||
+		prev.Name != t.Name ||
+		prev.Type != t.Type ||
+		prev.StateFrom != t.StateFrom ||
+		prev.Note != t.Note ||
+		!sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval)
+}
+
+// summarise turns an already-made comparison into the entry its three consumers
+// share. `Before` holds the previous state of each changed tab, which is the unit
+// somebody restoring by hand would actually want.
+func summarise(cur *stateDoc, next []docTab, by, origin string) JournalEntry {
 	entry := JournalEntry{
 		At:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		By:     by,
@@ -173,46 +222,15 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 		Names:  map[string]string{},
 		Before: map[string]json.RawMessage{},
 	}
-
-	var cur board
-	if len(currentRaw) > 0 {
-		_ = json.Unmarshal(currentRaw, &cur)
-	}
-	before := map[string]tab{}
-	for i := range cur.Tabs {
-		before[cur.Tabs[i].ID] = cur.Tabs[i]
-	}
-
 	for i := range next {
 		t := &next[i]
-		prev, existed := before[t.ID]
-		// The same comparison reconcileTabs makes, deliberately: one of them
-		// raises the dot on the tab and the other writes the journal line, and a
-		// change that gets one without the other is a change the human can see but
-		// not trace, or trace but not see.
-		//
-		// `note` was missing. A note is the human's own sentence about what a tab
-		// is for, an agent can overwrite it in a normal write, and the journal —
-		// the thing you go to when you ask "who changed this while I was
-		// thinking?" — had no record of it at all.
-		//
-		// `pendingRemoval` was missing too, and it was worse: a write that DROPS a
-		// tab changes nothing else about it, so an agent asking to delete
-		// something produced a banner on the human's screen and not one line
-		// anywhere else. `aboard journal` said nothing, `aboard watch` emitted
-		// nothing, and `aboard wait --for "tab bb126"` waited for a change that
-		// had already happened. Found by dropping a tab with a bare POST and
-		// looking at the journal afterwards.
-		if existed && jsonEqual(prev.State, t.State) &&
-			prev.Name == t.Name && prev.Type == t.Type &&
-			prev.StateFrom == t.StateFrom && prev.Note == t.Note &&
-			sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval) {
+		if !t.changed {
 			continue
 		}
 		entry.Tabs = append(entry.Tabs, t.ID)
 		entry.Names[t.ID] = t.Name
-		if existed && len(prev.State) > 0 {
-			entry.Before[t.ID] = prev.State
+		if j, existed := cur.byID[t.ID]; existed && len(cur.tabs[j].State) > 0 {
+			entry.Before[t.ID] = cur.tabs[j].State
 		}
 	}
 	return entry

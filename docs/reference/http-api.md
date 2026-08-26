@@ -86,8 +86,28 @@ one level too high. A path that neither equals the prefix nor starts with `prefi
 
 ## `GET /aboard.json`
 
-Returns the state file verbatim, `Content-Type: application/json`,
-`Cache-Control: no-store`.
+Returns the state file verbatim, `Content-Type: application/json`, with an
+**`ETag`** over the exact bytes and `Cache-Control: no-cache`.
+
+`no-cache` means *revalidate every time*, not *do not keep a copy*: send the tag
+back as `If-None-Match` and an unchanged board answers **`304`** with no body.
+The board shell fetches with `cache: 'no-cache'` for exactly this, so a reload of
+a board nobody has written to costs a conditional request instead of the whole
+document.
+
+The tag is a hash of the bytes and **not** the `rev` counter, deliberately. `rev`
+moves only on an accepted `POST`, and the state file is a file — a person editing
+it, a `git checkout`, another tool — so a document can change without `rev`
+changing, and a tag that missed that would answer `304` for a board that no
+longer exists.
+
+The server answers from memory, and re-reads only when the file's size or
+modification time has moved. A write it made itself is published to that cache as
+it lands, so a `GET` immediately after a `POST` is never stale. A re-read stats
+the file on both sides of itself and only believes a stamp the two agree on: the
+state file is replaced by rename, so a read that straddles a write returns the
+old bytes under the new file's stat, and caching that pair would pin the old
+document — ETag and all — until something else happened to move the file.
 
 ## `POST /aboard.json`
 
@@ -162,6 +182,30 @@ the caller's next one:
 ```json
 { "ok": true, "rev": 44, "updatedAt": "2026-08-25T11:05:31.004Z" }
 ```
+
+**What the parser refuses.** The document is parsed with
+[`encoding/json/v2`](https://github.com/go-json-experiment/json), which is
+stricter than the parser this server used to run, and three of the differences
+are visible to a caller:
+
+| written | v1 did | now |
+| --- | --- | --- |
+| the same object name twice — `{"nextId":1,"nextId":2}` | took the last one | `400`, naming the member |
+| invalid UTF-8 in a string | replaced the bytes with `U+FFFD` | `400` |
+| a field in the wrong case — `"ID"` for `"id"` | matched it anyway | the field is not matched |
+
+The first is the one worth knowing about, because it used to be *silent*: a
+generated document that set a key twice was accepted, one of the two values was
+kept, and nothing said which. `aboard apply` parses stdin the same way and
+refuses it in your own terminal before the write leaves the machine — which
+matters, because `apply` re-encodes what it decodes, so a lenient parse there
+would have collapsed the duplicate before the server could ever see it.
+
+**Body limit: 32 MiB.** `MaxBytesReader` refuses a larger body before any parser
+runs, so this is the size a board can grow to, not just the size of one request.
+It was 8 MiB while a write cost a multiple of the whole document; it is not any
+more. Uploads have their own, lower limit (12 MiB) because an image is not a
+document.
 
 Other statuses: `400` for a body that is not JSON, has no `tabs` array, exceeds the
 body limit, or carries a `__base` that is not a revision; `403` for a cross-site write or a non-loopback `Host` (see [who is allowed to

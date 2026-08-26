@@ -48,12 +48,32 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	jsonv2 "github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/exoport/aboard/pkg/aboard/web"
 )
 
-const maxBodyBytes = 8 << 20 // 8 MiB
+// maxBodyBytes is the ceiling on a POSTed document. 32 MiB, raised from 8 once
+// the write path stopped costing a multiple of the document (see document.go).
+//
+// The number is a judgement, not a measurement, so here is the reasoning. Below
+// it: MaxBytesReader refuses the body before any parser runs, so the ceiling is
+// what a board can GROW to, and a board that hits it is bricked for writes — the
+// browser cannot save, `apply` cannot land, and the only way out is editing the
+// file by hand. Above it: every request is read fully into memory before it is
+// parsed, so the ceiling is also what one hostile or buggy POST can make this
+// process allocate. 32 MiB is roughly a hundred times the largest real board
+// anyone has (135 KB), leaves room for the pasted-widget and annotated-screenshot
+// tabs that actually make a board big, and is still small enough that the process
+// holding one in memory is unremarkable.
+//
+// It is deliberately NOT unbounded. Uploads have their own, lower limit (12 MiB,
+// see upload.go) because an image is not a document.
+const maxBodyBytes = 32 << 20 // 32 MiB
 
 var (
 	serveDirs  = []string{"views", "lib", "assets", "test"}
@@ -134,6 +154,17 @@ type server struct {
 
 	// Append-only record of every accepted write (see journal.go).
 	journal *journal
+
+	// The state file as this process holds it: the bytes, their ETag, and the
+	// parsed document. Replaced on every accepted write and whenever the file is
+	// found to have moved underneath us. Atomic because a reader takes it without
+	// any lock at all — see liveDoc.
+	live atomic.Pointer[liveDoc]
+
+	// Signature of the state file as the watcher last hashed it, with the stat
+	// that produced it. Only the watcher goroutine touches these.
+	sig      string
+	sigStamp fileStamp
 
 	// Set by a POST so the browser that made the write can recognise the echo
 	// of its own change and skip reloading. Cleared on every broadcast.
@@ -625,7 +656,7 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) bool {
 	switch {
 	case upath == "/aboard.json" && r.Method == http.MethodGet:
-		s.getState(w)
+		s.getState(w, r)
 	case upath == "/aboard.json" && r.Method == http.MethodPost:
 		s.postState(w, r)
 	case upath == "/health" && r.Method == http.MethodGet:
@@ -683,15 +714,188 @@ func (s *server) routeUI(w http.ResponseWriter, r *http.Request, upath string) {
 
 /* ---------- state ---------- */
 
-func (s *server) getState(w http.ResponseWriter) {
-	body, err := os.ReadFile(s.stateFile)
+// liveDoc is the state file as this process holds it: the exact bytes, their
+// entity tag, the stat that produced them, and — for the write path — the parsed
+// document.
+//
+// `doc` is nil for a cache built by a READER, which needs the bytes and nothing
+// else. The write path is the only thing that dereferences it and it does so
+// under writeMu, so nothing here is shared mutable state; the pointer itself is
+// swapped atomically, and a reader always holds a consistent snapshot because a
+// liveDoc is never modified after it is published.
+type liveDoc struct {
+	doc   *stateDoc
+	disk  []byte
+	etag  string
+	stamp fileStamp
+}
+
+// fileStamp is what a stat can tell us cheaply: enough to know the file has NOT
+// moved, never enough to prove it has not changed. Comparable, so it is one `==`.
+type fileStamp struct {
+	size  int64
+	mtime int64
+}
+
+func stampOf(info os.FileInfo) fileStamp {
+	if info == nil {
+		return fileStamp{}
+	}
+	return fileStamp{size: info.Size(), mtime: info.ModTime().UnixNano()}
+}
+
+// usable says the stamp came from a file we actually saw. The zero value is the
+// deliberate "do not trust this" marker readStable returns when it could not
+// pin the bytes to a stat, and it must never compare equal to a real one — an
+// mtime of exactly the epoch is not a thing this file will have.
+func (f fileStamp) usable() bool { return f.mtime != 0 }
+
+// readStable reads the state file and returns a stamp that describes THE BYTES
+// IT GOT, which a stat on either side of the read on its own does not.
+//
+// This is not fussiness. The state file is replaced by rename (writeAtomic), so
+// a reader that opened the old inode reads the old bytes in full while the path
+// already names the new file — and a stat taken after that read describes the
+// NEW file. Caching those bytes under that stamp pins them: every later request
+// stats, matches, and is served the superseded document, for as long as nothing
+// else moves the file. Not 200 ms stale and corrected by the next frame, which
+// is the trade this cache was argued for — permanently stale, ETag and all, so
+// the browser's revalidation answers 304 on a board that no longer exists.
+// Reproduced with a rename storm under a concurrent reader before it was fixed.
+//
+// So: stat, read, stat, and only believe the stamp when the two agree. A file
+// being rewritten faster than it can be read gives up and returns the bytes with
+// an UNUSABLE stamp, which costs a re-read on the next request and cannot lie.
+func readStable(file string) ([]byte, fileStamp, error) {
+	var raw []byte
+	for range 3 {
+		before, err := os.Stat(file)
+		if err != nil {
+			return nil, fileStamp{}, err
+		}
+		raw, err = os.ReadFile(file)
+		if err != nil {
+			return nil, fileStamp{}, err
+		}
+		after, err := os.Stat(file)
+		if err != nil {
+			return nil, fileStamp{}, err
+		}
+		if stamp := stampOf(before); stamp == stampOf(after) {
+			return raw, stamp, nil
+		}
+	}
+	return raw, fileStamp{}, nil
+}
+
+// cachedState is the document a READER gets: served from memory when the file
+// has not moved, re-read when it has.
+//
+// Gated on stat rather than on content, which is the right trade for a read: a
+// GET that served bytes one poll interval stale is corrected by the very next
+// SSE frame, and the alternative is re-reading megabytes on every request from
+// every open page. The WRITE path does not settle for this — see currentLocked.
+//
+// The bytes and the stamp come from readStable, together, because the bound on
+// the staleness is the whole argument for the trade and a stamp taken after the
+// read does not deliver it — see there.
+func (s *server) cachedState() (*liveDoc, error) {
+	info, err := os.Stat(s.stateFile)
+	if err != nil {
+		return nil, err
+	}
+	// Loaded BEFORE the read, so the swap below can tell "nobody published while
+	// we were reading" from "the write path published the document it just
+	// wrote" — and never overwrite the second with our older copy.
+	prev := s.live.Load()
+	if stamp := stampOf(info); prev != nil && stamp.usable() && prev.stamp == stamp {
+		return prev, nil
+	}
+
+	raw, stamp, err := readStable(s.stateFile)
+	if err != nil {
+		return nil, err
+	}
+	live := &liveDoc{disk: raw, etag: etagOf(raw), stamp: stamp}
+	if !s.live.CompareAndSwap(prev, live) {
+		// Somebody got there first, and the only other publisher is the write
+		// path with the bytes it has just written. Theirs is at least as fresh as
+		// ours; take it and leave the cache alone.
+		if newer := s.live.Load(); newer != nil {
+			return newer, nil
+		}
+	}
+	return live, nil
+}
+
+// currentLocked is the document the WRITE path compares against, and it is
+// deliberately stricter than cachedState: it re-reads the file every time and
+// only reuses the parse when the bytes are identical.
+//
+// The read is what makes this airtight. A stat-gated cache has a window — an
+// external editor writing the same number of bytes inside one mtime tick — and on
+// the write path that window means silently reconciling against a document that
+// no longer exists and writing the other person's edit away. Reading 3.5 MB costs
+// ~0.6 ms and comparing it ~0.2 ms, against the ~30 ms the parse it avoids costs
+// and the several ms the write that follows will spend; buying certainty at that
+// price is not a trade worth thinking about twice.
+//
+// An unreadable document on disk is refused rather than treated as an empty
+// board, exactly as reconcileTabs used to refuse it: writing a fresh document
+// over a corrupt one would destroy whatever could still have been recovered from
+// it by hand.
+func (s *server) currentLocked() (*liveDoc, error) {
+	raw, stamp, err := readStable(s.stateFile)
+	if err != nil {
+		// A file that is not there is a board nobody has written yet, and the
+		// first POST against a fresh root has to be allowed to create it.
+		//
+		// A file that IS there and cannot be read is a different sentence, and
+		// calling it an empty board is how a write replaces a board this process
+		// merely failed to open: the guarantees restore a dropped tab from the
+		// CURRENT document, and an empty current document has nothing to restore,
+		// so every tab the caller happened to omit would go silently. Refused for
+		// the same reason an unparseable document is — the error was swallowed
+		// here, and the comment below already claimed it was not.
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("current board unreadable: %w", err)
+		}
+		raw, stamp = nil, fileStamp{}
+	}
+	if live := s.live.Load(); live != nil && live.doc != nil && bytes.Equal(live.disk, raw) {
+		return live, nil
+	}
+	doc, err := decodeDocument(raw)
+	if err != nil {
+		return nil, fmt.Errorf("current board unreadable: %w", err)
+	}
+	live := &liveDoc{doc: doc, disk: raw, etag: etagOf(raw), stamp: stamp}
+	s.live.Store(live)
+	return live, nil
+}
+
+// getState answers from the cache, with an ETag, so a client that already holds
+// this version gets a 304 and no body at all.
+//
+// It used to re-read the file per request and say `Cache-Control: no-store`,
+// which forbids a client from even keeping a copy to revalidate — so the
+// browser's post-SSE refetch transferred the whole document every time, including
+// the reloads where nothing about it had changed. `no-cache` is the honest
+// header: keep it, and ask every time whether it is still current.
+func (s *server) getState(w http.ResponseWriter, r *http.Request) {
+	live, err := s.cachedState()
 	if err != nil {
 		http.Error(w, "cannot read state", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(body)
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("ETag", live.etag)
+	if r.Header.Get("If-None-Match") == live.etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	_, _ = w.Write(live.disk)
 }
 
 func (s *server) postState(w http.ResponseWriter, r *http.Request) {
@@ -701,24 +905,38 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Decode into an ordered-ish generic map. Field order in the written file is
-	// whatever encoding/json produces (alphabetical); the board does not care,
-	// and it keeps diffs stable between writes.
-	var incoming map[string]any
-	if err := json.Unmarshal(raw, &incoming); err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	// ONE decode of the body, and the only one this request makes. Everything
+	// that follows — the compare-and-set check, the guarantees, the id
+	// reconciliation, the change summary — takes the parsed document; the
+	// document already on disk is not decoded at all unless its bytes moved.
+	incoming, err := decodeDocument(raw)
+	if err != nil {
+		if errors.Is(err, errTabsNotArray) {
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
+			return
+		}
+		// The parser is encoding/json/v2, which is stricter than the one this
+		// server used to run: a duplicate object name and invalid UTF-8 are now
+		// refused rather than silently resolved last-wins or replaced with U+FFFD.
+		// The reason is carried through verbatim because it names the member and
+		// the offset, and the caller is an agent that can fix it — a bare "invalid
+		// json" on a 4 MB document is a message that sends somebody to a diff.
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":  "invalid json",
+			"reason": err.Error(),
+		})
 		return
 	}
-	if _, ok := incoming["tabs"].([]any); !ok {
+	if !incoming.hasTabs {
 		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
 		return
 	}
 
-	origin, _ := incoming["__origin"].(string)
+	origin := rawString(incoming.fields["__origin"])
 	if origin == "" {
 		origin = "browser"
 	}
-	base, baseOK := baseToken(incoming["__base"])
+	base, baseOK := baseTokenRaw(incoming.fields["__base"])
 	if !baseOK {
 		// A `__base` that is present but not a token is refused rather than
 		// ignored. Ignoring it is the whole defect this token exists to close:
@@ -746,15 +964,15 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	// relies on the default. Which means the default's only remaining job is to
 	// name a caller that did not say who it was — and the safe answer to that is
 	// an agent-level one.
-	by, _ := incoming["__by"].(string)
+	by := rawString(incoming.fields["__by"])
 	if by == "" {
 		by = actorUnknown
 	}
-	delete(incoming, "__origin")
-	delete(incoming, "__base")
-	delete(incoming, "__by")
+	delete(incoming.fields, "__origin")
+	delete(incoming.fields, "__base")
+	delete(incoming.fields, "__by")
 
-	res, bad := s.commitState(incoming, raw, base, by, origin)
+	res, bad := s.commitState(incoming, base, by, origin)
 	if bad != nil {
 		s.writeJSON(w, bad.code, bad.body)
 		return
@@ -809,38 +1027,51 @@ type apiError struct {
 // race, which is why `aboard serve` refuses a duplicate rather than trusting the
 // file, and why `apply` posts to the running board instead of writing the file
 // itself — every writer that matters arrives through this function.
-func (s *server) commitState(incoming map[string]any, raw []byte, base, by, origin string) (commitResult, *apiError) {
+func (s *server) commitState(incoming *stateDoc, base, by, origin string) (commitResult, *apiError) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	currentRaw, _ := os.ReadFile(s.stateFile)
+	live, err := s.currentLocked()
+	if err != nil {
+		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{"error": err.Error()}}
+	}
+	current := live.doc
 
-	// Compare-and-set against the REVISION, not the clock. See revisionOf.
-	live := revisionOf(currentRaw)
-	if base != "" && len(currentRaw) > 0 {
-		if bad := live.refuse(base); bad != nil {
+	// Compare-and-set against the REVISION, not the clock. See revision.
+	if base != "" && len(live.disk) > 0 {
+		if bad := current.rev.refuse(base); bad != nil {
 			return commitResult{}, bad
 		}
 		// Only for a base that really is a timestamp: a legacy document can also
 		// be written against a numeric base of 0, and calling that a timestamp
 		// would be a wrong sentence in the log of the one case nobody can re-run.
-		if _, notANumber := strconv.Atoi(strings.TrimSpace(base)); live.legacy() && notANumber != nil {
+		if _, notANumber := strconv.Atoi(strings.TrimSpace(base)); current.rev.legacy() && notANumber != nil {
 			s.opts.Log().Printf("accepted a timestamp __base on a document with no rev — "+
-				"this board has not been written since the revision token landed; %q gets rev %d", by, live.rev+1)
+				"this board has not been written since the revision token landed; %q gets rev %d", by, current.rev.rev+1)
 		}
 	}
 
 	// Tab-level guarantees: an agent may not delete a tab or clear a change
 	// marker, and every tab it did change gets stamped so the UI can show a dot.
-	tabs, err := reconcileTabs(currentRaw, raw, by, s.opts.Log())
-	if err != nil {
-		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{"error": err.Error()}}
+	// One pass, and it also records which tabs changed — which is what the
+	// journal summary below reads instead of comparing everything a second time.
+	plan := reconcileDoc(current, incoming, by, s.opts.Log())
+
+	next := &stateDoc{
+		fields:  incoming.fields,
+		tabs:    plan.tabs,
+		byID:    make(map[string]int, len(plan.tabs)),
+		hasTabs: true,
 	}
-	incoming["tabs"] = tabs
+	for i := range next.tabs {
+		next.byID[next.tabs[i].ID] = i
+	}
+	next.nextID, _ = rawInt(next.fields["nextId"])
 
 	// Ids are board-wide monotonic; never let the counter regress or fall behind
-	// the ids already in use (see ids.go).
-	incoming["nextId"] = reconcileNextID(raw, currentRaw)
+	// the ids already in use (see ids.go). Only the tabs this write changed are
+	// walked: every other tab carries the answer it had.
+	nextID := nextIDFrom(next, current)
 
 	// The schema version is ours to state, not the caller's. This server writes
 	// version-3 documents by definition — it IS the v3 server — so a `version` in
@@ -856,32 +1087,59 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 	// the caller should never have set is the worse trade. The agent is still told
 	// — Apply warns on stderr (see wrongVersion) — so the stale source gets
 	// fixed by whoever is still holding the context for it.
-	incoming["version"] = SchemaVersion
-
-	// The compare-and-set token. Server-managed exactly like `version` and for a
-	// sharper reason: `updatedAt` was the token, and it is a millisecond clock —
-	// 4 collisions in 60 sequential writes, and every collision is a provably
-	// stale base that passes. A counter cannot collide, and the loser of a race
-	// is told a number it can compare rather than a timestamp it has to trust.
-	incoming["rev"] = live.rev + 1
-
+	//
+	// The compare-and-set token is server-managed for a sharper reason: `updatedAt`
+	// was the token, and it is a millisecond clock — 4 collisions in 60 sequential
+	// writes, and every collision is a provably stale base that passes. A counter
+	// cannot collide, and the loser of a race is told a number it can compare
+	// rather than a timestamp it has to trust.
+	rev := current.rev.rev + 1
 	stamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	incoming["updatedAt"] = stamp
-	incoming["lastEditedBy"] = by
+	for _, f := range []struct {
+		name  string
+		value any
+	}{
+		{"nextId", nextID},
+		{"version", SchemaVersion},
+		{"rev", rev},
+		{"updatedAt", stamp},
+		{"lastEditedBy", by},
+	} {
+		if err := next.setField(f.name, f.value); err != nil {
+			return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "encode failed"}}
+		}
+	}
+	next.nextID = nextID
+	next.rev = revision{rev: rev, had: true, updatedAt: stamp}
 
-	out, err := json.MarshalIndent(incoming, "", "  ")
+	out, err := next.marshalIndent()
 	if err != nil {
 		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "encode failed"}}
 	}
 	out = append(out, '\n')
 
 	// One comparison, three consumers: the journal on disk, the watch stream,
-	// and any session blocked on a predicate about this very change.
-	entry := changeSummary(currentRaw, tabs, by, origin)
+	// and any session blocked on a predicate about this very change. The
+	// comparison itself was made by reconcileDoc; this only reads the answer.
+	entry := summarise(current, next.tabs, by, origin)
 
 	if err := s.writeAtomic(out); err != nil {
 		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "write failed"}}
 	}
+
+	// The document just written IS the current document — parsed, hashed and id-
+	// counted already. Publishing it here is what makes the next write cost the
+	// next edit rather than the whole board again.
+	// The stamp is only believed when it describes the bytes we just wrote: if
+	// something renamed over the file between our own rename and this stat, the
+	// stat is somebody else's and caching our bytes under it would pin them.
+	// An unusable stamp costs the next reader a re-read and cannot lie.
+	info, _ := os.Stat(s.stateFile)
+	written := stampOf(info)
+	if written.size != int64(len(out)) {
+		written = fileStamp{}
+	}
+	s.live.Store(&liveDoc{doc: next, disk: out, etag: etagOf(out), stamp: written})
 
 	s.mu.Lock()
 	s.pendingOrigin = origin
@@ -895,7 +1153,7 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 		s.journal.append(entry)
 	}
 
-	return commitResult{doc: out, entry: entry, stamp: stamp, rev: live.rev + 1}, nil
+	return commitResult{doc: out, entry: entry, stamp: stamp, rev: rev}, nil
 }
 
 // revision is the board's compare-and-set token as it stands on disk: a counter
@@ -957,15 +1215,27 @@ func baseToken(v any) (string, bool) {
 	}
 }
 
-func revisionOf(raw []byte) revision {
-	var cur map[string]any
-	if len(raw) == 0 || json.Unmarshal(raw, &cur) != nil {
-		return revision{}
+// revisionFromFields reads the token off a document already parsed. It used to
+// be revisionOf, which unmarshalled the whole state file into a map[string]any to
+// find two keys — one of the seven full-document decodes a POST made.
+// baseTokenRaw is baseToken over the raw field, since the document is no longer
+// decoded into a map of `any`.
+func baseTokenRaw(raw jsontext.Value) (string, bool) {
+	if len(raw) == 0 {
+		return "", true
 	}
+	var v any
+	if jsonv2.Unmarshal(raw, &v) != nil {
+		return "", false
+	}
+	return baseToken(v)
+}
+
+func revisionFromFields(fields map[string]jsontext.Value) revision {
 	got := revision{}
-	got.updatedAt, _ = cur["updatedAt"].(string)
-	if n, ok := cur["rev"].(float64); ok {
-		got.rev, got.had = int(n), true
+	got.updatedAt = rawString(fields["updatedAt"])
+	if n, ok := rawInt(fields["rev"]); ok {
+		got.rev, got.had = n, true
 	}
 	return got
 }
@@ -1163,19 +1433,41 @@ func (s *server) watch() {
 	}
 }
 
+// stateSignature is one watcher tick: what the board spends, five times a
+// second, on a document nobody is writing to.
+//
+// The comment here used to say "size plus mtime catches everything a normal
+// write does. Hash the content only when mtime resolution could hide a fast
+// successive write" — and the code below it read and SHA-256'd the whole file
+// unconditionally, every tick. On a 10 MB board that is ~50 MB/s of sustained
+// reading and hashing to discover, fifty times in a row, that nothing happened.
+//
+// So the gate the comment described now exists: stat, and hash only when the
+// size or the modification time has moved. The signature stays a CONTENT hash
+// rather than becoming the stat itself, because a save that rewrites identical
+// bytes must not wake every open page — and a rename-based save moves mtime
+// whether or not anything changed.
+//
+// What this cannot see: a foreign write of exactly the same length inside one
+// mtime tick. That is a gap in the notification, not in the data — the write
+// path never trusts a stat (see currentLocked), and the next real change pings.
 func (s *server) stateSignature() string {
 	info, err := os.Stat(s.stateFile)
 	if err != nil {
 		return ""
 	}
-	// Size plus mtime catches everything a normal write does. Hash the content
-	// only when mtime resolution could hide a fast successive write.
+	stamp := stampOf(info)
+	if s.sig != "" && s.sigStamp == stamp {
+		return s.sig
+	}
 	body, err := os.ReadFile(s.stateFile)
 	if err != nil {
-		return fmt.Sprintf("%d-%d", info.Size(), info.ModTime().UnixNano())
+		s.sig, s.sigStamp = fmt.Sprintf("%d-%d", stamp.size, stamp.mtime), stamp
+		return s.sig
 	}
 	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:16])
+	s.sig, s.sigStamp = hex.EncodeToString(sum[:16]), stamp
+	return s.sig
 }
 
 func (s *server) broadcast() {

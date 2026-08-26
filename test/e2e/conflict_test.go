@@ -104,7 +104,7 @@ const mergeProbeJS = `async (ids) => {
     // The baseline is the SERVER's document, not the merged one: an unsaved edit
     // that became the baseline would be classified as already-saved and dropped
     // by the next merge, silently.
-    out.baselineIsServer = !P.baseline.tabs.some((t) => t.id === ids.mine && t.note === typed);
+    out.baselineIsServer = !(P.baseline.tabs.get(ids.mine) || "").includes(typed);
     out.rearmed = P.saveArmed;
   } catch (e) { out.err = String(e && e.message || e); }
   return out;

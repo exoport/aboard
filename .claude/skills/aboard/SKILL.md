@@ -150,6 +150,13 @@ participant when there may be several. It is what the change banner shows.
 `--by human` is refused from the CLI: the human's writes come from the browser,
 and an agent claiming to be them would hide its own tracks.
 
+**A duplicate key is refused, not resolved.** If any object in the document sets
+the same name twice — the shape a generated or hand-spliced document falls into —
+`apply` exits non-zero and names the key, and so does the server. It used to be
+taken last-wins, silently, so the field you thought you had set was the other
+one. Invalid UTF-8 is refused for the same reason, and a field in the wrong case
+(`"ID"` for `"id"`) is simply not matched rather than guessed at.
+
 The shape of every write, with the id allocator and the `upsertTab` helper worth
 pasting, is `aboard recipes show apply-a-write`.
 
