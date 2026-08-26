@@ -200,7 +200,7 @@ Chromium, which flaked once and would again.
 
 ### 10c-bis. `aboard boards` over /proc, and gomodguard_v2  ☑ `2bd572c` (the human reversed the drop the same day with a design: Linux only, honest elsewhere, no registry)
 
-### 10d. The user-facing docs audit and gap fill  ☐ (brief `brief-13-docs.md`: second board, reverse proxy, promote a tab, the VS Code extension, how aboard runs, the audit)
+### 10d. The user-facing docs audit and gap fill  ☑ `d0846a2`
 
 ### 10. Gated on the human — do not start without an answer
 
