@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–5 and 7 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–8 done (9 in progress); item 8 done in aboard_vscode (`6711c15` there). Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -126,7 +126,7 @@ with `jsontext.Value` and the stricter-defaults test pass. (3) per-tab resources
 **Done when** the "Measured" table in the handoff has before/after rows and the acceptance line of
 every structural item holds under the benchmark, with `make e2e` still green.
 
-### 6. The eleven reviewed features  ☐
+### 6. The eleven reviewed features  ☑ `d69197a` (items 1–10 built in three parallel worktrees and squash-merged; `bb372` parked — §10)
 
 Source: `development/handoffs/handoff-13-features.md`. Scope: items 1–10 as specified
 (`bb361` warnings travel with the write; `bb362` `apply --check`/`--strict`; `bb363` per-tab
