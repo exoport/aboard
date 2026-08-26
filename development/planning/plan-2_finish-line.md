@@ -208,6 +208,12 @@ Chromium, which flaked once and would again.
 
 ### 10g. The board never calls a native dialog  ☑ `2875113` (a VS Code webview swallows confirm/prompt/alert; found by the human clicking Remove in the panel)
 
+### 10h. The extension after the human's checklist  ☑ aboard_vscode `edadda6` (10 of 12 §11 rows observed passing on 2026-08-26; the bell now lights from an `aboard.waiting` context key; Copy Reference and Copy Link are two commands)
+
+### 10i. The human's notes to the agent (guarantee 5) and per-tab scroll memory  ☑ `1566bbb` (`tab.requests`, `aboard requests`, `wait --for request`, capsHash → `34af0bc9`)
+
+### 10j. Two recipes: the decision wizard, reviewed, and a human checklist  ☑ `bedc408` (built in a worktree, rebased onto 10i)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
