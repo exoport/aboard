@@ -78,7 +78,12 @@ aboard journal --limit 20  # who changed what recently, including other sessions
 ```
 
 `aboard status` reports: running (use it), a stale record, or nothing (start it
-with `aboard serve`). It also prints a `caps` line — the hash of what this board
+with `aboard serve`). It answers for THIS project only; `aboard boards` is the
+machine-wide version — every running board, whichever project it belongs to, read
+out of the process table. Use it when you have lost track of which board a URL
+belongs to, or before assuming a colleague's session is not already up. It is
+Linux-only and says so (exit 2) elsewhere, where the answer is `aboard status`
+inside each project. `status` also prints a `caps` line — the hash of what this board
 can actually do. **If it warns that the skill reference was generated for a
 different hash, this skill is describing a board that no longer exists**: ask
 `aboard capabilities dag` (or any type) for the truth rather than reading the
@@ -635,7 +640,7 @@ working directory, or from `--cwd`. One line in `.gitignore` covers all of it.
 | path | what it is |
 |---|---|
 | `.aboard/aboard.json` | the board itself: the document you read and apply |
-| `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) |
+| `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) — the state file and the instance record are all a name gets its own copy of; see [references/multi-session.md](references/multi-session.md) for what the two boards SHARE |
 | `.aboard/uploads/` | images the human pasted or dropped — content, not runtime (`aboard uploads` says which tabs mention each one, and prunes the rest behind `--yes`) |
 | `.aboard/recipes/` | this project's own recipes, shadowing the built-ins by name |
 | `.aboard/run/instance.json` | port, pid, URL of the running board — the discovery authority |

@@ -169,6 +169,21 @@ func Commands() []Command {
 			Exits: commonExits(),
 		},
 		{
+			// Beside `status`, because it is the same question one scope out and
+			// that is the order a reader wants them in: is a board running HERE,
+			// and what is running anywhere.
+			Name: "boards",
+			Doc:  "list every board running on this machine, from the process table (Linux only)",
+			Flags: []Flag{
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
+			},
+			Exits: []Exit{
+				{Code: ExitOK, Meaning: "printed; finding no board is still an answer"},
+				{Code: ExitFailed, Meaning: "the process table could not be read"},
+				{Code: ExitUsage, Meaning: "this system has no /proc to scan (any OS but Linux): run `aboard status` inside each project instead"},
+			},
+		},
+		{
 			Name: "init",
 			Doc:  "create .aboard/ in this directory and write an empty board",
 			Flags: []Flag{

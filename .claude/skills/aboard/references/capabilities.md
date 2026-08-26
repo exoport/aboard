@@ -35,6 +35,7 @@ the truth allows.
 
 ```sh
 aboard status                              # is a board running here? URL, pid, state file, caps beacon
+aboard boards                              # every board running on this machine (Linux; exit 2 elsewhere)
 aboard init --example --gitignore          # create .aboard/, seed it, ignore it
 aboard serve                               # run the server for this project
 aboard apply --by "agent-1" < next.json    # compare-and-set write (the only safe write)
@@ -53,8 +54,12 @@ make caps | e2e | shot | build | test | lint | status
 
 Every command takes `--cwd DIR` on the root, to resolve the project from
 somewhere other than the working directory, and `--name N` (env `ABOARD_NAME`) to
-address a second, isolated board. `status`, `journal`, `recipes list` and
-`version` take `--output-format human|json|yaml`. The complete flag table, per
+address a second, isolated board. `status`, `boards`, `journal`, `recipes list`
+and `version` take `--output-format human|json|yaml`. `boards` is the one command
+that needs no project at all — it asks the process table, so it answers from a
+directory that has never held a board, and it is also the one command that cannot
+answer everywhere: `/proc` is Linux-only, so on macOS and Windows it exits 2 with
+the reason and points at `aboard status` per project. The complete flag table, per
 command, is in [reference.generated.md](reference.generated.md) — it is generated
 from the same declaration the cobra tree is asserted against, so it cannot drift.
 

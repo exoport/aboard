@@ -133,7 +133,7 @@ with `jsontext.Value` and the stricter-defaults test pass. (3) per-tab resources
 **Done when** the "Measured" table in the handoff has before/after rows and the acceptance line of
 every structural item holds under the benchmark, with `make e2e` still green.
 
-### 6. The eleven reviewed features  ☑ `d69197a` (items 1–10 built in three parallel worktrees and squash-merged; `bb372` DROPPED by the human on 2026-08-26 — §10)
+### 6. The eleven reviewed features  ☑ `d69197a` (items 1–10 built in three parallel worktrees and squash-merged; `bb372` DROPPED by the human on 2026-08-26 and REVERSED the same day — built as a `/proc` scan, §10c)
 
 Source: `development/handoffs/handoff-13-features.md`. Scope: items 1–10 as specified
 (`bb361` warnings travel with the write; `bb362` `apply --check`/`--strict`; `bb363` per-tab
@@ -141,9 +141,10 @@ history and restore; `bb364` html tabs read the real palette; `bb365` mermaid fe
 `bb366` `apply` merges instead of failing; `bb367` `export` renders a `ui` tree; `bb368` mount
 receipts from the browser; `bb369` uploads accounting and prune; `bb371` write labels in the
 journal), each with Go tests and an `e2e` test where it has a browser half. Item 11 (`bb372`
-`boards`) was **gated on the human** (§10) and the answer, on 2026-08-26, was to DROP it — not
-build it, not defer it. The `~/.aboard/known-roots.json` registry was a proposal and is now a
-proposal nobody will take up.
+`boards`) was **gated on the human** (§10). Their first answer, on 2026-08-26, was to DROP it;
+they REVERSED that the same day with a design, and it is built — see §10c. The
+`~/.aboard/known-roots.json` registry was a proposal and is still a proposal nobody will take
+up: what shipped is the process-table scan, with no file anywhere.
 **Done when** items 1–10 are shipped with their handoff sections marked done and `capsHash`
 regenerated, and item 11 is either built to the human's answer or explicitly closed.
 
@@ -231,18 +232,34 @@ Chromium, which flaked once and would again.
 Four §10 entries were questions and now have answers. They are struck from the list above and
 recorded here with the reason, so nobody re-derives them from the shape of the code.
 
-- **`bb372` `boards` — DROPPED.** Not built and not deferred: the feature is off the table. Every
-  project already answers "is a board running here" with `aboard status`, and its
-  `.aboard/run/instance.json` and `GET /health` already say WHICH binary serves it (`app` is
-  `aboard` or `ape-aboard`), so a machine-wide list buys only cross-project discovery. The registry
-  design (`~/.aboard/known-roots.json`, written on serve and verified on read) was sound and is
-  still not worth new user-level state outside `.aboard/`. **And the scan it replaced does not come
-  back either**: the original `/proc` design was written off as unable to see a hosted board because
-  `comm` is `ape`, which is true but is not the reason — `/proc/<pid>/cmdline` carries the whole
-  argv and WOULD find `ape aboard serve`. The real reason is that `/proc` exists on Linux only, and
-  `aboard` ships binaries for macOS and Windows. Recorded precisely so the next reader does not
-  re-propose the scan with `cmdline` as the fix. Disposition: `handoff-13-features.md` §11 is
-  DROPPED; `CLAUDE.md` carries the one-line decision.
+- **`bb372` `boards` — DROPPED, then REVERSED and BUILT, both on 2026-08-26.** The first answer
+  was to drop it: every project already answers "is a board running here" with `aboard status`,
+  and its `.aboard/run/instance.json` and `GET /health` already say WHICH binary serves it, so a
+  machine-wide list buys only cross-project discovery. The human reversed that the same day, with
+  the design attached — **implement it as a `/proc` scan, run it only where `/proc` exists, give a
+  proper message elsewhere, and print a summary of every running board including the FULL project
+  path.** That is what shipped, in `pkg/aboard/boards.go` and `boards_linux.go`.
+
+  What the reversal KEPT from the refusal, and it is the half easiest to lose: **no registry
+  file.** `~/.aboard/known-roots.json` — written on serve, verified on read — stays rejected. A
+  process either exists or it does not, so the process table needs nothing written at startup and
+  nothing cleaned up after a crash, which is the one thing a registry cannot promise.
+
+  What the reversal OVERTURNED is the platform objection, by answering it rather than arguing
+  with it. `/proc` is Linux-only and `aboard` does ship for macOS and Windows — so the scanner
+  sits behind `//go:build linux`, and everywhere else the command still exists, is still declared
+  in the manifest, and exits 2 with one line naming the platform and pointing at `aboard status`
+  inside each project. A command missing on two of three platforms is worse than one that is
+  present and honest.
+
+  The `comm` note from the earlier entry survives as a design CONSTRAINT rather than an
+  objection: the scan reads `/proc/<pid>/cmdline` and never `comm`, because `comm` is 15
+  characters and under `ape aboard serve` it is the HOST's name.
+
+  Disposition: `handoff-13-features.md` §11 is DONE; `CLAUDE.md`'s decision bullet carries the
+  design as it now stands; `docs/reference/layout.md` and the skill's multi-session reference
+  document the command and, beside it, what two boards in one project SHARE.
+
 - **The example board's prose says "the agent".** All seven strings in
   `pkg/aboard/example/aboard.json` renamed; every id and every other byte kept, and the fixture's
   formatting is unchanged (`TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder` reads it).

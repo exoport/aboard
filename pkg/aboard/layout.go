@@ -187,6 +187,16 @@ func (r Root) InstanceFile(name string) string {
 	return filepath.Join(r.RunDir(), "instance."+name+".json")
 }
 
+// InstanceGlob matches EVERY board's instance record in this project — the
+// default board's and every named one's. `aboard boards` needs it: it has a pid
+// and a root and has to find which of the project's boards that process is
+// serving, which InstanceFile cannot answer because it takes the name as input.
+//
+// A pattern rather than a listing so the join still happens here. The `*` can
+// only stand for `.<name>`, because ValidateBoardName is what decides which
+// files this directory may ever hold.
+func (r Root) InstanceGlob() string { return filepath.Join(r.RunDir(), "instance*.json") }
+
 // JournalFile is the append-only record of accepted writes.
 //
 // NOT qualified by board name, which is the spike's rule kept deliberately
@@ -288,6 +298,31 @@ func RecipeFile(dir, name string) string { return filepath.Join(dir, name) }
 // writeAtomic).
 func TempFileBeside(path string, n uint64) string {
 	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".aboard-%d-%d.json", os.Getpid(), n))
+}
+
+// procSelfPath and procEntryPath name paths inside a process table. They are
+// here for one reason and it is the rule rather than the subject: "no
+// filepath.Join outside layout.go" is a rule about the TREE, and a scanner that
+// joined its own paths would be the fifth exemption TestNothingOutsideLayoutJoinsAPath
+// was written to stop. Nothing about /proc belongs to a project root, which is
+// why the proc root is a PARAMETER — the scanner's tests hand it a fake tree
+// under t.TempDir() rather than the machine's real one.
+func procSelfPath(procRoot string) string { return filepath.Join(procRoot, "self") }
+
+// procEntryPath is one file inside one process's directory: `cmdline`, `cwd`.
+func procEntryPath(procRoot, pid, leaf string) string {
+	return filepath.Join(procRoot, pid, leaf)
+}
+
+// resolveAgainst interprets p relative to base, which is what a `--cwd` read out
+// of another process's argv needs: the flag was typed relative to THAT process's
+// working directory, not ours, and joining it against ours would resolve a
+// perfectly good relative path to the wrong project.
+func resolveAgainst(base, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(base, p)
 }
 
 // DevWebFile names one file inside a --dev web tree. The tree need not be under

@@ -29,6 +29,16 @@ linters:
     - gocognit
     - godot
     - godox
+    # gomodguard, and NOT gomodguard_v2 — the opposite of the exhaustruct and
+    # wsl pairs above, so read the two together. Those disable both names because
+    # this repo decided against the LINTER, and a rename must not re-enable it.
+    # Here the linter is wanted: `default: all` turns on every name golangci
+    # knows, which since v2.12.0 is both the deprecated `gomodguard` and its
+    # successor `gomodguard_v2`, and running both printed a deprecation warning
+    # on every `make lint`. Disabling the old name leaves the new one enabled by
+    # `default: all` with the same (empty) settings, so nothing about what is
+    # allowed changes — only the warning goes.
+    - gomodguard
     - ireturn
     - lll
     - nlreturn

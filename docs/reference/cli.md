@@ -31,6 +31,7 @@ Start with:
 Subcommands:
 
 - `apply` — Write a board document from stdin, through the running board
+- `boards` — List every board running on this machine, from the process table (Linux only)
 - `capabilities` — Print what this board can do: types, state fields, controls, endpoints, commands
 - `export` — Print one tab as text, for pasting into the project's own documents
 - `history` — List what a tab said before, from the journal
@@ -106,6 +107,56 @@ Flags:
 | `--force` | bool | `false` | write without compare-and-set, overwriting anything since you read the document |
 | `--label` | string | `—` | why this write is happening; recorded on the journal entry, not in the board |
 | `--strict` | bool | `false` | refuse the write if anything warns (exit 1, nothing written) |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
+## aboard boards
+
+List every board running on this machine, from the process table (Linux only)
+
+```
+aboard boards [flags]
+```
+
+Every running board on this machine, whichever project it belongs to.
+
+This is the cross-project half of `aboard status`. It needs no project of its
+own — it works from a directory that has never held a board — because it asks
+the PROCESS TABLE rather than a registry: it walks /proc for an `aboard serve`
+or an `ape aboard serve`, resolves each one's project root, and then does exactly
+what status does for one project — read the instance record, verify it over
+/health, and report what the board says about itself.
+
+One row per (project, name), because two boards in one project are two boards.
+The project path is printed in full: the point of a machine-wide listing is that
+you are not standing in the project it names.
+
+Nothing is trusted that a live board did not just confirm. A record whose process
+has gone is listed as "recorded but not answering" rather than dropped — a stale
+record is information — and the count of processes inspected is printed with the
+result, because "no board found" after 3 processes and after 400 mean different
+things.
+
+/proc is Linux only. Everywhere else this command exits 2 and says so, and the
+per-project answer is `aboard status` inside each project.
+
+Examples:
+
+```
+  aboard boards
+  aboard boards --output-format json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--output-format` | string | `human` | human, json or yaml |
 
 Global flags:
 

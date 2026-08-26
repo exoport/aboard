@@ -187,14 +187,61 @@ aboard serve --name review
 ```
 
 That gives a different derived port, `.aboard/aboard.review.json` as its state
-file, and its own instance record. The two boards cannot interfere. Every other
-command takes the same `--name` (or reads `ABOARD_NAME` from the environment), so
-a session working on the named board exports it once instead of repeating it.
-Tell the user which URL belongs to which, since they now have two tabs to keep
-straight.
+file, and its own instance record. The two boards' DOCUMENTS cannot interfere.
+Every other command takes the same `--name` (or reads `ABOARD_NAME` from the
+environment), so a session working on the named board exports it once instead of
+repeating it. Tell the user which URL belongs to which, since they now have two
+tabs to keep straight.
 
 Use this sparingly. A shared board is the feature; two boards is a fallback for
 when the work genuinely does not overlap.
+
+### What the two boards still share
+
+A name qualifies the state file and the instance record. It qualifies **nothing
+else**, and the rest of `.aboard/` is per PROJECT:
+
+| path | shared |
+|---|---|
+| `run/journal.jsonl` | one write log for the whole project |
+| `run/logs/<tab>.log` | one sidecar log directory |
+| `run/rendered.json` | one mount-receipt file |
+| `uploads/` | one image store |
+| `recipes/` | one recipe directory |
+
+The consequence to hold in your head, because nothing on screen will remind you:
+**`aboard journal` and `aboard history` in a named board list the other board's
+writes as well as yours**, and tab ids are allocated per BOARD — so a `bb12` in
+the journal may belong to either one, and the id alone cannot tell you which.
+Read the `by` and the timestamp, or follow the board you actually mean with
+`aboard watch` while you work. Do not conclude from a journal line that a tab in
+YOUR board changed.
+
+Whether those five should become per-board is the human's call and is not
+settled; this is the behaviour as it stands.
+
+### Which boards are up, anywhere on this machine
+
+`aboard status` answers for the project you are in. `aboard boards` answers for
+the machine:
+
+```sh
+aboard boards                        # one row per (project, name), full paths
+aboard boards --output-format json   # the same, for a script
+```
+
+It reads the PROCESS TABLE — `/proc`, for an `aboard serve` or an
+`ape aboard serve` — and then verifies each one exactly as `status` does: the
+project's instance record, then `GET /health`. There is no registry file, so
+nothing goes stale and nothing needs cleaning up after a crash. A record whose
+process has gone is shown as "recorded but not answering" rather than dropped,
+and the count of processes it managed to inspect is printed with the result —
+"no board found" after 3 processes and after 400 are different answers.
+
+Use it when two sessions may already be running, when a URL is open and you have
+lost track of which project it belongs to, and before starting a board in a
+project a colleague may already have one in. **`/proc` is Linux only**: elsewhere
+the command exits 2 and names `aboard status` per project as the alternative.
 
 ## Driving the board yourself, in a browser
 

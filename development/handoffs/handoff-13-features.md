@@ -1,7 +1,8 @@
 # Handoff — 13 features for `aboard` (the first build queue)
 
 **Status: DONE for items 1–10, 2026-08-26 (plan-2 item 6, commit `d69197a`); item 11
-(`bb372` `boards`) is DROPPED — the human answered on 2026-08-26 (plan-2 §10c).** Each
+(`bb372` `boards`) is DONE too — dropped by the human on 2026-08-26 and REVERSED by
+them the same day, with the design it was then built to (plan-2 §10c).** Each
 item's own section carries a **DONE** heading and a note saying what actually shipped,
 which is not always what the original sketch below it proposed; where the two disagree,
 the DONE note is the record and the sketch is preserved as written. **Nothing in this
@@ -76,7 +77,7 @@ means it needs a human's own hand on the keyboard, in the browser, not a flag.
 | 8 | `bb368` | Mount receipts from the browser | M | **DONE** (plan-2 item 6c) |
 | 9 | `bb369` | Uploads accounting and prune | S | **DONE** (plan-2 item 6c) |
 | 10 | `bb371` | Write labels in the journal | S | **DONE** (plan-2 item 6a) |
-| 11 | `bb372` | `boards` — every board on this machine | S | **DROPPED** — the human's answer, 2026-08-26, plan-2 §10c |
+| 11 | `bb372` | `boards` — every board on this machine | S | **DONE** — dropped then reversed, 2026-08-26; built as a `/proc` scan, plan-2 §10c |
 
 ---
 
@@ -450,30 +451,41 @@ the id beside it, and an id from a rotated journal is nothing to a future reader
 
 ---
 
-## 11. `boards` — every board on this machine — **DROPPED**
+## 11. `boards` — every board on this machine — **DONE**
 
 `bb372` · size **S — an afternoon**
 
-**DROPPED on 2026-08-26 by the human, when the question below was put to them. Not
-built, not deferred, not "unless": do not build it, do not create a registry file,
-do not re-propose it.** The reason is short, and the rest of this section is kept
-only so nobody re-derives the design from scratch and mistakes it for a queue item:
+**Dropped by the human on 2026-08-26 and REVERSED by them the same day, with the
+design attached. Built to that design; see plan-2 §10c for the reversal as it was
+recorded.** The record of both answers is kept here because the drop is the more
+persuasive of the two and would otherwise be the last word a reader found.
 
-- **The gap it closes is small.** `aboard status` already answers "is a board running
-  here" for the project you are in, and `.aboard/run/instance.json` plus `GET /health`
-  already say WHICH binary serves it (`app` is `aboard` or `ape-aboard`). A machine-wide
-  list buys cross-project discovery and nothing else.
-- **And the `/proc` scan does not come back with a better filter.** The bullets below
-  say the scan "breaks under `ape aboard`" because `comm` is `ape`. That is true of
-  `comm` and it is NOT the reason the scan is dead: `/proc/<pid>/cmdline` carries the
-  whole argv, so a scan reading `cmdline` instead WOULD find `ape aboard serve`. The
-  reason is the second bullet on its own — `/proc` is Linux-only, and `aboard` ships
-  binaries for macOS and Windows. Written down here because "just read `cmdline`" is
-  the obvious fix to the wrong objection, and it would resurrect a feature that has
-  been closed.
+**What shipped.** `aboard boards` (`pkg/aboard/boards.go`, `boards_linux.go`,
+`pkg/aboard/cli/boards.go`) walks `/proc/[0-9]*`, recognises an `aboard serve` or an
+`ape aboard serve` from `cmdline`, honours a `--cwd` in the argv, `FindRoot`s from
+there, and then does per project exactly what `status` does: read the root's
+`instance*.json`, keep the record whose `pid` matches, verify it with `ProbeBoard`.
+One row per (root, name) — the full absolute project path, the name (`default` when
+empty), app, url, port, pid, started, version, tab count and the
+`lastEditedBy`/`updatedAt` pair — sorted by root then name, with
+`--output-format json|yaml`. A record whose process has gone is listed as "recorded
+but not answering"; the number of processes inspected and the number that could not
+be is printed with the result.
+
+**What came out different from both sketches below.** No registry file, so the
+"append on serve, verify on read" design in the ORIGINAL PROPOSAL is not what
+shipped and is not held in reserve. And the platform objection was ANSWERED rather
+than argued with: the scanner is behind `//go:build linux`, and everywhere else the
+command exists, is declared, and exits 2 with the reason and `aboard status` as the
+alternative.
+
+**The `comm` note survives as a constraint, not an objection.** The bullets below say
+the scan "breaks under `ape aboard`" because `comm` is `ape`. That is true of `comm`
+and it is why the scan reads `cmdline` instead: `/proc/<pid>/cmdline` carries the
+whole argv, so it finds `ape aboard serve`.
 
 Everything from here to the next rule is the ORIGINAL PROPOSAL, preserved unchanged
-and superseded by the paragraph above.
+and superseded by the paragraphs above.
 
 **What it does — re-specified, not just renamed.** The spike's design scanned
 `/proc` for `comm == "board"`, read each match's `cwd`, and read that project's

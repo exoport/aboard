@@ -127,6 +127,7 @@ interaction itself is the point; `table` the moment you find yourself writing ro
 | `aboard init`               | Create `.aboard/`; `--example` seeds the example board, `--gitignore` adds the ignore. |
 | `aboard serve`              | Run the board server for this project. `--dev`, `--port`, `--name`, `--base-path`.    |
 | `aboard status`             | Is a board running, where, since when — plus the caps beacon and skill staleness.     |
+| `aboard boards`             | Every board running on this machine, from the process table. Linux only; exit 2 elsewhere. |
 | `aboard apply`              | Read a document on stdin and write it through the running board (compare-and-set).    |
 | `aboard wait`               | Block until the human pokes, or until a predicate matches. Exit 3 means nobody came.  |
 | `aboard poke`               | Release every session waiting on this board, as the human's notify button does.       |

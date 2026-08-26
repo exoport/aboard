@@ -36,9 +36,12 @@ the judgement calls in `handoffs/handoff-phase-e-finish.md`, which stand until o
 
 Four entries left that list on 2026-08-26, when the human answered them; their dispositions are
 [§10c](planning/plan-2_finish-line.md#10c-answered-on-2026-08-26--closed-not-deferred) and the
-work landed with them. **`boards` (`bb372`) is DROPPED — closed, not deferred**: do not build it
-and do not re-propose the `/proc` scan with `cmdline` in place of `comm`, which fixes the wrong
-objection (the real one is that `/proc` is Linux-only). The other three: the example board's
+work landed with them. **`boards` (`bb372`) was DROPPED and then REVERSED, both on 2026-08-26,
+and it is BUILT**: `aboard boards` is a `/proc` scan reading `cmdline` (never `comm`), behind
+`//go:build linux`, exiting 2 with the reason and `aboard status` as the alternative everywhere
+else. The registry file stays rejected — that half of the drop survived the reversal. The
+platform objection did not: it is answered by the build tag and the refusal rather than by not
+building the feature. The other three: the example board's
 prose says "the agent", the notify button's acknowledgement is a toast the SSE repaint cannot
 reach, and `JournalEntry.Before` carries the whole tab so the `apply` merge survives a foreign
 rename.
@@ -112,6 +115,15 @@ Everything else in that review is dispositioned in
   constants in `pkg/aboard/wire.go`, one block per vocabulary, with `key*` (the
   board document) and `wire*` (the HTTP API) deliberately kept apart even where
   they spell a word the same way.
+
+  *And the one thing the upgrade left behind, closed 2026-08-26.* v2.13.1 printed a
+  deprecation warning on every `make lint`: `default: all` enables every linter
+  golangci knows, which since v2.12.0 is both `gomodguard` and its successor
+  `gomodguard_v2`. `.golangci.yaml` now disables the old NAME — the opposite of the
+  `exhaustruct`/`exhaustruct_v5` and `wsl`/`wsl_v5` pairs beside it, which disable
+  both because this repo decided against those linters, where this one is wanted.
+  Neither has any settings here, so nothing about what is allowed changed; `make
+  lint` is 0 issues and silent.
 
   *The one thing that did NOT get fixed on its merits.* `gosec` G703 on the three
   sidecar-log file operations. The validation moved into `layout.go` — `Root.LogFile`

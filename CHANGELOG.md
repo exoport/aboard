@@ -33,12 +33,42 @@ lines and the ones with no user-visible surface — the suite, the extension —
   `aboard init --example`'s demo content — two dag node titles, two node notes, a form
   intro, an image caption and a region note. Every id and every other byte unchanged.
   `views/chat.js` still recognises `claude` as a historical ACTOR name in a transcript.
-- **docs: there is no `boards` command, and there will not be one.** The proposed
-  machine-wide list of running boards is dropped rather than deferred: `aboard status`
-  answers the question per project, and `/health` already names the binary serving it.
-  Recorded with the reason the `/proc` scan it replaced is also dead — `/proc` is
-  Linux-only, not (as the earlier note said) because `comm` reads `ape` under
-  `ape aboard`, which reading `cmdline` would have fixed.
+- **feat: `aboard boards` lists every board running on this machine.** The cross-project
+  half of `aboard status`, and the one command that needs no project of its own: it walks
+  the PROCESS TABLE — `/proc`, for an `aboard serve` or an `ape aboard serve` — resolves
+  each one's root (honouring a `--cwd` in the argv), and then does per project exactly
+  what `status` does: read the root's `instance*.json`, keep the record whose pid matches,
+  verify it over `/health`. One row per (project, name), sorted, with the FULL project
+  path — the reader of a machine-wide listing is by definition not standing in the project
+  it names — plus app, url, port, pid, started, version, tab count and who wrote last.
+  `--output-format json|yaml`.
+  **There is no registry file, and that is the design**: a process either exists or it does
+  not, so nothing is written on startup and nothing needs cleaning up after a crash.
+  It reads `cmdline` and never `comm`, which is 15 characters and, under `ape aboard
+  serve`, is the host's name — the reason the original design was thought unable to see a
+  hosted board.
+  **`/proc` is Linux only, and the command says so rather than disappearing**: elsewhere it
+  exits 2 with one line naming the platform and pointing at `aboard status` inside each
+  project. Two things it refuses to hide: a record whose process has gone is listed as
+  "recorded but not answering" rather than dropped, and the listing prints how many
+  processes it inspected and how many it could not (another user's board), because "no
+  board found" after 3 processes and after 400 are different answers. A third row state
+  the design did not originally name: a serve process that no instance record identifies —
+  caught in the moments before it writes one, or started with `--state` — is listed with
+  its pid and its project, keyed on that pid so two of them in one project stay two rows,
+  and labelled `[board not identified]` rather than `[default]`, which is a name it has
+  not got.
+  Documented beside it, because it is the reason `boards` has one row per (project, name):
+  **`--name` qualifies the state file and the instance record and nothing else.** The
+  journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
+  so `aboard journal` and `aboard history` in a named board show the other board's entries
+  too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **chore: `make lint` is silent again.** `.golangci.yaml` disables `gomodguard` so that
+  `gomodguard_v2`, which `default: all` already enables, is the only one running; v2.13.1
+  printed a deprecation warning on every run while both were on. The opposite of the
+  `exhaustruct`/`exhaustruct_v5` and `wsl`/`wsl_v5` pairs beside it, which name both
+  versions because this repo decided against those linters. Neither gomodguard has any
+  settings here, so nothing about what is allowed changed.
 - **chore: the make targets are the gate, and the pinned tools moved.** A `$PATH` copy
   of a tool and the `.bingo` pin are two different programs, and this repo ran both: the
   pinned linter reported 0 where the pre-commit hook's `$PATH` copy reported 11, and the

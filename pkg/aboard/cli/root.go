@@ -85,6 +85,7 @@ Start with:
 	root.AddCommand(
 		newServeCmd(opts),
 		newStatusCmd(opts),
+		newBoardsCmd(opts),
 		newInitCmd(opts),
 		newApplyCmd(opts),
 		newWaitCmd(opts),

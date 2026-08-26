@@ -190,6 +190,14 @@ func TestJournalFallsBackWhenTheRecordedBoardIsDead(t *testing.T) {
 // One test over every struct that reaches renderOutput, comparing the KEY SETS
 // rather than the values: a tag added to one field and forgotten on the next is
 // exactly the shape of this defect.
+//
+// **The table below is HAND-MAINTAINED, and nothing checks that it is complete.**
+// Reflection can enumerate a struct's fields; it cannot enumerate the types that
+// reach renderOutput, because each one arrives through a different command's
+// closure. So a new `--output-format` struct is covered when somebody adds it
+// here and is silently uncovered otherwise — `boards` shipped two of them into
+// yaml before this line was written. Add the struct in the same change that adds
+// the command.
 func TestEveryOutputStructAgreesInJSONAndYAML(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -212,6 +220,18 @@ func TestEveryOutputStructAgreesInJSONAndYAML(t *testing.T) {
 		}},
 		{"version", versionReport{
 			App: "aboard", Host: "aboard", Version: "v", BuildDate: "T", GitCommit: "abc", Schema: 3,
+		}},
+		// `boards`. Its brief predicted this test would pick the new structs up on
+		// its own; it does not, and the comment above now says so where the next
+		// reader will meet the same assumption.
+		{"boards report", aboard.BoardsReport{
+			Boards: []aboard.BoardRow{}, Inspected: 400, Unreadable: 2,
+		}},
+		{"board row", aboard.BoardRow{
+			Project: "/p", Name: "review", App: "aboard", URL: "http://localhost:1",
+			Port: 1, PID: 2, Started: "T0", Version: "v", Tabs: 15,
+			LastEditedBy: "human", UpdatedAt: "T1", Recorded: true, Answering: true,
+			InstanceFile: "/p/.aboard/run/instance.review.json",
 		}},
 		{"recipe", aboard.RecipeOut{
 			Name: "r", Description: "d", WhenToUse: "w", Tags: []string{"t"},
@@ -277,6 +297,21 @@ func TestOmitEmptyIsHonouredInYAMLToo(t *testing.T) {
 	}
 	if diff := keyDiff(asJSON, asYAML); diff != "" {
 		t.Errorf("status with nothing set: %s", diff)
+	}
+
+	// A board row with nothing but a pid: the unrecorded case, which is a real
+	// row rather than an error. The default board's absent name must stay absent
+	// in both, since a consumer compares it against --name.
+	bare := aboard.BoardRow{Project: "/p", PID: 7}
+	rowJSON := roundTrip(t, "board row", json.Marshal, json.Unmarshal, bare)
+	rowYAML := roundTrip(t, "board row", yaml.Marshal, yaml.Unmarshal, bare)
+	for _, key := range []string{"name", "url", "port", "started", "version", "lastEditedBy", "updatedAt", "instanceFile"} {
+		if _, ok := rowYAML[key]; ok {
+			t.Errorf("yaml carried empty %q", key)
+		}
+	}
+	if diff := keyDiff(rowJSON, rowYAML); diff != "" {
+		t.Errorf("board row with nothing set: %s", diff)
 	}
 }
 

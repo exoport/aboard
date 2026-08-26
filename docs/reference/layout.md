@@ -103,13 +103,56 @@ aboard serve --name review
 A name changes three things and nothing else: the state file becomes
 `.aboard/aboard.<name>.json`, the instance record becomes
 `run/instance.<name>.json`, and the port is derived from root **plus** name. The two
-boards never interfere.
+boards' **documents** never interfere.
 
 `ABOARD_NAME` sets the name for a session that is working on one, so it does not have to
 be repeated on every command.
 
-The journal is deliberately **not** qualified by name. It answers "who changed what in
-this project", and a second board in the same project is part of the same conversation.
+### What a named board does NOT get its own copy of
+
+"three things and nothing else" is exact, and the rest of `.aboard/` is per **project**.
+Two boards in one project share every one of these:
+
+| path                          | shared by both boards |
+| ----------------------------- | --------------------- |
+| `run/journal.jsonl`           | one write log for the project |
+| `run/logs/<tab>.log`          | one sidecar log directory |
+| `run/rendered.json`           | one mount-receipt file |
+| `uploads/`                    | one image store |
+| `recipes/`                    | one recipe directory |
+
+The journal is the one that will surprise you, so say the consequence out loud:
+**`aboard journal` and `aboard history` in a named board show the other board's entries
+too**, and tab ids are allocated **per board**, so a `bb12` in the journal may belong to
+either one. A row is not enough to tell them apart — read the `by` and the timestamp, or
+watch the board you mean with `aboard watch` while you work.
+
+The journal being project-wide is deliberate: it answers "who changed what in this
+project", and a second board in the same project is part of the same conversation. The
+other four are shared because they were never qualified by name in the first place;
+whether they should be is the human's call and is not settled here.
+
+## Finding boards in other projects
+
+Everything above is per project, and so is `aboard status`. The machine-wide question —
+what is running anywhere — is `aboard boards`:
+
+```bash
+aboard boards                          # every running board, grouped by project
+aboard boards --output-format json     # the same, as a document
+```
+
+It asks the **process table**, not a registry: it walks `/proc` for an `aboard serve` or
+an `ape aboard serve`, resolves each one's project root, and then does per project
+exactly what `status` does — read the instance record, verify it over `/health`. One row
+per (project, name), which is why the two boards of the section above are two rows.
+
+There is no registry file anywhere, and that is the design rather than an omission: a
+process either exists or it does not, so nothing has to be written on startup and
+nothing has to be cleaned up on a crash.
+
+`/proc` is Linux only. On macOS and Windows the command exists, exits **2**, and says so
+in one line — the per-project answer is `aboard status` inside each project.
 
 ## The instance record
 

@@ -16,7 +16,7 @@ unlike [Reference](../reference/), they're goal-oriented rather than exhaustive.
 
 ## Planned guides
 
-- **How to run a second board in one project.** `--name`, the separate state file, the separate port and instance record, and when a side investigation deserves one.
+- **How to run a second board in one project.** `--name`, the separate state file, the separate port and instance record, and when a side investigation deserves one. (What a name does and does NOT qualify — the journal, logs, receipts, uploads and recipes stay per project — is already answered in [the layout reference](../reference/layout.md#named-boards), along with `aboard boards`.)
 - **How to put aboard behind a reverse proxy.** `serve --base-path`, what the injected base constant covers, and what to check in the browser's network panel.
 - **How to promote a board tab into a document.** `aboard export`, what to rewrite rather than paste, and demoting the tab afterwards.
 
