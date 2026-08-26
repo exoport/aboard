@@ -151,6 +151,11 @@ aboard wait --by "agent-1" --note "finished the tutorial write" --timeout 2m
 It hangs. Look at the browser: the header now shows a **notify agent-1** button with a
 lit dot, your note beside it, and a countdown. Press it.
 
+*notified 1 session* flashes beside the button and fades, and the button goes back to
+saying *no session waiting* — which is now true. The button only ever reports live
+state; the acknowledgement of your press is the flash, because releasing the session
+changes the count the button is drawn from.
+
 The terminal returns immediately, exit 0. Had nobody pressed it within two minutes, it
 would have exited **3** — "nobody came" and "something broke" are different outcomes and
 a script should be able to tell them apart. From another terminal, `aboard poke` does

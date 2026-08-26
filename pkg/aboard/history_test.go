@@ -34,6 +34,11 @@ func journalWith(t *testing.T, root Root, entries ...JournalEntry) {
 	}
 }
 
+// entry writes a GENERATION-1 record — no `schema` key, and `before` is a tab's
+// bare state. Deliberately kept as the default for these tests: it is what every
+// journal already on disk looks like, and a rotated generation can hand one to
+// every reader here long after the live file has moved on. Hand-written rather
+// than produced, because there is no code left that can produce one.
 func entry(rev int, at, by, tab, before string) JournalEntry {
 	return JournalEntry{
 		At: at, By: by, Rev: rev,
@@ -41,6 +46,14 @@ func entry(rev int, at, by, tab, before string) JournalEntry {
 		Names:  map[string]string{tab: "Plan"},
 		Before: map[string]json.RawMessage{tab: json.RawMessage(before)},
 	}
+}
+
+// entryV2 writes the record this build produces: `schema` stamped, and `before`
+// holding the whole tab.
+func entryV2(rev int, at, by, tab, before string) JournalEntry {
+	e := entry(rev, at, by, tab, before)
+	e.Schema = journalSchema
+	return e
 }
 
 // The listing is newest first and names who replaced each version. Both halves
@@ -134,7 +147,7 @@ const restoreBoard = `{
 // a removal request on every other one, in front of the human.
 func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 	root := Root(t.TempDir())
-	writeBoardFile(t, root, restoreBoard)
+	writeBoardFile(t, root)
 	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "bb1", `{"v":2}`))
 
 	var out bytes.Buffer
@@ -160,23 +173,28 @@ func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 	}
 }
 
-// A tab that is gone cannot be rebuilt from the journal — it records a name and
-// a state and never a `type` — so the command says so instead of producing a
-// document that mounts as "No renderer".
+// A tab that is gone is not rebuilt from the journal, and the reason moved when
+// the record widened. It used to be that the journal held a name and a state and
+// never a `type`, so a rebuilt tab would have mounted as "No renderer"; a
+// schema-2 record holds the type, so that sentence stopped being true. The
+// refusal stands on the honest reason: an agent cannot delete a tab, so a tab
+// that is gone is one the human removed by answering a removal request, and
+// putting it back is theirs to decide rather than a pipeline's to perform.
 func TestRestoreRefusesATabThatIsNoLongerOnTheBoard(t *testing.T) {
 	root := Root(t.TempDir())
-	writeBoardFile(t, root, restoreBoard)
-	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "human", "bb9", `{"v":1}`))
+	writeBoardFile(t, root)
+	journalWith(t, root, entryV2(7, "2026-08-26T09:03:00.000Z", "human", "bb9",
+		`{"id":"bb9","name":"Gone","type":"notes","state":{"v":1}}`))
 
 	err := Restore(t.Context(), root, "", "bb9", 1, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "`type`") {
-		t.Errorf("want a refusal naming the missing type, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "removed by the human") {
+		t.Errorf("want a refusal saying who removed it, got %v", err)
 	}
 }
 
 func TestRestoreRefusesAVersionThatIsNotThere(t *testing.T) {
 	root := Root(t.TempDir())
-	writeBoardFile(t, root, restoreBoard)
+	writeBoardFile(t, root)
 	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "human", "bb1", `{"v":1}`))
 
 	err := Restore(t.Context(), root, "", "bb1", 4, &bytes.Buffer{})
@@ -214,13 +232,17 @@ func TestHistoryEndpointNeedsATabAndAnswersWithVersions(t *testing.T) {
 	}
 }
 
-// writeBoardFile puts a document where the engine expects to find one.
-func writeBoardFile(t *testing.T, root Root, document string) {
+// writeBoardFile puts restoreBoard where the engine expects to find a document.
+//
+// Not a parameter: every caller wants the same two-tab board — one tab to restore
+// and one to prove the restore did not drop it — and a parameter with one value
+// ever passed to it is a choice nobody made.
+func writeBoardFile(t *testing.T, root Root) {
 	t.Helper()
 	if err := os.MkdirAll(root.Dir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(root.StateFile(""), []byte(document), 0o644); err != nil {
+	if err := os.WriteFile(root.StateFile(""), []byte(restoreBoard), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

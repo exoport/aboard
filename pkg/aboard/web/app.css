@@ -389,6 +389,44 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   .poke-btn[data-live="yes"] .poke-dot { animation: none; }
 }
 
+/* The notify acknowledgement. A zero-width anchor sitting immediately before the
+   button, with the flash itself positioned out of it, so a confirmation that
+   appears for a second and a half neither nudges the button sideways nor is
+   erased by the repaint the poke itself triggers. The flash is views/inline.js's
+   `.inline-flash` — the same one an inline editor shows after a save — because a
+   third transient-message mechanism is one more thing to keep in step.
+
+   It carries its own GROUND, and that is not decoration. Taking the message out
+   of the flow is what stops it moving the button, and the space it then occupies
+   already belongs to the version badge immediately to its left — so a transparent
+   flash printed straight through it and the two strings interleaved into
+   something neither of them said. Overlapping was the right trade (a header that
+   reflows under the cursor is worse); printing through it was not. So it covers
+   what is behind it for its second and a half: the badge is static text that is
+   still there afterwards, and nothing else in this corner moves. */
+.poke-flash {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  align-self: center;
+}
+
+.poke-flash .inline-flash {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 7px;
+  /* Explicit, so the cover does not depend on the badge staying unpositioned:
+     an absolutely positioned box outpaints an in-flow sibling today, and stops
+     the day somebody gives .version-badge a position of its own. */
+  z-index: 1;
+}
+
 .tab-add {
   align-self: center;
   margin-bottom: 2px;

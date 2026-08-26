@@ -44,6 +44,12 @@
   <span class="spacer"></span>
   <span class="meta" id="save-state"></span>
   <span class="meta version-badge" id="version" title="the binary serving this board"></span>
+  <!-- The acknowledgement of a press, and nothing else. The BUTTON tells the
+       truth about live state and repaints itself the moment the poke changes
+       the waiter count, so anything written into its label is gone in a few
+       frames. This is a zero-width anchor beside it: the flash is positioned
+       out of it, so it neither moves the button nor can be repainted away. -->
+  <span class="poke-flash" id="poke-flash" role="status" aria-live="polite"></span>
   <button type="button" class="icon-btn poke-btn" id="poke" data-live="no" disabled>
     <span class="poke-dot" aria-hidden="true"></span>
     <span id="poke-label">no session waiting</span>
@@ -932,6 +938,7 @@ function onUiSignature(sig) {
 
 const $poke = document.getElementById('poke');
 const $pokeLabel = document.getElementById('poke-label');
+const $pokeFlash = document.getElementById('poke-flash');
 let waiting = [];
 
 // How long a waiter has left, from the absolute `until` it declared. Recomputed
@@ -947,11 +954,14 @@ function remainingLabel(until) {
   return `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}`;
 }
 
-function paintPoke(note) {
+// The button, and only ever live state. It took a `note` override once, which is
+// how the acknowledgement of a press ended up somewhere the next repaint would
+// erase it; the override is gone deliberately, so nothing can put a message here
+// again. Transient messages go through flashPoke.
+function paintPoke() {
   const n = waiting.length;
   $poke.disabled = n === 0;
   $poke.dataset.live = n ? 'yes' : 'no';
-  if (note !== undefined) { $pokeLabel.textContent = note; return; }
   if (!n) {
     $pokeLabel.textContent = 'no session waiting';
     $poke.title = 'Nothing is waiting on this board.\nA session waits with:  aboard wait --by agent-1';
@@ -989,10 +999,33 @@ async function refreshWaiters() {
   }
 }
 
+// The acknowledgement of the press. It used to be written into the button's own
+// label, and the poke ITSELF destroyed it: releasing the waiters changes the
+// waiter count, the change broadcasts on the SSE stream, the page calls
+// refreshWaiters(), and the button repaints over the one piece of feedback the
+// action had. Measured in test/e2e with a 15 ms polling loop that never caught it.
+//
+// The fix is not to suppress the repaint — that would make the button lie about
+// live state for as long as the suppression lasted, and the button's whole claim
+// is that somebody is genuinely listening. The confirmation moves OFF the button
+// instead, into the same transient flash the inline editors use, where nothing
+// that repaints the button can reach it.
+function flashPoke(text) {
+  // The previous flash goes first. flashSaved APPENDS, and this anchor is zero
+  // width with the flash positioned absolutely out of it, so two live at once
+  // would sit exactly on top of each other and neither would be readable. Easy
+  // to reach on the failure path, where paintPoke() re-enables the button from
+  // live state the moment the fetch rejects and a second press can land inside
+  // the 1.7 s the first message has left.
+  $pokeFlash.replaceChildren();
+  flashSaved($pokeFlash, text);
+}
+
 $poke.addEventListener('click', async () => {
   const expected = waiting.length;
+  // Disabled for the round trip, and that is live state too: the press is in
+  // flight and a second one would release nothing.
   $poke.disabled = true;
-  paintPoke('notifying…');
   try {
     const res = await fetch(api('/poke'), {
       method: 'POST',
@@ -1002,9 +1035,17 @@ $poke.addEventListener('click', async () => {
     const body = await res.json().catch(() => ({}));
     const released = Number.isFinite(Number(body.released)) ? Number(body.released) : expected;
     waiting = [];
-    paintPoke(`notified ${released} session${released === 1 ? '' : 's'}`);
+    paintPoke();
+    // Zero is reachable even though the button is disabled with nobody waiting:
+    // the last waiter can time out between the repaint and the click. Saying
+    // "notified 0 sessions" would read as a failure; this says what happened.
+    flashPoke(released
+      ? `notified ${released} session${released === 1 ? '' : 's'}`
+      : 'no session was waiting');
   } catch {
-    paintPoke('notify failed');
+    // Nothing was released, so the waiters we knew about are still the truth.
+    paintPoke();
+    flashPoke('notify failed');
   }
   setTimeout(refreshWaiters, 1500);
 });

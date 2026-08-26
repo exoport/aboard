@@ -1,11 +1,13 @@
 # Plan 2 — the finish line: everything owed, in order
 
 **Status: COMPLETE. Written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at
-`28252bb`) and finished 2026-08-26. All nine items are done — the hash beside each is the
-commit that landed it; item 8 landed in the `aboard_vscode` repo (`6711c15` + `ca72ca6` there),
-not this one. §10 is the only list still open, and every entry in it is a question for the
-human rather than work to pick up. A session resuming after a context clear reads this line and
-knows there is no queue: ask the human what is next.**
+`28252bb`) and finished 2026-08-26. All nine items are done, plus 10a (the make targets are the
+gate) and 10b (the human's answers to four §10 questions) — the hash beside each is the commit
+that landed it; item 8 landed in the `aboard_vscode` repo (`6711c15` + `ca72ca6` there), not this
+one. §10 is the only list still open, it is four entries shorter since the human answered
+those four on 2026-08-26 (their dispositions are §10c), and every entry left in it is a question for
+the human rather than work to pick up. A session resuming after a context clear reads this line
+and knows there is no queue: ask the human what is next.**
 
 This is the master list. Every item points at the document that holds its detail; this file
 holds the ORDER, the scope boundary of each item, and what "done" means. Decided with the human
@@ -131,7 +133,7 @@ with `jsontext.Value` and the stricter-defaults test pass. (3) per-tab resources
 **Done when** the "Measured" table in the handoff has before/after rows and the acceptance line of
 every structural item holds under the benchmark, with `make e2e` still green.
 
-### 6. The eleven reviewed features  ☑ `d69197a` (items 1–10 built in three parallel worktrees and squash-merged; `bb372` parked — §10)
+### 6. The eleven reviewed features  ☑ `d69197a` (items 1–10 built in three parallel worktrees and squash-merged; `bb372` DROPPED by the human on 2026-08-26 — §10)
 
 Source: `development/handoffs/handoff-13-features.md`. Scope: items 1–10 as specified
 (`bb361` warnings travel with the write; `bb362` `apply --check`/`--strict`; `bb363` per-tab
@@ -139,10 +141,11 @@ history and restore; `bb364` html tabs read the real palette; `bb365` mermaid fe
 `bb366` `apply` merges instead of failing; `bb367` `export` renders a `ui` tree; `bb368` mount
 receipts from the browser; `bb369` uploads accounting and prune; `bb371` write labels in the
 journal), each with Go tests and an `e2e` test where it has a browser half. Item 11 (`bb372`
-`boards`) is **gated on the human** (§10) — the handoff's `~/.aboard/known-roots.json` registry is a
-proposal, not a decision; do not build it before the answer.
+`boards`) was **gated on the human** (§10) and the answer, on 2026-08-26, was to DROP it — not
+build it, not defer it. The `~/.aboard/known-roots.json` registry was a proposal and is now a
+proposal nobody will take up.
 **Done when** items 1–10 are shipped with their handoff sections marked done and `capsHash`
-regenerated, and item 11 is either built to the human's answer or explicitly parked.
+regenerated, and item 11 is either built to the human's answer or explicitly closed.
 
 ### 7. Panel prerequisites on the aboard side  ☑ `913eef6` (built in a worktree in parallel with item 5, rebased onto it)
 
@@ -192,13 +195,10 @@ Chromium, which flaked once and would again.
 
 ### 10a. The make targets are the gate  ☑ `b1dc79c` (added 2026-08-26 on the human's instruction: pinned tools updated, the pre-commit hook and CI run `make lint`/`make fmt-check`)
 
-### 10b. The human's answers to four §10 questions  ☐ (brief `brief-11-human-decisions.md`: `bb372` dropped; example prose says "the agent"; notify acknowledgement is a toast; `JournalEntry.Before` carries the whole tab)
+### 10b. The human's answers to four §10 questions  ☑ (brief `brief-11-human-decisions.md`: `bb372` dropped; example prose says "the agent"; notify acknowledgement is a toast; `JournalEntry.Before` carries the whole tab — the four dispositions are recorded under §10 below)
 
 ### 10. Gated on the human — do not start without an answer
 
-- **`bb372` `boards`**: the proposed `~/.aboard/known-roots.json` registry written by `aboard serve`
-  and verified against `/health`. Alternatives: a scan of a configured list of project roots; or
-  drop the feature. Decision needed before item 6's last feature.
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
   (`git@github.diegos_exo:exoport/aboard.git` and `…/aboard_vscode.git`) and **nothing has been
   pushed to either**. What is still the human's: pushing at all — which waits on their own manual
@@ -218,33 +218,6 @@ Chromium, which flaked once and would again.
 - The judgement calls listed in `handoff-phase-e-finish.md` (`make dist` dropped, `restart.sh`
   kept, NOTICE in archives, the `vuln` job, hidden commands outside the declared table) stand
   until the human says otherwise.
-- **The example board's prose names "Claude" seven times** — counted in
-  `pkg/aboard/example/aboard.json`, and listed exactly, so the answer is a yes or no and not
-  another survey: two `dag` NODE titles, both "Claude reads and reacts" (`bb5` in the Plan
-  tab, `bb149` in the same graph re-used as the Dependencies block of the Migration review
-  stack); two `dag` node `note`s (`bb10`, `bb11`); a `form`'s `intro` (`bb46`, "Claude asks,
-  you answer here"); a `markup` image `caption` (`bb152`); and a `markup` region `note`
-  (`bb153`). Not one of them is a TAB name or a tab `note`, which is why nothing in the tab
-  strip gives them away. Every one is visible on every
-  `aboard init --example` board, including in projects that have nothing to do with this one. The
-  clean-break rename was of the TOKEN and the colour name (`--claude` → `--agent`); it deliberately
-  did not touch prose, and whether the demo content should say "the agent" instead is one decision
-  with seven strings behind it. **Not edited** — it is the human's voice in a fixture they will see
-  every time they seed a board, and an agent renaming the human's own words is the wrong default.
-- **The notify button's confirmation is repainted away.** Pressing it says "notified N sessions",
-  and the SSE `waiters` frame that the poke itself causes arrives a moment later and redraws the
-  button over the message — so the one piece of feedback the action has is visible for a few frames
-  (recorded in `test/e2e/notify_test.go`, which asserts the poke, not the message). A ~1.5 s
-  suppression of `refreshWaiters` after a poke would fix it. Left alone because it is an interface
-  taste call — a suppression window is a lie about live state for its duration, and how long a
-  confirmation should out-rank the truth is the human's to say.
-- **`apply`'s 409 merge stops on a foreign RENAME of a tab you did not touch.** The merge asks the
-  journal what each tab held at the base it started from, and `JournalEntry.Before` holds a tab's
-  `state` and nothing else — no name, no note, no type. So a tab renamed on the board while an
-  agent wrote to a DIFFERENT tab cannot be classified, and the merge refuses by name rather than
-  guessing, which is the right refusal for the record it has. Widening the journal entry to carry
-  the whole tab would make it mergeable — and that is a schema decision about a file that rotates,
-  is read by `history`, and is the board's only undo, so it is not one to take while tidying up.
 - **`aboard <cmd>` is hardcoded in user-facing prose** — 13 places by item 6's reviewer's count,
   four of them added by item 6 itself, and more again if help text and the generated headers are
   counted. This is the latent hosted-mode finding above, now measured: under `ape aboard` every one
@@ -252,3 +225,39 @@ Chromium, which flaked once and would again.
   through the messages is a whole-repo change and belongs WITH the ape mount, not before it —
   recorded here so nobody rediscovers it one string at a time, and so the ape plan starts with a
   number rather than a survey.
+
+### 10c. Answered on 2026-08-26 — CLOSED, not deferred
+
+Four §10 entries were questions and now have answers. They are struck from the list above and
+recorded here with the reason, so nobody re-derives them from the shape of the code.
+
+- **`bb372` `boards` — DROPPED.** Not built and not deferred: the feature is off the table. Every
+  project already answers "is a board running here" with `aboard status`, and its
+  `.aboard/run/instance.json` and `GET /health` already say WHICH binary serves it (`app` is
+  `aboard` or `ape-aboard`), so a machine-wide list buys only cross-project discovery. The registry
+  design (`~/.aboard/known-roots.json`, written on serve and verified on read) was sound and is
+  still not worth new user-level state outside `.aboard/`. **And the scan it replaced does not come
+  back either**: the original `/proc` design was written off as unable to see a hosted board because
+  `comm` is `ape`, which is true but is not the reason — `/proc/<pid>/cmdline` carries the whole
+  argv and WOULD find `ape aboard serve`. The real reason is that `/proc` exists on Linux only, and
+  `aboard` ships binaries for macOS and Windows. Recorded precisely so the next reader does not
+  re-propose the scan with `cmdline` as the fix. Disposition: `handoff-13-features.md` §11 is
+  DROPPED; `CLAUDE.md` carries the one-line decision.
+- **The example board's prose says "the agent".** All seven strings in
+  `pkg/aboard/example/aboard.json` renamed; every id and every other byte kept, and the fixture's
+  formatting is unchanged (`TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder` reads it).
+  `views/chat.js` still matches `claude` as a historical ACTOR name, and code comments naming
+  Claude are untouched — this was a decision about the demo content the human sees on every
+  `aboard init --example`, not about the repo's vocabulary.
+- **The notify button's acknowledgement is a toast.** Option (b): the button keeps telling the
+  truth about live state and repaints from the SSE `waiters` frame exactly as before, and the
+  acknowledgement of the press moves to a transient notice the repaint cannot reach — the same
+  `flashSaved` mechanism the inline editors use. "notified N sessions" / "no session was waiting",
+  from the `/poke` reply. The rejected alternative was suppressing `refreshWaiters` for ~1.5 s,
+  which would have made the button lie about live state for its duration.
+- **`JournalEntry.Before` carries the whole tab.** Option (a): entries gain a `schema` integer,
+  stamped `2`, and `Before` becomes the tab — `id`, `name`, `type`, `note`, `stateFrom`, `state`,
+  `key`, `touched`, `pendingRemoval`, `seen` — instead of a bare `state`. Every reader handles both
+  generations, because a rotated `journal.jsonl.1` can hold `schema`-less entries while the live
+  file holds v2 ones. `apply`'s 409 merge can now classify a foreign rename/note/type change and
+  merges it; a same-tab rename on both sides is still named as a collision and still stops.

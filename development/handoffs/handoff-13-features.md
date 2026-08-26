@@ -1,11 +1,11 @@
 # Handoff — 13 features for `aboard` (the first build queue)
 
 **Status: DONE for items 1–10, 2026-08-26 (plan-2 item 6, commit `d69197a`); item 11
-(`bb372` `boards`) is PARKED, gated on the human — plan-2 §10.** Each item's own section
-carries a **DONE** heading and a note saying what actually shipped, which is not always
-what the original sketch below it proposed; where the two disagree, the DONE note is the
-record and the sketch is preserved as written. Nothing here is a live instruction any
-more except `bb372`, and that one is a question for the human before it is work.
+(`bb372` `boards`) is DROPPED — the human answered on 2026-08-26 (plan-2 §10c).** Each
+item's own section carries a **DONE** heading and a note saying what actually shipped,
+which is not always what the original sketch below it proposed; where the two disagree,
+the DONE note is the record and the sketch is preserved as written. **Nothing in this
+file is a live instruction any more.**
 
 ## Provenance
 
@@ -24,9 +24,10 @@ no such tab here.
 
 Two of the original thirteen items were folded into the port itself rather than
 queued (plan-1 §8, decision 8) and are already closed — §0 below. The remaining
-eleven are the actual build queue. `bb372` is re-specified against the new layout
+eleven were the actual build queue. `bb372` was re-specified against the new layout
 rather than merely renamed, because its original design (a `/proc` scan) does not
-survive the port's own decisions — see its entry.
+survive the port's own decisions — and then the human dropped the whole feature; see
+its entry.
 
 **`bb370` does not appear anywhere in this list.** It was on the human's ballot and
 was left unticked (`pick: false`) — declined, not lost in translation, and not one of
@@ -75,7 +76,7 @@ means it needs a human's own hand on the keyboard, in the browser, not a flag.
 | 8 | `bb368` | Mount receipts from the browser | M | **DONE** (plan-2 item 6c) |
 | 9 | `bb369` | Uploads accounting and prune | S | **DONE** (plan-2 item 6c) |
 | 10 | `bb371` | Write labels in the journal | S | **DONE** (plan-2 item 6a) |
-| 11 | `bb372` | `boards` — every board on this machine | S | **PARKED** — gated on the human, plan-2 §10 |
+| 11 | `bb372` | `boards` — every board on this machine | S | **DROPPED** — the human's answer, 2026-08-26, plan-2 §10c |
 
 ---
 
@@ -449,16 +450,30 @@ the id beside it, and an id from a rotated journal is nothing to a future reader
 
 ---
 
-## 11. `boards` — every board on this machine — **PARKED**
+## 11. `boards` — every board on this machine — **DROPPED**
 
 `bb372` · size **S — an afternoon**
 
-**PARKED — gated on the human. Do not build it; do not create a registry file.**
-See `development/planning/plan-2_finish-line.md` §10: the
-`~/.aboard/known-roots.json` registry below is a PROPOSAL, not a decision, and the
-alternatives on the table are a scan of a configured list of project roots, or
-dropping the feature. Everything else in this handoff has shipped; this is the one
-item left, and it is waiting on an answer rather than on work.
+**DROPPED on 2026-08-26 by the human, when the question below was put to them. Not
+built, not deferred, not "unless": do not build it, do not create a registry file,
+do not re-propose it.** The reason is short, and the rest of this section is kept
+only so nobody re-derives the design from scratch and mistakes it for a queue item:
+
+- **The gap it closes is small.** `aboard status` already answers "is a board running
+  here" for the project you are in, and `.aboard/run/instance.json` plus `GET /health`
+  already say WHICH binary serves it (`app` is `aboard` or `ape-aboard`). A machine-wide
+  list buys cross-project discovery and nothing else.
+- **And the `/proc` scan does not come back with a better filter.** The bullets below
+  say the scan "breaks under `ape aboard`" because `comm` is `ape`. That is true of
+  `comm` and it is NOT the reason the scan is dead: `/proc/<pid>/cmdline` carries the
+  whole argv, so a scan reading `cmdline` instead WOULD find `ape aboard serve`. The
+  reason is the second bullet on its own — `/proc` is Linux-only, and `aboard` ships
+  binaries for macOS and Windows. Written down here because "just read `cmdline`" is
+  the obvious fix to the wrong objection, and it would resurrect a feature that has
+  been closed.
+
+Everything from here to the next rule is the ORIGINAL PROPOSAL, preserved unchanged
+and superseded by the paragraph above.
 
 **What it does — re-specified, not just renamed.** The spike's design scanned
 `/proc` for `comm == "board"`, read each match's `cwd`, and read that project's

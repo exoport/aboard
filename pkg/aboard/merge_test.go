@@ -126,6 +126,37 @@ func setTabText(t *testing.T, doc map[string]any, id, text string) {
 	t.Fatalf("no tab %s in the document", id)
 }
 
+// setTabName renames a tab in a document the test is about to submit — the
+// foreign edit the merge could not classify until the journal record widened.
+func setTabName(t *testing.T, doc map[string]any, id, name string) {
+	t.Helper()
+	list, _ := doc["tabs"].([]any)
+	for _, raw := range list {
+		tab, ok := raw.(map[string]any)
+		if ok && tab["id"] == id {
+			tab["name"] = name
+			return
+		}
+	}
+	t.Fatalf("no tab %s in the document", id)
+}
+
+// tabName reads a tab's name off the board as it stands.
+func tabName(t *testing.T, root Root, id string) string {
+	t.Helper()
+	list, _ := readBoard(t, root)["tabs"].([]any)
+	for _, raw := range list {
+		tab, ok := raw.(map[string]any)
+		if !ok || tab["id"] != id {
+			continue
+		}
+		name, _ := tab["name"].(string)
+		return name
+	}
+	t.Fatalf("no tab %s on the board", id)
+	return ""
+}
+
 // writeInProcess lands a write through postState with no HTTP at all.
 func writeInProcess(t *testing.T, srv *server, id, text, by string) {
 	t.Helper()
@@ -393,5 +424,149 @@ func TestAMergedWriteKeepsTheLabelOfTheWriteItRedoes(t *testing.T) {
 	// root field no renderer reads.
 	if _, leaked := readBoard(t, root)["__label"]; leaked {
 		t.Error("__label was written into the merged document")
+	}
+}
+
+/* ---------- what the widened journal record bought ---------- */
+
+// The case that was recorded as a limitation and is now a merge: somebody
+// RENAMES a tab on the board while an agent writes to a DIFFERENT one.
+//
+// `JournalEntry.Before` used to hold a tab's `state` and nothing else, so the
+// merge had to compare our copy's name against the FRESH tab's — and our copy
+// carries the name as it was when we read the board, which is not the name it has
+// now. One side had moved it, ours had not, and the merge stopped anyway. The
+// record carries the name now (journalSchema 2), the comparison is against the
+// record like the state's, and the write lands.
+func TestMergeSurvivesAForeignRename(t *testing.T) {
+	root, _, _ := liveBoard(t)
+
+	mine := readBoard(t, root) // rev 1, and bb2 is still called "Theirs" in it
+	setTabText(t, mine, "bb1", "mine")
+
+	theirs := readBoard(t, root)
+	setTabName(t, theirs, "bb2", "Renamed by the human")
+	if _, _, err := applyDoc(t, root, theirs, "human-in-the-browser"); err != nil {
+		t.Fatalf("the rename should have landed: %v", err)
+	}
+
+	out, errOut, err := applyDoc(t, root, mine, "agent-1")
+	if err != nil {
+		t.Fatalf("a foreign rename must not stop a write to another tab: %v (stderr %s)", err, errOut)
+	}
+	if !strings.Contains(out, "merged") {
+		t.Errorf("a merged write must say so on stdout, got %q", out)
+	}
+	if got := tabText(t, root, "bb1"); got != "mine" {
+		t.Errorf("bb1 = %q, want the edit that was refused to have landed", got)
+	}
+	if got := tabName(t, root, "bb2"); got != "Renamed by the human" {
+		t.Errorf("bb2 is called %q — the merge must keep the rename it did not make", got)
+	}
+}
+
+// And the half that must NOT change: both sides renaming the same tab is a
+// collision, named as one. The merge picking a winner here is how one of the two
+// names disappears with a 200 to say it went well.
+func TestMergeStopsOnASameTabRename(t *testing.T) {
+	root, _, _ := liveBoard(t)
+
+	// Both names differ from the fixture's, or one "rename" would be a no-op and
+	// the test would be asserting a collision that never happened.
+	mine := readBoard(t, root)
+	setTabName(t, mine, "bb1", "Mine, renamed")
+
+	theirs := readBoard(t, root)
+	setTabName(t, theirs, "bb1", "Theirs, renamed")
+	if _, _, err := applyDoc(t, root, theirs, "agent-2"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := applyDoc(t, root, mine, "agent-1")
+	if err == nil {
+		t.Fatal("both sides renamed bb1; picking a winner is not the merge's call")
+	}
+	// Named, and named as what it is: the tab AND the field, so the caller is not
+	// sent looking through a state blob for an edit that is in the title bar.
+	for _, want := range []string{"bb1", "name", "while you were changing it too"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not say %q: %v", want, err)
+		}
+	}
+	if got := tabName(t, root, "bb1"); got != "Theirs, renamed" {
+		t.Errorf("bb1 is called %q, want the other session's write left alone", got)
+	}
+}
+
+// A window covered by a PRE-SCHEMA-2 entry still cannot attribute a rename, and
+// still refuses — the honest answer for the record it has. The wording changed
+// with it: "the journal does not record which side changed it" was true of every
+// entry once and is now true only of these, so it names the generation.
+//
+// The old entry is made by rewriting the one the foreign write just appended,
+// which is the only way to get one: nothing in this build writes that shape any
+// more, and a rotated journal.jsonl.1 full of them is the real case.
+func TestAPreSchema2RecordStillCannotAttributeARename(t *testing.T) {
+	root, _, _ := liveBoard(t)
+
+	mine := readBoard(t, root)
+	setTabText(t, mine, "bb1", "mine")
+
+	theirs := readBoard(t, root)
+	setTabName(t, theirs, "bb2", "Renamed by the human")
+	if _, _, err := applyDoc(t, root, theirs, "human-in-the-browser"); err != nil {
+		t.Fatal(err)
+	}
+	narrowTheJournal(t, root)
+
+	_, _, err := applyDoc(t, root, mine, "agent-1")
+	if err == nil {
+		t.Fatal("a record that cannot attribute the rename must refuse rather than guess")
+	}
+	for _, want := range []string{"bb2", "name", "schema 1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not say %q: %v", want, err)
+		}
+	}
+}
+
+// narrowTheJournal rewrites every entry on disk into the generation-1 shape:
+// `schema` dropped, and `before[<id>]` cut back to the bare state it used to be.
+func narrowTheJournal(t *testing.T, root Root) {
+	t.Helper()
+	raw, err := os.ReadFile(root.JournalFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	for line := range strings.SplitSeq(strings.TrimSpace(string(raw)), "\n") {
+		if line == "" {
+			continue
+		}
+		var e JournalEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Fatal(err)
+		}
+		for id, was := range e.Before {
+			var full tab
+			if err := json.Unmarshal(was, &full); err != nil {
+				t.Fatal(err)
+			}
+			if len(full.State) == 0 {
+				delete(e.Before, id)
+				continue
+			}
+			e.Before[id] = full.State
+		}
+		e.Schema = 0
+		body, err := json.Marshal(&e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out.Write(body)
+		out.WriteByte('\n')
+	}
+	if err := os.WriteFile(root.JournalFile(), out.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -4,19 +4,21 @@
 //	aboard history <tab>            list them, with who wrote each one
 //	aboard history <tab> --at N     print a document `aboard apply` accepts
 //
-// The journal already records, for every accepted write, the state each changed
-// tab held BEFORE it — which is the unit somebody undoing a bad write actually
-// wants. Until now that was reachable only by parsing `.aboard/run/journal.jsonl`
+// The journal already records, for every accepted write, each changed tab as it
+// stood BEFORE it — which is the unit somebody undoing a bad write actually
+// wants. (Entries written before the record widened hold only a tab's `state`;
+// both generations are read here, and a restore from the older one puts back the
+// state alone — see journalSchema.) Until now that was reachable only by parsing `.aboard/run/journal.jsonl`
 // by hand, so the board's only recovery path was one nobody could use in a hurry.
 //
 // Two properties are load-bearing and neither is obvious:
 //
-//   - **A restore is a whole document.** A journal entry holds one tab's inner
-//     `state` blob. Submitting that on its own as `{"tabs":[{…}]}` would be a
-//     document that DROPS every other tab, and the server would dutifully turn
-//     each one into a removal request on the human's screen. So `--at N` merges
-//     the old state onto a freshly read full document and prints THAT — the same
-//     shape of mistake an absent `__by` used to make, avoided in the same way.
+//   - **A restore is a whole document.** A journal entry holds one tab. Submitting
+//     that on its own as `{"tabs":[{…}]}` would be a document that DROPS every
+//     other tab, and the server would dutifully turn each one into a removal
+//     request on the human's screen. So `--at N` merges the old tab onto a
+//     freshly read full document and prints THAT — the same shape of mistake an
+//     absent `__by` used to make, avoided in the same way.
 //
 //   - **History ends, and the listing says where.** Rotation keeps one older
 //     generation, so a tab's past is bounded and the boundary moves. A listing
@@ -35,6 +37,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // historyScan is how many journal entries a history read looks through. The
@@ -65,6 +69,20 @@ type HistoryVersion struct {
 	Name   string          `json:"name,omitempty"   yaml:"name,omitempty"`
 	Bytes  int             `json:"bytes"            yaml:"bytes"`
 	State  json.RawMessage `json:"state"            yaml:"-"`
+
+	// Schema is which generation of the journal record this version came out of
+	// (journalSchema). It is on the version and not only on the listing because a
+	// rotated journal can hold both, so two versions of ONE tab can disagree about
+	// what a restore of them will carry.
+	Schema int `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// Was is what the tab called ITSELF at this version. Distinct from Name, which
+	// is what it was called after the write that replaced this version — the entry
+	// records the change, so its `names` map is the new name, not the old one.
+	// Empty on a generation-1 record, which never held a name.
+	Was string `json:"was,omitempty" yaml:"was,omitempty"`
+	// Tab is the whole recorded tab, for a restore that puts back the name and the
+	// note as well as the state. Nil on a generation-1 record.
+	Tab json.RawMessage `json:"tab,omitempty" yaml:"-"`
 }
 
 // TabHistory is one tab's past as the kept journal holds it, newest first.
@@ -111,11 +129,11 @@ func historyFrom(entries []JournalEntry, tab string, limit int) TabHistory {
 	// walks up to historyScan of them (gocritic rangeValCopy).
 	for i := range slices.Backward(entries) {
 		e := &entries[i]
-		state, ok := e.Before[tab]
+		was, ok := e.recorded(tab)
 		if !ok {
-			// The tab changed in this write but held no state before it — a tab
-			// being CREATED. There is nothing to restore, and listing it as a
-			// version with an empty body would offer a restore that blanks it.
+			// The tab changed in this write and the record holds nothing it was:
+			// a tab being CREATED. There is nothing to restore, and listing it as
+			// a version would offer a restore that blanks it.
 			continue
 		}
 		n++
@@ -125,7 +143,8 @@ func historyFrom(entries []JournalEntry, tab string, limit int) TabHistory {
 		}
 		out.Versions = append(out.Versions, HistoryVersion{
 			N: n, At: e.At, By: e.By, Origin: e.Origin, Rev: e.Rev,
-			Name: e.Names[tab], Bytes: len(state), State: state,
+			Name: e.Names[tab], Bytes: len(was.State), State: was.State,
+			Schema: e.Schema, Was: was.Name, Tab: was.Whole,
 		})
 	}
 	return out
@@ -195,8 +214,17 @@ func (h TabHistory) Human() string {
 		fmt.Fprintf(&b, "no recorded history for %s\n", h.Tab)
 	} else {
 		fmt.Fprintf(&b, "%s — %d recorded version%s, newest first\n", h.Tab, len(h.Versions), plural(len(h.Versions)))
-		for _, v := range h.Versions {
+		// Indexed, not copied: a HistoryVersion carries three raw blobs now and a
+		// value range copies all of it per version (gocritic rangeValCopy).
+		for i := range h.Versions {
+			v := &h.Versions[i]
 			label := v.Name
+			// What the tab called itself THEN, when that is not what the write
+			// renamed it to. A history listing that only ever showed the later
+			// name made a rename invisible in the one record that holds it.
+			if v.Was != "" && v.Was != v.Name {
+				label = v.Was + " → " + v.Name
+			}
 			if label != "" {
 				label = " (" + label + ")"
 			}
@@ -225,14 +253,16 @@ func (h TabHistory) EndsAt() string {
 // ErrNoSuchVersion is what Restore returns for an --at that names nothing.
 var ErrNoSuchVersion = errors.New("no such version")
 
-// Restore builds the document that puts one recorded state back: the CURRENT
-// document, whole, with that one tab's state replaced.
+// Restore builds the document that puts one recorded version back: the CURRENT
+// document, whole, with that one tab's content replaced — its name, type, note,
+// stateFrom, key and state where the record holds them (see restoreOnto), and its
+// state alone where the record predates them.
 //
 // Merged onto a fresh read rather than printed on its own, and this is the whole
-// risk of the feature. A journal entry holds one tab's `state`; wrapping it as
-// `{"tabs":[{"id":…,"state":…}]}` is a legal document that says the board has one
-// tab, and `reconcileTabs` would answer it by raising a removal request on every
-// other tab the human owns. The restore is a normal write of a normal document
+// risk of the feature. A journal entry holds one tab; wrapping it as
+// `{"tabs":[{"id":…}]}` is a legal document that says the board has one tab, and
+// `reconcileTabs` would answer it by raising a removal request on every other tab
+// the human owns. The restore is a normal write of a normal document
 // with one field different, and it carries the fresh document's `rev`, so it is
 // refused rather than clobbering if somebody wrote while you were reading.
 func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Writer) error {
@@ -256,15 +286,18 @@ func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Wr
 	}
 	i, ok := doc.byID[tab]
 	if !ok {
-		// Deliberately refused rather than rebuilt. The journal records a tab's
-		// NAME and its state, never its `type` — so a tab reconstructed from it
-		// would mount as "No renderer for type" and the restore would look like a
-		// second failure. Recreating the tab is one gesture in the browser, and
-		// then this command works.
-		return fmt.Errorf("tab %s is not on the board any more — the journal has its state but not its `type`, "+
-			"so this cannot rebuild it: recreate the tab (same id), then run this again", tab)
+		// Still refused, and the REASON changed when the record widened. It used
+		// to be that the journal held a tab's state and not its `type`, so a tab
+		// rebuilt from it would have mounted as "No renderer for type" — that
+		// sentence is simply false now, and leaving it would have been a document
+		// lying about the code beside it. The refusal stands on the honest reason
+		// instead: an agent cannot delete a tab, so a tab that is gone is one the
+		// HUMAN removed by answering a removal request. Putting it back is a
+		// decision they take, not an undo a pipeline performs on their behalf.
+		return fmt.Errorf("tab %s is not on the board any more — it was removed by the human answering a removal request, "+
+			"and putting it back is their call rather than a restore: recreate the tab (same id), then run this again", tab)
 	}
-	doc.tabs[i].State = want.State
+	restoreOnto(&doc.tabs[i], want)
 
 	body, err := doc.marshalIndent()
 	if err != nil {
@@ -272,6 +305,37 @@ func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Wr
 	}
 	_, err = out.Write(append(body, '\n'))
 	return err
+}
+
+// restoreOnto puts one recorded version back onto the tab that is on the board.
+//
+// CONTENT only, and the split is the whole of the judgement here. A schema-2
+// record holds the entire tab, markers included, and putting those back would
+// undo things that were never this command's to undo: `touched` is the human's
+// dot and only their dismiss clears it, `pendingRemoval` is a request they have
+// already answered, and `seen` is every actor's read state including other
+// sessions'. Restoring them would re-raise a dismissed notice and re-open a
+// settled removal — three of the four guarantees in tabs.go, walked around by
+// the one command whose job is to undo. So: name, type, note, stateFrom, key and
+// state come back; the markers stay as the live board has them.
+//
+// A generation-1 record carries only a state, and then only the state moves —
+// which is exactly what this command did for every version before the record
+// widened.
+func restoreOnto(t *docTab, want HistoryVersion) {
+	t.State = want.State
+	if len(want.Tab) == 0 {
+		return
+	}
+	var was tab
+	if jsonv2.Unmarshal(want.Tab, &was) != nil {
+		return
+	}
+	t.Name = was.Name
+	t.Type = was.Type
+	t.Note = was.Note
+	t.StateFrom = was.StateFrom
+	t.Key = was.Key
 }
 
 // currentDocument reads the board as it stands: from the running server when

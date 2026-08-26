@@ -28,13 +28,20 @@ bookkeeping. Every handoff in [`handoffs/`](handoffs/) says DONE or SUPERSEDED a
 `plan-1_port-from-spike.md` is the record of how the repo came to be and its 16 decisions still
 bind.
 
-**The one open list is [plan-2 §10](planning/plan-2_finish-line.md#10-gated-on-the-human--do-not-start-without-an-answer)** — ten
+**The one open list is [plan-2 §10](planning/plan-2_finish-line.md#10-gated-on-the-human--do-not-start-without-an-answer)** — six
 entries, all of them questions for the human rather than work to pick up. Do not start any of
-them without an answer: the `boards` subcommand's registry, the remote and first tag, Go 1.27,
-the `ape aboard` mount and the `aboard <cmd>` strings measured for it, installing the VS Code
-extension (M6), the example board's prose, the notify confirmation's repaint, the journal record
-the `apply` merge would need widening to survive a foreign rename, and a pointer to the
-judgement calls in `handoffs/handoff-phase-e-finish.md`, which stand until overruled.
+them without an answer: the remote and first tag, Go 1.27, the `ape aboard` mount and the
+`aboard <cmd>` strings measured for it, installing the VS Code extension (M6), and a pointer to
+the judgement calls in `handoffs/handoff-phase-e-finish.md`, which stand until overruled.
+
+Four entries left that list on 2026-08-26, when the human answered them; their dispositions are
+[§10c](planning/plan-2_finish-line.md#10c-answered-on-2026-08-26--closed-not-deferred) and the
+work landed with them. **`boards` (`bb372`) is DROPPED — closed, not deferred**: do not build it
+and do not re-propose the `/proc` scan with `cmdline` in place of `comm`, which fixes the wrong
+objection (the real one is that `/proc` is Linux-only). The other three: the example board's
+prose says "the agent", the notify button's acknowledgement is a toast the SSE repaint cannot
+reach, and `JournalEntry.Before` carries the whole tab so the `apply` merge survives a foreign
+rename.
 
 Below that, one more list: real findings that are nobody's blocker and nobody's question —
 decisions for whoever next touches that code. They are not §10, and they are not work queued

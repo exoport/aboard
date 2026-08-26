@@ -48,13 +48,15 @@ unit-tested, never loaded into a real VS Code). Every handoff in
 `development/handoffs/` says DONE or SUPERSEDED at the top, and the review file has a
 disposition beside every finding.
 
-**The one open list is that plan's §10** — ten entries, and every one of them is a
-question rather than work: the `boards` subcommand's registry, the remote and the first
-tag, Go 1.27, the `ape aboard` mount and the `aboard <cmd>` strings that go with it,
-installing the extension, the example board's prose, the notify confirmation's repaint,
-the journal record `apply`'s merge would need widening to survive a foreign rename, and
-a pointer to the judgement calls in `handoff-phase-e-finish.md` that stand until
-overruled. `development/README.md` carries a separate list — findings that are real,
+**The one open list is that plan's §10** — six entries, and every one of them is a
+question rather than work: the remote and the first tag, Go 1.27, the `ape aboard` mount
+and the `aboard <cmd>` strings that go with it, installing the extension, and a pointer
+to the judgement calls in `handoff-phase-e-finish.md` that stand until overruled. Four
+more left that list on 2026-08-26 when the human answered them (§10c, and the work
+landed with the answers): `boards` is dropped, the example board's prose says "the
+agent", the notify button's acknowledgement is a flash the repaint cannot reach, and the
+journal entry carries the whole tab so the `apply` merge survives a foreign rename.
+`development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
 count, `BUILD_DATE` and `make install INSTALL_DIR`), each with what it would take, so
 nobody re-measures them. A fifth, the pinned-versus-`$PATH` divergence, is RESOLVED:
@@ -181,6 +183,7 @@ session is watching is not yours to restart.
 - **Four guarantees are server-enforced, not conventions**: no agent deletes a tab, clears a `touched` marker, un-acks a chat message, or clears another actor's `seen` — [why](docs/explanation/why-four-guarantees-are-server-enforced.md).
 - **Nothing in the UI may START an agent session.** The board may ask; a session may choose to wait — [why](docs/explanation/why-nothing-in-the-ui-starts-a-session.md).
 - **A diff renderer is rejected. Closed, not deferred** — [why](docs/explanation/why-no-diff-renderer.md).
+- **No `boards` command — closed, not deferred.** Asked as plan-2 §10 and answered on 2026-08-26: there is no machine-wide list of every board, and neither of the two designs comes back. `aboard status` answers "is a board running here" per project, and `.aboard/run/instance.json` plus `GET /health` already name the binary serving it, so the feature buys cross-project discovery alone. The `~/.aboard/known-roots.json` registry would be new user-level state outside `.aboard/` for that. And the `/proc` scan it replaced is dead for the reason that is easy to get wrong: not because `comm` reads `ape` under `ape aboard` — `/proc/<pid>/cmdline` carries the whole argv and would find it — but because `/proc` is Linux-only and this binary ships for macOS and Windows. Do not build it, do not propose the `cmdline` fix, do not add an "unless".
 - **`html` tabs are sandboxed with `connect-src 'none'`**, and `frame-ancestors` deliberately admits VS Code's webview origins — [why](docs/explanation/why-html-tabs-are-sandboxed.md).
 - **Two identities, one `.aboard/`**: `aboard` and `ape-aboard` are hosts; the manifest's app name is neither — [why](docs/explanation/why-two-identities.md).
 - **The capability surface is declared and checked, never scraped**; controls are a list because their order is the toolbar's — [why](docs/explanation/why-the-manifest-is-declared.md).
@@ -192,10 +195,16 @@ session is watching is not yours to restart.
   base it started from (and what each held AT that base, which is the only record of the
   third document), re-applies its own tabs where the server did not touch them, and
   retries ONCE. Both refusals that remain are deliberate: a genuine same-tab collision is
-  NAMED and never merged silently, exactly as the browser refuses to; and a conflict the
-  merge cannot reason about — a timestamp base, a journal rotated past the base — falls
-  back to the plain refusal with the reason on stderr. `JournalEntry` gained `rev` for
-  this: `at` is a millisecond clock, which is the token this project stopped trusting.
+  NAMED — with the FIELD as well as the tab — and never merged silently, exactly as the
+  browser refuses to; and a conflict the merge cannot reason about — a timestamp base, a
+  journal rotated past the base — falls back to the plain refusal with the reason on
+  stderr. `JournalEntry` gained `rev` for this: `at` is a millisecond clock, which is the
+  token this project stopped trusting. It then gained the whole TAB (2026-08-26): with
+  only a `state` on the record, a tab somebody else renamed while you wrote to a
+  different tab could not be classified, so the merge compared against the fresh copy,
+  found a difference neither side of your write had made, and refused. That case merges
+  now. A pre-`schema` entry still cannot attribute a rename and still refuses, and the
+  message names the generation rather than blaming the caller.
 - **Writes are serialised, and a `409` is the guarantee that nothing of yours landed.** One lock across read → compare-and-set → reconcile → write, and the token compared is a **revision counter** (`rev`), never a timestamp; the losers of a simultaneous write are refused, not queued on top — [why](docs/explanation/why-writes-are-serialised.md).
 - **The board answers loopback only, and refuses a cross-site write.** A `Host` outside `localhost`/`127.0.0.1`/`[::1]` is `403` (the DNS-rebinding guard), and so is any mutating request whose `Origin` is not the board's own — [the rules](docs/reference/http-api.md#who-is-allowed-to-ask). Neither is authentication; the server has none. They stop a browser from being the thing that reaches it for somebody else.
 - **A write warning goes to the journal entry and to the screen, never into a tab.** `POST /aboard.json` runs the write-time checks over the tabs the write TOUCHED, and the strings ride the journal entry, the POST reply, the SSE frame, the tab's notice banner and the trace tab. Scoped on purpose: a whole-document scan would re-report every pre-existing mistake as though this write had made it — the example board's deliberately invalid `sparkline` would then ride along on every write ever made, and a warning that always fires is one people learn to skip. It still warns on a write that touches ITS tab, and there is no suppression mechanism for it. The reply and the frame also name the tabs the checks RAN over, which is the only thing that can take a banner back DOWN: a clean tab is absent from the warnings, which is the same shape as a tab the write never looked at, so a page that only ever received warnings could raise a banner and never lower one. `apply --check` runs the checks and posts nothing; `apply --strict` refuses on any warning. Warning-not-refusing stays the default, because a spec can legitimately lag its renderer. `apply --label "…"` records WHY a write happened — stripped off the payload beside `__by` and `__base`, stored on the journal entry and never in the board document, and printed by `journal`, `watch` and the trace tab. A journal answered who and what and never why, so "the write that broke the gallery" could not be found without reading every payload; it is navigation inside a local, rotating file, never a record to cite anywhere permanent.
@@ -205,7 +214,8 @@ session is watching is not yours to restart.
 - **Prefer `ui` over `html`** whenever a component tree can express it: it cannot get the theme, contrast or type sizes wrong, and the next session can change one node instead of reading a page of someone else's JavaScript. `html` is for when the INTERACTION is the point.
 - **Colours only from `app.css` tokens.** Single dark theme, text pinned to WCAG AAA, no hex in any view. The periwinkle token is `--agent`; `claude` resolves to nothing, and a write naming an unknown colour warns. An `html` tab's frame **parses** `app.css`'s `:root` and inherits the whole set rather than carrying a copy — a copy had already lost five tokens once, and a widget naming one of those got no colour and no warning. It fails closed to a built-in literal, because a widget with no ground at all is worse than one on a stale palette.
 - **The journal is the board's undo, and `aboard history` is how you reach it.** Every
-  accepted write already records the state each changed tab held BEFORE it; `GET /history?tab=`
+  accepted write already records each changed tab AS IT WAS — the whole tab, since
+  2026-08-26, stamped `schema: 2` on the entry; `GET /history?tab=`
   and `aboard history <tab>` read it out, and `--at N` prints a WHOLE document `apply`
   accepts. Merged onto a freshly read document rather than printed alone, and that is the
   whole risk of the feature: a single-tab document is a document that DELETES every other
@@ -214,7 +224,15 @@ session is watching is not yours to restart.
   the record ends, because rotation keeps one generation and an empty list is otherwise
   indistinguishable from "everything about this tab rotated away". The change banner in
   the shell links to it, read-only: restoring from a button would be a write the human
-  made without seeing the document it produces.
+  made without seeing the document it produces. **The record has two generations and
+  every reader dispatches per ENTRY, not per file**: rotation keeps one older generation,
+  so `journal.jsonl.1` can hold pre-`schema` lines — whose `before` is a bare `state` —
+  for as long as the board lives while the live file holds whole tabs. A restore from the
+  wide record puts back the tab's CONTENT — name, type, note, stateFrom and key as well
+  as state — and NEVER
+  `touched`, `pendingRemoval` or `seen`: re-raising a dismissed dot or re-opening an
+  answered removal request would be the one command whose job is to undo walking around
+  three of the four guarantees.
 - **The browser reports what it drew, into a sidecar.** After every mount — and, debounced,
   after a control is pressed — `aboard.html` posts the declared control ids on screen, any
   the renderer built that no spec declares, and any unknown-component marker, to

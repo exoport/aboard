@@ -47,7 +47,7 @@
             "order": 1,
             "parent": "bb2",
             "status": "done",
-            "title": "Claude reads and reacts"
+            "title": "The agent reads and reacts"
           },
           {
             "id": "bb6",
@@ -83,7 +83,7 @@
           },
           {
             "id": "bb10",
-            "note": "Structured answers back to Claude, and regions drawn on an image.",
+            "note": "Structured answers back to the agent, and regions drawn on an image.",
             "order": 0,
             "parent": "bb6",
             "status": "todo",
@@ -91,7 +91,7 @@
           },
           {
             "id": "bb11",
-            "note": "Claude: you added this under bb3 — what is it? Name it and I'll act on it.",
+            "note": "Agent: you added this under bb3 — what is it? Name it and I'll act on it.",
             "order": 1,
             "parent": "bb3",
             "status": "doing",
@@ -183,7 +183,7 @@
           }
         ],
         "id": "bb46",
-        "intro": "Claude asks, you answer here. Answers land in .aboard/aboard.json under \"form\".",
+        "intro": "The agent asks, you answer here. Answers land in .aboard/aboard.json under \"form\".",
         "title": "Board direction"
       },
       "note": "What a form is for: typed answers instead of a paragraph of questions. Field ids stay semantic, so an agent reads answers back by name."
@@ -274,7 +274,7 @@
                   "order": 1,
                   "parent": "bb146",
                   "status": "done",
-                  "title": "Claude reads and reacts"
+                  "title": "The agent reads and reacts"
                 },
                 {
                   "id": "bb150",
@@ -335,13 +335,13 @@
               "images": [
                 {
                   "annotatable": true,
-                  "caption": "Draw on this to point at something. Coordinates are normalized 0-1, so Claude can read where you marked.",
+                  "caption": "Draw on this to point at something. Coordinates are normalized 0-1, so the agent can read where you marked.",
                   "id": "bb152",
                   "regions": [
                     {
                       "h": 0.07,
                       "id": "bb153",
-                      "note": "Example region, written by Claude. Delete it and draw your own.",
+                      "note": "Example region, written by the agent. Delete it and draw your own.",
                       "w": 0.2,
                       "x": 0.06,
                       "y": 0.1

@@ -515,7 +515,10 @@ aboard wait  --by "agent-1" --timeout 15m    # then wait to be told to look
 While you wait, the board's header shows **notify agent-1** with a lit dot: the
 human can see that a session is listening, and pressing it releases you. Nobody
 waiting means the button is disabled — a waiter is an open connection, so the
-count cannot lie or go stale.
+count cannot lie or go stale. The button never says anything but live state; the
+acknowledgement of a press ("notified 1 session") is a flash beside it that goes
+after a second and a half, because the poke itself changes the waiter count and
+repaints the button.
 
 - exit **0** — released. The event (`{event, at, by, note}`) is on stdout; re-read
   the state file and act on what changed.

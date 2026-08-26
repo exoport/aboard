@@ -63,8 +63,10 @@ list left is that plan's §10 — the things gated on the human.
 
 ## Open judgement calls the agents made — the human may want to overrule
 
-- `boards` (bb372) was re-specified around an invented `~/.aboard/known-roots.json` registry written by
-  `aboard serve` and verified against `/health` — `development/handoffs/handoff-13-features.md`. Not settled.
+- ~~`boards` (bb372) was re-specified around an invented `~/.aboard/known-roots.json` registry written by
+  `aboard serve` and verified against `/health` — `development/handoffs/handoff-13-features.md`. Not settled.~~
+  **Settled 2026-08-26: the human DROPPED the feature.** Neither the registry nor the `/proc` scan;
+  `aboard status` per project is the answer — plan-2 §10c.
 - `make dist` from the spike was dropped (goreleaser `snapshot` + `xcompile-windows` replace it).
 - `restart.sh` was kept as a dev convenience and documented in CLAUDE.md's directory map.
 - `recipes index` and `gen-docs` are hidden and excluded from the declared command table (parity test
@@ -81,7 +83,7 @@ list left is that plan's §10 — the things gated on the human.
   `state.data` back off the server, and does the same for an html block inside a stack
   (`TestAWidgetWritesThroughTheBridge`, `TestAWidgetInsideAStackBlockWritesThroughTheBridge`).
 - ~~The 11 open features of the 13-feature review are queued, not built.~~ **Closed 2026-08-26**:
-  ten of the eleven shipped as plan-2 item 6 (`d69197a`); the eleventh, `boards` (`bb372`), is
-  parked on the human's answer — plan-2 §10, and the judgement call below is the question.
+  ten of the eleven shipped as plan-2 item 6 (`d69197a`); the eleventh, `boards` (`bb372`), was put
+  to the human and DROPPED — plan-2 §10c. Nothing of the thirteen is open.
 - The spike's own board was found DOWN mid-session and restarted with its own `restart.sh` on
   port 46624; nothing in its tree was written.

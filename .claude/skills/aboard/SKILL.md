@@ -443,10 +443,15 @@ direction:
   hosting, and this server deliberately has neither.
 - **The journal is local too.** `.aboard/run/journal.jsonl` tells you who changed
   what on THIS machine. It is not a project audit trail; do not cite it as one.
-  It is also the board's only undo: `aboard history <tab>` lists what a tab said
-  before, newest first, and `aboard history <tab> --at 1` prints a whole document
+  It is also the board's only undo: `aboard history <tab>` lists what a tab was,
+  newest first, and `aboard history <tab> --at 1` prints a whole document
   `apply` accepts. Rotation keeps one generation, so the listing says where the
-  record ends — read that line before promising the human a restore.
+  record ends — read that line before promising the human a restore. A version
+  from an entry written since 2026-08-26 (`schema: 2`) restores the tab's NAME,
+  note and type as well as its state; an older one carries a state and nothing
+  else, and `aboard history` marks which is which. Neither restores `touched`,
+  `pendingRemoval` or `seen`: putting back a dismissed dot or an answered removal
+  request is not an undo.
 
 ## Choosing a type
 

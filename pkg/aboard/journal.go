@@ -8,8 +8,9 @@
 // Why: with two sessions and a human writing one document, "who changed the plan
 // while I was thinking?" had no answer except git archaeology over a file that
 // changes constantly. git gives coarse history of aboard.json across commits; this
-// gives per-write granularity, the author, and — for a tab that changed — the
-// state it held BEFORE, which is the unit you would actually want to restore.
+// gives per-write granularity, the author, and — for a tab that changed — the tab
+// AS IT WAS, which is the unit you would actually want to restore. What "as it
+// was" spells on disk has two generations; see journalSchema.
 //
 // Every accepted write already funnels through one function, so this is one
 // append at a choke point that cannot be bypassed: an agent that forgets to
@@ -33,6 +34,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	jsonv2 "github.com/go-json-experiment/json"
 )
 
 const (
@@ -40,8 +43,55 @@ const (
 	journalKeep     = 1        // how many rotated generations to keep
 )
 
-// JournalEntry is one accepted write. `Before` holds the previous state of each
-// tab that changed, keyed by tab id — absent for a tab that was created.
+// journalSchema is the shape of the entries THIS build writes, stamped on every
+// one of them.
+//
+// Named `schema` and not `v` or `version`, deliberately, and the reason is the
+// same one wire.go is built on: the board document already has a root key called
+// `version`, and it means the STATE FILE's schema. A journal entry is a different
+// contract with a different audience and its own reason to change, and giving the
+// two the same word is exactly how a rename of one silently renames the other in
+// somebody's head. `v` would have been shorter and says nothing at the point of
+// use — `jq 'select(.schema==2)'` reads as a question about the record, `.v` reads
+// as a question about a value.
+//
+// 2, not 1, because generation 1 is every entry already on disk, and those carry
+// no `schema` key at all. A reader treats absent and 1 as the same thing:
+//
+//	1  `before[<id>]` is a tab's bare `state` blob.
+//	2  `before[<id>]` is the whole tab — id, name, type, note, stateFrom, state,
+//	   and the markers the document carries.
+//
+// Both shapes stay readable forever, and NOT because of politeness: rotation
+// keeps one older generation, so `journal.jsonl.1` can hold generation-1 entries
+// while the live file holds generation-2 ones, and the reader that concatenates
+// them must not care which file a line came from. Every reader dispatches per
+// ENTRY, never per file.
+const journalSchema = 2
+
+// journalWholeTab is the generation at which `before` became a whole tab, and it
+// is a FACT ABOUT THE PAST rather than a statement about this build: entries
+// stamped below it hold a bare state, entries at or above it hold a tab.
+//
+// Separate from journalSchema even though the two are the same number today,
+// because they answer different questions and the moment a generation 3 exists
+// they stop agreeing. A reader that asked `Schema < journalSchema` would, on the
+// day somebody bumped journalSchema to 3, start handing every generation-2
+// record's whole-tab JSON back as though it were a state blob — silently, which
+// is the exact failure this whole record widening was done to remove.
+const journalWholeTab = 2
+
+// JournalEntry is one accepted write. `Before` holds each changed tab AS IT WAS,
+// keyed by tab id — absent for a tab that was created, which is how a reader tells
+// "this write replaced something" from "this write made something".
+//
+// `Before` used to hold a tab's `state` and nothing else, and that was too narrow
+// in a way only one caller ever felt: `apply`'s 409 merge asks the journal what a
+// tab held at the base it started from, so a tab RENAMED on the board while an
+// agent wrote to a different tab could not be classified at all — the merge had to
+// refuse by name rather than guess which side had moved the name. It now records
+// the whole tab (schema 2), the merge can attribute a foreign rename, and the
+// record is also the better one to restore from.
 //
 // `Label` and `Warnings` are the two things a journal entry could never answer.
 //
@@ -63,6 +113,10 @@ const (
 // warning cannot be laundered into the record by a later write that copies the
 // tab forward.
 type JournalEntry struct {
+	// Schema is which generation of this record the entry is — see journalSchema.
+	// Absent (zero) on every entry written before the record widened, which a
+	// reader treats as 1.
+	Schema int    `json:"schema,omitempty" yaml:"schema,omitempty"`
 	At     string `json:"at"               yaml:"at"`
 	By     string `json:"by"               yaml:"by"`
 	Origin string `json:"origin,omitempty" yaml:"origin,omitempty"`
@@ -242,10 +296,18 @@ func changedAgainst(cur *stateDoc, t *docTab) bool {
 }
 
 // summarise turns an already-made comparison into the entry its three consumers
-// share. `Before` holds the previous state of each changed tab, which is the unit
-// somebody restoring by hand would actually want.
+// share. `Before` holds each changed tab as it stood before this write, which is
+// the unit somebody restoring by hand — or merging a 409 — actually wants.
+//
+// Recorded for every tab that EXISTED, where it used to be recorded only for a
+// tab that existed and had a non-empty state. Those two are not the same
+// question, and conflating them made a tab with no state look exactly like a tab
+// being created — which is the one distinction the merge reads `Before`'s
+// presence to make, so an empty-state tab moved on the board was reported to
+// `apply` as "created while you were writing" and refused.
 func summarise(cur *stateDoc, next []docTab, by, origin string) JournalEntry {
 	entry := JournalEntry{
+		Schema: journalSchema,
 		At:     time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		By:     by,
 		Origin: origin,
@@ -260,11 +322,70 @@ func summarise(cur *stateDoc, next []docTab, by, origin string) JournalEntry {
 		}
 		entry.Tabs = append(entry.Tabs, t.ID)
 		entry.Names[t.ID] = t.Name
-		if j, existed := cur.byID[t.ID]; existed && len(cur.tabs[j].State) > 0 {
-			entry.Before[t.ID] = cur.tabs[j].State
+		j, existed := cur.byID[t.ID]
+		if !existed {
+			continue
 		}
+		// The whole tab, encoded with the board's own write options so the record
+		// and the document spell the same bytes for the same tab.
+		was, err := jsonv2.Marshal(cur.tabs[j].tab, writeOptions)
+		if err != nil {
+			continue
+		}
+		entry.Before[t.ID] = was
 	}
 	return entry
+}
+
+// recordedTab is what a journal entry says a tab held before the write that
+// produced the entry — read out of whichever generation wrote it.
+//
+// The generations differ in what they can answer, not only in shape, and a reader
+// that forgets the difference gets it wrong in the dangerous direction. A
+// generation-1 record carries a bare `state`, so Name, Type, Note and StateFrom
+// come back EMPTY — which is not the same claim as "they were empty", and code
+// that compared them anyway would report every unchanged name as a change to "".
+// `Fields` is the flag that keeps the two apart; nothing may read the four
+// strings without it.
+type recordedTab struct {
+	// State is the tab's state at that point. Both generations carry it.
+	State json.RawMessage
+	// Fields reports that this record carries the tab's own fields — a schema-2
+	// entry. False for an older one, where the four strings below say nothing.
+	Fields    bool
+	Name      string
+	Type      string
+	Note      string
+	StateFrom string
+	// Whole is the recorded tab as it was written, for a restore that puts the
+	// tab back rather than only its state. Nil for a generation-1 record.
+	Whole json.RawMessage
+}
+
+// recorded reads `Before[id]` in whichever shape this entry wrote it.
+//
+// The second return is "the record has this tab", which is the question the merge
+// asks to tell a tab that was REPLACED from one that was CREATED. A schema-2
+// record that will not decode answers false: a corrupt line is not a tab that was
+// created, but it is also not a record anything may reason from, and the callers'
+// refusals are the conservative answer in both cases.
+func (e *JournalEntry) recorded(id string) (recordedTab, bool) {
+	raw, ok := e.Before[id]
+	if !ok || len(raw) == 0 {
+		return recordedTab{}, false
+	}
+	if e.Schema < journalWholeTab {
+		return recordedTab{State: raw}, true
+	}
+	var t tab
+	if err := jsonv2.Unmarshal(raw, &t); err != nil {
+		return recordedTab{}, false
+	}
+	return recordedTab{
+		State: t.State, Fields: true,
+		Name: t.Name, Type: t.Type, Note: t.Note, StateFrom: t.StateFrom,
+		Whole: raw,
+	}, true
 }
 
 // sameRemovalAsk compares two removal requests, either of which may be absent.

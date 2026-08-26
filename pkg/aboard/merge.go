@@ -11,7 +11,9 @@
 //
 //  1. re-read the live document;
 //  2. ask the journal which tabs moved since the base we started from, and what
-//     each of them said AT that base (`before` on the first entry that touched it);
+//     each of them WAS at that base (`before` on the first entry that touched it —
+//     the whole tab, since journalSchema 2, which is what lets step 4 tell a
+//     foreign rename from one of ours);
 //  3. keep the server's version of every tab it moved, and our version of every
 //     tab it did not;
 //  4. if we changed a tab the server also changed, NAME IT AND STOP. That is the
@@ -47,13 +49,16 @@ import (
 // ErrCollision is a conflict the merge will not resolve on its own, and every
 // use of it wraps a sentence naming the tab and saying which kind it is.
 //
-// The sentence is deliberately not "both sides changed the same tab", which was
-// the first wording and was a lie in one of the three cases: the name/type/note
-// comparison below is against the FRESH tab rather than against our base, so a
-// tab somebody else RENAMED while we wrote to a different one lands here having
-// been touched by exactly one side. An error that asserts something untrue about
-// what the caller did is worse than a vaguer one — it sends them looking for an
-// edit of their own that is not there.
+// The general sentence is deliberately not "both sides changed the same tab". It
+// was, once, and it was a lie in the case the journal could not attribute: the
+// name/type/note comparison ran against the FRESH tab rather than against our
+// base, so a tab somebody else RENAMED while we wrote to a different one landed
+// here having been touched by exactly one side. That case now MERGES — the record
+// carries those fields (journalSchema 2) — and the only place the vaguer wording
+// still applies is a pre-schema-2 entry, where it is still true and still says so
+// out loud. An error that asserts something untrue about what the caller did is
+// worse than a vaguer one: it sends them looking for an edit of their own that is
+// not there.
 var ErrCollision = errors.New("the merge stopped rather than pick a winner")
 
 // errUnmergeable is a 409 the merge cannot reason about — a timestamp base, a
@@ -129,18 +134,24 @@ func mergeOnConflict(ctx context.Context, inst Instance, ours map[string]any, ba
 }
 
 // movedTab is one tab the server changed since our base: whether it existed at
-// that base at all, and what its state was then.
+// that base at all, and what the journal recorded it as holding then.
 type movedTab struct {
 	existed bool
-	state   json.RawMessage
+	was     recordedTab
 }
 
 // tabsMovedSince asks the journal which tabs changed after a revision, and what
 // each of them held at it.
 //
-// The state comes from the EARLIEST qualifying entry, not the latest: `before` on
-// entry N is the state that entry replaced, so the earliest one after our base is
+// The record comes from the EARLIEST qualifying entry, not the latest: `before`
+// on entry N is what that entry replaced, so the earliest one after our base is
 // the only entry holding the document as WE read it.
+//
+// Whichever generation wrote that entry. A journal that rotated mid-window holds
+// generation-1 lines in journal.jsonl.1 and generation-2 lines in the live file,
+// and /journal concatenates them — so the dispatch is per entry (recorded), never
+// per file, and a merge can legitimately classify one tab from a wide record and
+// the tab beside it from a narrow one.
 //
 // A write that changed no tab is not journalled at all, so a gap between our base
 // and the live revision is not evidence of a missing record — it is a write that
@@ -181,8 +192,8 @@ func tabsMovedSince(ctx context.Context, base string, sinceRev int) (map[string]
 			if _, seen := moved[id]; seen {
 				continue
 			}
-			state, existed := e.Before[id]
-			moved[id] = movedTab{existed: existed, state: state}
+			was, existed := e.recorded(id)
+			moved[id] = movedTab{existed: existed, was: was}
 		}
 	}
 	return moved, nil
@@ -231,7 +242,7 @@ func mergeTabs(ours, fresh map[string]any, moved map[string]movedTab) (tabs []an
 		if !gone.existed {
 			return nil, nil, fmt.Errorf("%w: %s was created on the board while you were writing a tab with the same id — re-read the board, redo the edit, apply again", ErrCollision, id)
 		}
-		if err := ourTabIsUnchanged(id, t, live, gone.state); err != nil {
+		if err := ourTabIsUnchanged(id, t, live, gone.was); err != nil {
 			return nil, nil, err
 		}
 		out = append(out, live)
@@ -256,28 +267,78 @@ func mergeTabs(ours, fresh map[string]any, moved map[string]movedTab) (tabs []an
 // ourTabIsUnchanged decides whether our copy of a server-moved tab is one we
 // left alone, and returns the collision when it is not.
 //
-// Two questions, and they are answered from different sources on purpose:
+// One question, asked of the JOURNAL: is our copy of this tab the same as what
+// the record says it held at our base? If it is, we changed nothing and the
+// server's version wins. If it is not, both sides moved the same tab, which is
+// the one thing this merge will not resolve — the browser refuses it too, because
+// a silent same-tab merge is how one of the two edits disappears with a 200 to
+// say it went well.
 //
-//   - `state` is compared against what the JOURNAL says the tab held at our base.
-//     That is the only comparison that can distinguish "I changed this" from "the
-//     server changed this", because it is the only record of the third document.
-//   - name, type, note and stateFrom are compared against the FRESH tab, because
-//     the journal does not carry them. That is a weaker test and it can produce a
-//     FALSE collision: if the human renamed a tab we did not touch, our copy
-//     disagrees with the fresh one through no fault of ours and the merge stops.
-//     Stopping is the safe half of that trade — the caller re-reads and applies
-//     again — where the alternative silently discards whichever rename lost.
-func ourTabIsUnchanged(id string, ours, live map[string]any, atBase json.RawMessage) error {
-	if !sameJSON(mustJSON(ours["state"]), atBase) {
+// It was two questions from two sources until the record widened, and the second
+// one was a known false-positive generator: `state` came from the journal, but
+// name, type, note and stateFrom had to be compared against the FRESH tab because
+// the journal did not carry them. So a tab somebody else RENAMED while we wrote
+// to a DIFFERENT tab disagreed with the fresh copy through no fault of ours, and
+// the merge stopped on a collision that had exactly one side. Now the record
+// holds those four, they are compared against it like the state, and that case
+// merges.
+//
+// The old comparison survives for a generation-1 entry, and so does its wording:
+// the record genuinely cannot attribute the change, and stopping is the safe half
+// of that trade where the alternative silently discards whichever rename lost.
+func ourTabIsUnchanged(id string, ours, live map[string]any, was recordedTab) error {
+	if !sameJSON(mustJSON(ours["state"]), was.State) {
 		return fmt.Errorf("%w: %s changed on the board while you were changing it — re-read the board, redo the edit, apply again", ErrCollision, id)
 	}
 	for _, field := range []string{keyName, keyType, keyNote, keyStateFrom} {
-		if !sameJSON(mustJSON(ours[field]), mustJSON(live[field])) {
-			return fmt.Errorf("%w: %s — its %s differs from the board's and the journal does not record which side changed it; re-read the board, redo the edit, apply again",
+		if !was.Fields {
+			// Pre-schema-2 record: the best available comparison is against the
+			// live tab, and it cannot tell our edit from theirs.
+			if !sameJSON(mustJSON(ours[field]), mustJSON(live[field])) {
+				return fmt.Errorf("%w: %s — its %s differs from the board's and this journal entry predates the record that would say which side changed it (schema 1); re-read the board, redo the edit, apply again",
+					ErrCollision, id, field)
+			}
+			continue
+		}
+		if !sameJSON(mustJSON(ours[field]), mustJSON(was.field(field))) {
+			return fmt.Errorf("%w: %s — its %s changed on the board while you were changing it too — re-read the board, redo the edit, apply again",
 				ErrCollision, id, field)
 		}
 	}
 	return nil
+}
+
+// field reads one of the four the record carries, by the document's own key, so
+// the loop above walks one list of names rather than four branches. Only ever
+// called with Fields true.
+func (r recordedTab) field(name string) any {
+	switch name {
+	case keyName:
+		return emptyToNil(r.Name)
+	case keyType:
+		return emptyToNil(r.Type)
+	case keyNote:
+		return emptyToNil(r.Note)
+	case keyStateFrom:
+		return emptyToNil(r.StateFrom)
+	}
+	return nil
+}
+
+// emptyToNil makes an absent field and an empty one compare equal.
+//
+// `note` and `stateFrom` are `omitempty` in the document, so a tab without a note
+// has no `note` key at all and `ours["note"]` decodes to nil — while the record
+// round-trips the same absence through a Go string, which is "". Comparing those
+// two directly would say `""` differs from absent, and every tab with no note
+// would be a collision. `name` and `type` are not omitempty and are never empty
+// in practice, but they go through the same door so nobody has to remember which
+// is which.
+func emptyToNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 /* ---------- small readers ---------- */

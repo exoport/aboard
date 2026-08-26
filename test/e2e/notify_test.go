@@ -76,18 +76,24 @@ func TestTheNotifyButtonReleasesAWaitingSession(t *testing.T) {
 	if err := poke.Click(); err != nil {
 		t.Fatalf("pressing notify: %v", err)
 	}
+	// The acknowledgement, asserted FIRST because it is the transient half: the
+	// flash lives for about a second and a half and then removes itself.
+	//
+	// It used to be unassertable, and the comment that stood here said so: the
+	// handler wrote "notified 1 session" into the BUTTON's label, and the poke
+	// itself destroyed it — releasing the waiter changes the waiter count, which
+	// broadcasts on the SSE stream, which calls refreshWaiters(), which repaints
+	// the button from scratch. A 15 ms polling loop never once caught it. The
+	// human answered that on 2026-08-26 (plan-2 §10c): the button goes on telling
+	// the truth about live state, and the confirmation moves somewhere the
+	// repaint cannot reach.
+	if err := expect.Locator(s.page.Locator("#poke-flash")).ToContainText("notified 1 session"); err != nil {
+		t.Errorf("the press was not acknowledged: %v", err)
+	}
 	// What the button must do after the press: stop claiming a session is
 	// listening. It is the honest half, and it is the half that matters — a
 	// board with nothing waiting is simply not listening, and saying otherwise
 	// is the failure this whole feature was built to avoid.
-	//
-	// NOT asserted: the "notified 1 session" label the click handler sets. It is
-	// written and then overwritten before a human could read it — releasing the
-	// waiter changes the waiter count, which broadcasts on the SSE stream, which
-	// calls refreshWaiters(), which repaints from scratch. Measured here with a
-	// 15 ms polling loop that never once caught it. Recorded rather than
-	// asserted or "fixed": whether the human should get a moment of confirmation
-	// is a judgement about the interface, not a defect this suite gets to decide.
 	if err := expect.Locator(poke).ToBeDisabled(); err != nil {
 		t.Errorf("the button still looks live after everyone was released: %v", err)
 	}
@@ -129,4 +135,46 @@ func waiterCount(t *testing.T) int {
 	}
 	getJSON(t, "/waiters", &body)
 	return body.Waiting
+}
+
+// Two presses in a row leave ONE message, and it says what the second press did.
+//
+// The flash is positioned absolutely out of a zero-width anchor so it cannot
+// nudge the button, which means two of them alive at once sit exactly on top of
+// each other and neither is readable. `flashSaved` appends, so the guard has to
+// be in the caller. Reachable without any exotic timing on the failure path: a
+// rejected fetch repaints the button from live state, which re-enables it while
+// the first message still has more than a second to live.
+//
+// It also pins the wording for a poke that released nobody, which is the other
+// half of the human's answer and has no waiter to arrange: "no session was
+// waiting", never "notified 0 sessions", which would read as a failure.
+func TestTheNotifyFlashReplacesItselfRatherThanStacking(t *testing.T) {
+	s := open(t, "")
+	// Nobody is waiting, so the button is correctly disabled — that is what
+	// TestTheNotifyButtonIsDisabledWithNobodyWaiting asserts. The press itself is
+	// still reachable (the last waiter can time out between the repaint and the
+	// click), so the handler is driven directly rather than through a state the
+	// board would have to be talked into.
+	press := `() => { const b = document.getElementById('poke'); b.disabled = false; b.click(); }`
+	for range 2 {
+		if _, err := s.page.Evaluate(press); err != nil {
+			t.Fatalf("pressing notify: %v", err)
+		}
+	}
+
+	flash := s.page.Locator("#poke-flash .inline-flash")
+	if err := expect.Locator(flash).ToHaveText("no session was waiting"); err != nil {
+		t.Errorf("a poke that released nobody must say so: %v", err)
+	}
+	// ToHaveText on a locator matching two elements fails on its own, but the
+	// count is asserted separately so a failure says WHICH of the two things went
+	// wrong.
+	n, err := flash.Count()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("%d messages are stacked on the anchor; a second press must replace the first, not pile on it", n)
+	}
 }

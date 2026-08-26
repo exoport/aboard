@@ -380,6 +380,12 @@ caller hangs up, the waiter disappears.
 Body `{"by": "…", "note": "…"}` (both optional; `by` defaults to `"human"`). Releases
 every waiter and answers `{"ok": true, "released": N, "at": "…", "by": "…"}`.
 
+`released` is what the shell's notify button flashes back at the human ("notified 2
+sessions", or "no session was waiting" for zero, which is reachable when the last
+waiter times out between the repaint and the click). It is a transient notice beside
+the button and not the button's own label, because the poke changes the waiter count
+and the `waiters` frame that follows repaints the button a moment later.
+
 ## `GET /waiters`
 
 `{"waiting": N, "waiters": [...], "lastPoke": {...}}`. The UI enables its notify button
@@ -388,12 +394,13 @@ from this.
 ## `GET /journal`
 
 Recent accepted writes, oldest first; `?limit=N` bounds the count, keeping the most
-recent N. Each entry carries the timestamp, the actor, the origin, and the tabs the
-write changed with their previous state — which is what lets the `trace` renderer show a
-diff without keeping history in the board document.
+recent N. Each entry carries the timestamp, the actor, the origin, and every tab the
+write changed **as it was before** — which is what lets the `trace` renderer show a
+change without keeping history in the board document.
 
 ```json
 {
+  "schema": 2,
   "at": "2026-08-26T09:12:44.310Z",
   "by": "agent-1",
   "origin": "apply",
@@ -402,9 +409,32 @@ diff without keeping history in the board document.
   "tabs": ["bb133"],
   "names": { "bb133": "UI gallery" },
   "warnings": { "bb133": ["bb133 (ui): root is a stat, which does not read …"] },
-  "before": { "bb133": { "root": "…" } }
+  "before": {
+    "bb133": { "id": "bb133", "name": "UI gallery", "type": "ui",
+               "note": "every component, rendered", "state": { "root": "…" } }
+  }
 }
 ```
+
+### The two generations of an entry
+
+`schema` says how to read `before`, and **a reader must dispatch per entry**:
+
+| `schema` | `before[<id>]` is |
+| --- | --- |
+| absent, or `1` | a tab's bare `state` blob, and nothing about its name, type or note |
+| `2` | the whole tab — `id`, `name`, `type`, `note`, `stateFrom`, `state`, and the markers |
+
+Generation 1 is every entry written before the record widened, and it does not go
+away with a migration: rotation keeps one older generation, so `journal.jsonl.1`
+can hold generation-1 lines while the live file holds generation-2 ones, and this
+endpoint concatenates them. A reader that decided per FILE would be wrong on
+exactly the boards that have been running longest.
+
+`before[<id>]` being **absent** means the tab did not exist at all — the write
+created it. A tab that existed with no state is still recorded (as a tab with no
+`state` key), because "did it exist" and "did it have content" are different
+questions and `apply`'s merge reads the first one.
 
 `rev` is the revision this write PRODUCED — the compare-and-set token the board
 carried once it landed. It is what lets a reader ask "which tabs moved since the
@@ -425,9 +455,18 @@ changed, then re-read the board); `label` and `warnings` are not.
 `/journal` already is. `?limit=N` bounds the list (default 20).
 
 Answers `{"tab", "versions": [...], "scanned", "oldest", "truncated", "limited", "ends"}`.
-Each version is `{"n", "at", "by", "origin", "rev", "name", "bytes", "state"}` — the state
-the tab held **before** the write, newest first, numbered from 1 so `1` is the undo.
-`at`/`by` describe the write that *replaced* that state, not the one that produced it.
+Each version is `{"n", "at", "by", "origin", "rev", "name", "bytes", "state", "schema",
+"was", "tab"}` — what the tab held **before** the write, newest first, numbered from 1 so
+`1` is the undo. `at`/`by` describe the write that *replaced* that version, not the one
+that produced it.
+
+`schema` is which generation of the journal record the version came out of (see
+`/journal` above), and it is per VERSION rather than per listing because a rotated
+journal can hand one listing both. `tab` is the whole recorded tab, present only for
+a generation-2 record, and it is what lets `aboard history --at N` put a NAME back
+and not only a state. `was` is what the tab called itself at that version — distinct
+from `name`, which is what it was called *after* the write that replaced it, since an
+entry records a change and its `names` map holds the new name.
 
 `ends` is a sentence saying where the record stops, and it is a field rather than a
 derivation because the terminal prints the same one: the journal keeps one rotated
@@ -439,7 +478,13 @@ The change banner in the shell reads this; `aboard history` reads it too, fallin
 
 ## `GET /watch`
 
-The same entries as JSON lines, streamed as they happen, until the client disconnects.
+The same entries as JSON lines, streamed as they happen, until the client disconnects —
+**minus `before`**, which is stripped from every streamed line. A watcher wants to know
+THAT something changed and then re-read the board; the record of what each tab was is for
+the file on disk, where `history` and `apply`'s merge read it. So the rule above — an
+absent `before[<id>]` means the write created that tab — is about `/journal` and the file,
+and says nothing on this stream, where `before` is absent for every entry. `schema` still
+rides along, and still describes the entry rather than the file it will land in.
 
 ## `POST /rendered`
 

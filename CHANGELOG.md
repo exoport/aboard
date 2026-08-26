@@ -6,6 +6,39 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **feat: a journal entry records the whole tab, so `apply`'s merge survives a foreign
+  rename.** `JournalEntry.Before` held a tab's `state` and nothing else, so a tab
+  RENAMED on the board while an agent wrote to a different tab could not be classified
+  at all — the merge compared our copy's name against the live one, found a difference
+  neither side of the write had made, and refused. Entries now carry `schema: 2` and
+  record the tab: id, name, type, note, stateFrom, state and its markers. That case
+  merges; both sides renaming one tab is still a collision, and is now named with the
+  FIELD as well as the tab. `aboard history --at N` restores the name, note and type
+  along with the state (never `touched`, `pendingRemoval` or `seen` — putting back a
+  dismissed dot is not an undo), and the listing shows a rename as `old → new`. **Every
+  reader handles both generations, per entry rather than per file**, because rotation
+  keeps one older generation and a `journal.jsonl.1` full of the narrow shape outlives
+  the change. One thing fixed on the way: a tab that existed with an EMPTY state was not
+  recorded at all, which made it indistinguishable from a tab being created — the one
+  distinction the merge reads `before`'s presence to make.
+- **fix: the notify button's acknowledgement is no longer repainted away.** Pressing it
+  wrote "notified 1 session" into the button's own label, and the poke destroyed it:
+  releasing the waiter changes the waiter count, which broadcasts on the SSE stream,
+  which repaints the button. The confirmation moved to a transient flash beside it — the
+  same one an inline editor shows after a save — where nothing that repaints the button
+  can reach it, and the button goes on reporting live state and only live state. "no
+  session was waiting" for a poke that released nobody, which is reachable when the last
+  waiter times out between the repaint and the click.
+- **docs: the example board's prose says "the agent", not "Claude".** Seven strings in
+  `aboard init --example`'s demo content — two dag node titles, two node notes, a form
+  intro, an image caption and a region note. Every id and every other byte unchanged.
+  `views/chat.js` still recognises `claude` as a historical ACTOR name in a transcript.
+- **docs: there is no `boards` command, and there will not be one.** The proposed
+  machine-wide list of running boards is dropped rather than deferred: `aboard status`
+  answers the question per project, and `/health` already names the binary serving it.
+  Recorded with the reason the `/proc` scan it replaced is also dead — `/proc` is
+  Linux-only, not (as the earlier note said) because `comm` reads `ape` under
+  `ape aboard`, which reading `cmdline` would have fixed.
 - **chore: the make targets are the gate, and the pinned tools moved.** A `$PATH` copy
   of a tool and the `.bingo` pin are two different programs, and this repo ran both: the
   pinned linter reported 0 where the pre-commit hook's `$PATH` copy reported 11, and the
@@ -207,13 +240,15 @@ lines and the ones with no user-visible surface — the suite, the extension —
 - **hardening: an `html` tab's CSP carries `sandbox allow-scripts`**, so the opaque
   origin holds when the document is fetched standalone rather than framed.
   `connect-src 'none'` is still the containment.
-- **`capsHash` ends this release at `9defc6c6`.** It moved twice on the way:
+- **`capsHash` ends this release at `4a42dfe3`.** It moved three times on the way:
   `9facfc76` → `6ff337ed` when the command table gained subcommands, so
   `recipes list`, `recipes show` and their flags became part of the described
-  surface; then `6ff337ed` → `9defc6c6` when `history`, `rendered`, `uploads` and
-  `apply`'s `--check`/`--strict`/`--label`/`--force` did. Both moves are correct
-  and both are recorded, because the intermediate value is the one a half-updated
-  skill will be carrying — and `aboard status` comparing a skill's stamp against
+  surface; `6ff337ed` → `9defc6c6` when `history`, `rendered`, `uploads` and
+  `apply`'s `--check`/`--strict`/`--label`/`--force` did; and `9defc6c6` →
+  `4a42dfe3` when the journal record widened, because the manifest's own line for
+  `GET /journal` said `before` held a previous STATE and that stopped being the
+  whole truth. All three moves are correct and all three are recorded, because the
+  intermediate value is the one a half-updated skill will be carrying — and `aboard status` comparing a skill's stamp against
   the binary's is how a session finds out its reference describes a board that no
   longer exists.
 

@@ -23,20 +23,27 @@ func newHistoryCmd(opts Options) *cobra.Command {
 		Short: "List what a tab said before, from the journal",
 		Long: `Per-tab history, read out of the journal the board already keeps.
 
-Every accepted write records the state each changed tab held BEFORE it, which is
-the unit somebody undoing a bad write actually wants. This lists those versions
-newest first, naming who replaced each one — and says plainly where the record
-ends, because rotation keeps one older generation and a listing that just stopped
-would read as "this tab has only ever been written twice".
+Every accepted write records each changed tab AS IT WAS, which is the unit
+somebody undoing a bad write actually wants. This lists those versions newest
+first, naming who replaced each one — and says plainly where the record ends,
+because rotation keeps one older generation and a listing that just stopped would
+read as "this tab has only ever been written twice".
 
   aboard history bb133                          what it said, and when
   aboard history bb133 --at 1 | aboard apply --by agent-1     put version 1 back
 
---at prints a WHOLE document with that one tab's state replaced, not the tab on
-its own: a single-tab document is a document that deletes every other tab, and
-the server would answer it with a removal request on each one. It carries the
-board's current ` + "`rev`" + `, so a restore built while somebody else was writing is
-refused rather than clobbering.
+--at prints a WHOLE document with that one tab put back, not the tab on its own:
+a single-tab document is a document that deletes every other tab, and the server
+would answer it with a removal request on each one. It carries the board's
+current ` + "`rev`" + `, so a restore built while somebody else was writing is refused
+rather than clobbering.
+
+What a restore carries depends on which generation of the record it came from,
+and the listing marks each version with it. An entry stamped ` + "`schema: 2`" + ` holds
+the whole tab, so the name, type, note, stateFrom and key come back with the state; an
+older entry holds a bare state, and then only the state moves. Neither ever puts
+back ` + "`touched`" + `, ` + "`pendingRemoval`" + ` or ` + "`seen`" + ` — re-raising a dot the human
+dismissed, or re-opening a removal request they answered, is not an undo.
 
 Reads from the running board when there is one and from
 .aboard/run/journal.jsonl when there is not.`,
