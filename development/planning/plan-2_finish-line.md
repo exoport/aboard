@@ -202,6 +202,10 @@ Chromium, which flaked once and would again.
 
 ### 10d. The user-facing docs audit and gap fill  ☑ `d0846a2`
 
+### 10e. A named board owns its runtime files; one live board per project however bound  ☑ `2f37497`
+
+### 10f. The extension after its first real run (aboard_vscode)  ☑ `fc886c1` (the human ran M6 once on 2026-08-26: the dot SVGs were malformed XML, the framed board was a pre-`?chrome=` binary; both fixed, plus a backoff that never backed off)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
