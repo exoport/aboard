@@ -23,12 +23,24 @@ import (
 //     it can read and rewrite the whole board — so blocking network egress from
 //     the frame is what actually contains it. Inline script and style are
 //     allowed (that is the point); fetch, XHR, WebSocket and form posts are not.
+//  3. That same policy leads with `sandbox allow-scripts`, so the opaque origin
+//     holds for a STANDALONE fetch too. Rendered in the board's own iframe the
+//     sandbox attribute already provided it; opened directly at /tab/<id>/html —
+//     which is how a screenshot is taken and how a human checks a widget — the
+//     page ran on the board's real origin, with the board's storage reachable
+//     from it. This is HARDENING, not an egress fix: `sandbox allow-scripts`
+//     blocks popups and form submission but NOT the page navigating itself, and
+//     `connect-src 'none'` was and remains the thing that contains it. The two
+//     sandboxes intersect rather than conflict, so the framed case is unchanged
+//     (asserted: the header a tab serves and the header a stack block serves are
+//     byte-identical, and both carry this directive).
 //
 // State still round-trips: a small bridge exposes `aboard.get()` / `aboard.set()`
 // which postMessage to the parent, and the parent writes the tab's `state.data`
 // through the normal compare-and-set path.
 
-const htmlTabCSP = "default-src 'none'; " +
+const htmlTabCSP = "sandbox allow-scripts; " +
+	"default-src 'none'; " +
 	"script-src 'unsafe-inline' 'unsafe-eval'; " +
 	"style-src 'unsafe-inline'; " +
 	"img-src data: blob:; " +

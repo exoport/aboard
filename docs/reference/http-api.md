@@ -31,7 +31,23 @@ prints the same table; the browser suite asserts that every declared path answer
 | GET    | `/uploads/<file>`   | Serve one, from disk.                                                     |
 | GET    | *anything else*     | Static asset from the embedded web tree (`ETag`, so a reload revalidates). |
 
-Anything not matched, and any method not listed for a matched path, is `404`.
+What an unmatched request actually gets, in the order the server decides it:
+
+1. **`403`, before the path is looked at.** The two refusals below run first, so a
+   request with a disallowed `Host`, or a write from a foreign `Origin`, is `403`
+   whether or not the path it asked for exists.
+2. **`404`** for a method that is not listed for a path that is — `POST /`, `HEAD /`,
+   `DELETE /aboard.json`.
+3. **`403 forbidden`** for a `GET` of a path outside the static allow-list — anything
+   that is not `app.css`, `aboard.html`, or under `assets/`, `views/`, `lib/` or
+   `test/`. The last table row serves the embedded tree, and it serves only those; a
+   name outside them is refused rather than looked up, so the refusal says nothing
+   about what the tree does or does not contain.
+4. **`404`** for a `GET` of a path that is inside the allow-list and holds no file —
+   `/views/nosuchview.js`.
+
+Steps 3 and 4 are the pair worth remembering: `/nope.js` is `403` and
+`/views/nope.js` is `404`, and the reference said `404` for both until 2026-08-26.
 
 ### Who is allowed to ask
 
@@ -180,9 +196,11 @@ a global, and the `aboard.*` bridge. `<id>` may be a compound `<tab>/<block>` pa
 resolves to an `html` block inside a `stack` tab and serves that block's own html, data
 and title — with a byte-identical CSP.
 
-Response headers: the sandbox CSP (`connect-src 'none'`, `frame-ancestors` listing
-`'self'` plus VS Code's webview origins), `Cache-Control: no-store`,
-`X-Content-Type-Options: nosniff`. A wrong path is answered with a message naming what
+Response headers: the sandbox CSP (`sandbox allow-scripts`, `connect-src 'none'`,
+`frame-ancestors` listing `'self'` plus VS Code's webview origins),
+`Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. The `sandbox` directive
+keeps the opaque origin when the document is fetched **standalone** rather than framed;
+`connect-src 'none'` is the containment. A wrong path is answered with a message naming what
 was wrong rather than a blank `404`. See
 [why html tabs are sandboxed](../explanation/why-html-tabs-are-sandboxed.md).
 

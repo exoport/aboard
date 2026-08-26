@@ -339,15 +339,35 @@ await new Promise((r) => setTimeout(r, 2500));
   log.push(`undeclared controls rendered: ${undeclared.length ? undeclared.join(' ') : 'none'}`);
   log.push(`declared controls rendered: ${document.querySelectorAll('[data-gesture]').length}`);
 }
-log.push(`mermaid svg rendered: ${document.querySelectorAll('[data-view="diagram"] svg').length}`);
-log.push(`dag svg nodes: ${document.querySelectorAll('[data-view="dag"] .node-box').length}`);
-log.push(`kanban cards: ${document.querySelectorAll('[data-view="kanban"] .card').length}`);
-log.push(`form inputs: ${document.querySelectorAll('[data-view="form"] input, [data-view="form"] select, [data-view="form"] textarea').length}`);
-log.push(`markup overlay: ${document.querySelectorAll('[data-view="markup"] svg').length}`);
-log.push(`chat composer: ${document.querySelectorAll('[data-view="chat"] textarea').length}`);
-log.push(`notes textarea: ${document.querySelectorAll('[data-view="notes"] textarea').length}`);
-log.push(`html sandboxed frames: ${document.querySelectorAll('[data-view="html"] iframe[sandbox]').length}`);
-log.push(`stack blocks mounted: ${document.querySelectorAll('[data-view="stack"] .block').length}`);
+// Render counts, COMPARED rather than logged.
+//
+// These nine lines used to print a number and nothing read it: the consumer only
+// failed on THREW / MISSING EXPORT / ERROR / REJECTION, so `mermaid svg
+// rendered: 0` printed `ok` beside every other row. Reproduced with a
+// deliberately broken renderer, which the suite passed.
+//
+// A THRESHOLD, not an exact count, and deliberately: the numbers come from the
+// board this suite is aimed at, so an exact table would fail the moment somebody
+// added a card. What is being asserted is "this renderer produced its
+// characteristic output at all", and 0-versus-1 is the whole distance between a
+// renderer that works and one that mounted an empty box. `COUNT-LOW` is the
+// token the consumer's failure regex catches — a word, so a grep for it finds
+// this table.
+const COUNTS = [
+  ['mermaid svg rendered', '[data-view="diagram"] svg', 1],
+  ['dag svg nodes', '[data-view="dag"] .node-box', 1],
+  ['kanban cards', '[data-view="kanban"] .card', 1],
+  ['form inputs', '[data-view="form"] input, [data-view="form"] select, [data-view="form"] textarea', 1],
+  ['markup overlay', '[data-view="markup"] svg', 1],
+  ['chat composer', '[data-view="chat"] textarea', 1],
+  ['notes textarea', '[data-view="notes"] textarea', 1],
+  ['html sandboxed frames', '[data-view="html"] iframe[sandbox]', 1],
+  ['stack blocks mounted', '[data-view="stack"] .block', 1],
+];
+for (const [label, selector, want] of COUNTS) {
+  const got = document.querySelectorAll(selector).length;
+  log.push(`${label}: got ${got} want >= ${want}${got >= want ? '' : ' COUNT-LOW'}`);
+}
 
 out.textContent = 'SMOKE_RESULT ' + JSON.stringify(log);
 </script>

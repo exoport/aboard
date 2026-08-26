@@ -2,6 +2,7 @@ package aboard
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -403,6 +404,116 @@ func TestRecipesReadmeIsNotARecipe(t *testing.T) {
 	for _, r := range found {
 		if strings.EqualFold(r.Name, "README") {
 			t.Errorf("README.md was read as a recipe (%s)", r.Path)
+		}
+	}
+}
+
+// One file nobody can read is not a reason to report that the project has no
+// recipes. `readRecipeFS` returned an error for it, which aborted the WHOLE
+// discovery — every tier, the nine built-ins included — so a dangling symlink
+// or a chmod 000 in `.aboard/recipes/` took `aboard recipes list` down to a bare
+// error message while the recipes the agent needed sat compiled into the binary
+// it was running.
+func TestDiscoverySurvivesAnUnreadableRecipe(t *testing.T) {
+	root := Root(t.TempDir())
+	dir := root.RecipesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	good := filepath.Join(dir, "usable.md")
+	if err := os.WriteFile(good, []byte("---\nname: usable\ndescription: a recipe that reads\nwhen_to_use: whenever\n---\n\nBody.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A DANGLING SYMLINK: fs.ReadDir lists it, fs.ReadFile fails on it. The
+	// unreadable case that needs no root and no special filesystem.
+	if err := os.Symlink(filepath.Join(dir, "nothing-here.md"), filepath.Join(dir, "dangling.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := DiscoverRecipes(root)
+	if err != nil {
+		t.Fatalf("one unreadable file aborted discovery: %v", err)
+	}
+
+	broken := recipeByName(t, found, "dangling")
+	if broken.Valid() {
+		t.Error("the dangling recipe was reported as valid")
+	}
+	if !strings.Contains(broken.Err, "cannot be read") {
+		t.Errorf("the reason does not say what is wrong: %q", broken.Err)
+	}
+	if r := recipeByName(t, found, "usable"); !r.Valid() {
+		t.Errorf("the readable recipe beside it was lost: %q", r.Err)
+	}
+	// And the built-ins, which have nothing to do with this project's directory,
+	// are still there. That is the half the abort was really costing.
+	if r := recipeByName(t, found, "apply-a-write"); !r.Valid() {
+		t.Error("a built-in recipe was lost to an unreadable project file")
+	}
+	if !strings.Contains(RecipeListHuman(found), "INVALID") {
+		t.Error("the human listing does not mark the unreadable row")
+	}
+}
+
+// A recipe directory is FLAT, and a subdirectory of one used to be dropped
+// without a word — while the how-to told the reader that a recipe missing from
+// the listing must have failed frontmatter validation. That sentence sent them
+// to debug the wrong file, which is worse than saying nothing.
+//
+// Reported rather than recursed: the precedence order is four fixed tiers, and
+// nesting would add a fifth axis with no rule for what shadows what.
+func TestANestedRecipeDirectoryIsReportedNotDropped(t *testing.T) {
+	root := Root(t.TempDir())
+	dir := root.RecipesDir()
+	if err := os.MkdirAll(filepath.Join(dir, "team"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte("---\nname: nested\ndescription: a recipe someone filed away\nwhen_to_use: never, it is not loaded\n---\n\nBody.\n")
+	if err := os.WriteFile(filepath.Join(dir, "team", "nested.md"), body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := DiscoverRecipes(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The recipe itself is not loaded — that is the behaviour, not the bug.
+	for i := range found {
+		if found[i].Name == "nested" && found[i].Valid() {
+			t.Error("a recipe in a subdirectory was loaded; discovery is meant to be flat")
+		}
+	}
+	// But the directory is on the listing, saying why.
+	row := recipeByName(t, found, "team")
+	if row.Valid() {
+		t.Fatal("the subdirectory was reported as a usable recipe")
+	}
+	for _, want := range []string{"flat", "directory"} {
+		if !strings.Contains(row.Err, want) {
+			t.Errorf("the reason does not mention %q: %q", want, row.Err)
+		}
+	}
+}
+
+// An unrelated directory sitting in a recipes tier stays quiet: reporting every
+// stray directory is the noise that teaches people to ignore the INVALID marker.
+func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
+	root := Root(t.TempDir())
+	dir := root.RecipesDir()
+	if err := os.MkdirAll(filepath.Join(dir, "notes", "deeper"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes", "scratch.txt"), []byte("not a recipe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := DiscoverRecipes(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range found {
+		if found[i].Name == "notes" {
+			t.Errorf("a directory holding no recipes was reported: %q", found[i].Err)
 		}
 	}
 }

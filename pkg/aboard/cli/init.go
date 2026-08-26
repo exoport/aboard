@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/exoport/aboard/pkg/aboard"
@@ -56,7 +57,16 @@ over a conversation that was never theirs.`,
 				Example:   example,
 				Gitignore: gitignore,
 			})
+			// A failure AFTER something was created still reports what exists.
+			// `init --gitignore` failing at its last step used to print total
+			// failure over a board that had just been written, so the corrected
+			// retry then exited 1 with "a board already exists" — the tool
+			// contradicting itself across two runs. The exit status still says it
+			// failed, because something the user asked for did not happen.
 			if err != nil {
+				if len(res.Created) > 0 {
+					_ = renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res) })
+				}
 				return err
 			}
 			return renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res) })
@@ -72,18 +82,33 @@ over a conversation that was never theirs.`,
 // printed whether or not --gitignore was passed: a project that does not commit
 // its board is the default posture, and a reader who has to be told twice is a
 // reader who committed one.
+//
+// It is now also printed on a PARTIAL failure, which is why the board's own line
+// is conditional. `res.StateFile` is the path Init INTENDED, filled in long
+// before anything is written; printing "created <it>" unconditionally would have
+// announced a board that does not exist to a reader whose next line is an error
+// saying so — the same self-contradiction the partial result was added to end,
+// moved one step earlier. Only what is actually in res.Created is claimed.
 func initHuman(res aboard.InitResult) string {
 	var b strings.Builder
+	made := slices.Contains(res.Created, res.StateFile)
 	what := "empty board"
 	if res.Seeded {
 		what = fmt.Sprintf("example board, %d tabs", res.Tabs)
 	}
-	fmt.Fprintf(&b, "created %s (%s)\n", res.StateFile, what)
+	if made {
+		fmt.Fprintf(&b, "created %s (%s)\n", res.StateFile, what)
+	} else if len(res.Created) > 0 {
+		fmt.Fprintf(&b, "the board itself was NOT created; what exists so far:\n")
+	}
 	for _, p := range res.Created {
 		if p == res.StateFile {
 			continue
 		}
 		fmt.Fprintf(&b, "  %s\n", p)
+	}
+	if !made {
+		return b.String()
 	}
 
 	switch res.GitignoreState {
@@ -91,6 +116,11 @@ func initHuman(res aboard.InitResult) string {
 		fmt.Fprintf(&b, "added %s to %s\n", res.GitignoreLine, res.GitignoreFile)
 	case aboard.GitignorePresent:
 		fmt.Fprintf(&b, "%s already ignores %s\n", res.GitignoreFile, res.GitignoreLine)
+	case aboard.GitignoreFailed:
+		// The board is there; the one thing still owed is named, because the
+		// reader's next move is to add the line by hand and not to start over.
+		fmt.Fprintf(&b, "\ncould NOT write %s — add this line to it yourself:\n  %s\n",
+			res.GitignoreFile, res.GitignoreLine)
 	default:
 		fmt.Fprintf(&b, "\nadd this to .gitignore (or re-run with --gitignore):\n  %s\n", res.GitignoreLine)
 	}

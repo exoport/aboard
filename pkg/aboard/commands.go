@@ -54,12 +54,20 @@ type Exit struct {
 }
 
 // Command is one subcommand of the board CLI.
+//
+// Subcommands is the same shape one level down. It exists because `recipes` is
+// a group whose real surface — `recipes list --output-format`, `recipes show
+// --template` — sat one level below anything the manifest or the parity test
+// looked at, so a flag could be added to either with the suite green and
+// capsHash unmoved. A tree that stops at depth one is a declaration that lies
+// about a tree.
 type Command struct {
-	Name  string `json:"name"`
-	Args  string `json:"args,omitempty"`
-	Doc   string `json:"doc"`
-	Flags []Flag `json:"flags,omitempty"`
-	Exits []Exit `json:"exits,omitempty"`
+	Name        string    `json:"name"`
+	Args        string    `json:"args,omitempty"`
+	Doc         string    `json:"doc"`
+	Flags       []Flag    `json:"flags,omitempty"`
+	Exits       []Exit    `json:"exits,omitempty"`
+	Subcommands []Command `json:"subcommands,omitempty"`
 }
 
 // RootFlags are the flags on the root command itself, inherited by every
@@ -81,8 +89,21 @@ func commonExits() []Exit {
 	}
 }
 
-// Commands is the declared command table. Order is the order `aboard --help`
-// lists them, which is why it is a slice: it is read by a human top to bottom.
+// Commands is the declared command table. It is a slice because its ORDER is part
+// of the surface: it is the order the capability manifest reports and the order
+// the generated skill reference prints, which is what a reader goes through top
+// to bottom — most-used first, rather than alphabetically.
+//
+// It is NOT the order `aboard --help` prints, and the comment here used to say it
+// was. Cobra sorts its command list alphabetically, and the switch for that
+// (`cobra.EnableCommandSorting`) is a PACKAGE-LEVEL variable — so setting it
+// would reorder the commands of any host that mounts this tree, which is the
+// package-level cobra state this library exists without (see aboard.go). A
+// cosmetic ordering is not worth reaching into a host's own help output, so the
+// claim was corrected rather than made true.
+//
+// Reordering this slice therefore moves capsHash, which is correct: the manifest
+// reports it.
 func Commands() []Command {
 	return []Command{
 		{
@@ -194,6 +215,33 @@ func Commands() []Command {
 				{Code: ExitOK, Meaning: "printed"},
 				{Code: ExitFailed, Meaning: "no such recipe, or the recipe has no template"},
 				{Code: ExitUsage, Meaning: "an unknown output format"},
+			},
+			Subcommands: []Command{
+				{
+					Name: "list",
+					Doc:  "list every recipe available in this project, and where each came from",
+					Flags: []Flag{
+						{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+					},
+					Exits: []Exit{
+						{Code: ExitOK, Meaning: "printed"},
+						{Code: ExitFailed, Meaning: "the recipe directories could not be read"},
+						{Code: ExitUsage, Meaning: "an unknown output format"},
+					},
+				},
+				{
+					Name: "show",
+					Args: "<name>",
+					Doc:  "print one recipe's body, or just its tab skeleton",
+					Flags: []Flag{
+						{Name: "template", Type: "bool", Def: "false", Doc: "print only the recipe's JSON tab skeleton"},
+					},
+					Exits: []Exit{
+						{Code: ExitOK, Meaning: "printed"},
+						{Code: ExitFailed, Meaning: "no such recipe, it does not parse, or it has no template"},
+						{Code: ExitUsage, Meaning: "a missing or extra argument"},
+					},
+				},
 			},
 		},
 		{

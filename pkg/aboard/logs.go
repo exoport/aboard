@@ -50,16 +50,16 @@ func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
 	path, ok := s.logPath(tab)
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "chunk too large"})
+		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "chunk too large"})
 		return
 	}
 	if len(body) == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": 0})
+		s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": 0})
 		return
 	}
 
@@ -67,7 +67,7 @@ func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	defer logMu.Unlock()
 
 	if err := os.MkdirAll(s.root.LogsDir(), 0o755); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the log directory"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the log directory"})
 		return
 	}
 	if info, err := os.Stat(path); err == nil && info.Size()+int64(len(body)) > logMaxBytes {
@@ -75,25 +75,25 @@ func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open the log"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open the log"})
 		return
 	}
 	defer func() { _ = f.Close() }()
 	if _, err := f.Write(body); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot append"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot append"})
 		return
 	}
 	if body[len(body)-1] != '\n' {
 		_, _ = f.Write([]byte{'\n'})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": len(body)})
+	s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": len(body)})
 }
 
 func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
 	path, ok := s.logPath(tab)
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
 		return
 	}
 	tail := logTailLines
@@ -105,7 +105,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 
 	f, err := os.Open(path)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"lines": []string{}, "size": 0, "missing": true})
+		s.writeJSON(w, http.StatusOK, map[string]any{"lines": []string{}, "size": 0, "missing": true})
 		return
 	}
 	defer func() { _ = f.Close() }()
@@ -123,7 +123,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 	if info, err := f.Stat(); err == nil {
 		size = info.Size()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"lines": lines, "size": size})
+	s.writeJSON(w, http.StatusOK, map[string]any{"lines": lines, "size": size})
 }
 
 // Log streams stdin into a tab's log, a line at a time, so a long-running

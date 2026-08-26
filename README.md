@@ -38,8 +38,11 @@ With a Go toolchain (1.26 or later):
 go install github.com/exoport/aboard/cmd/aboard@latest
 ```
 
-The binary lands at `$(go env GOPATH)/bin/aboard`. A `go install` build reports
-`Version=dev` from `aboard version`, since it is built without goreleaser's ldflags.
+The binary lands at `$(go env GOPATH)/bin/aboard`. It reports the module version
+it was installed at — `aboard version` prints `0.1.0` for `@v0.1.0`, and a
+VCS-derived pseudo-version like `0.0.0-20260826031230-f67e682b8f8a` for `@latest` on
+an untagged commit. Only a binary built with no module and no VCS information at
+all calls itself `dev`.
 
 Or take the release archive for your platform:
 

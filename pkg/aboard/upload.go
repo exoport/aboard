@@ -84,36 +84,36 @@ func sniffUpload(body []byte) (ext, mime string, ok bool) {
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, uploadMaxBytes))
 	if err != nil {
-		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
+		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
 			"error": fmt.Sprintf("image is larger than %d MiB", uploadMaxBytes>>20),
 		})
 		return
 	}
 	if len(body) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "empty body"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "empty body"})
 		return
 	}
 
 	ext, mime, ok := sniffUpload(body)
 	if !ok {
-		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
+		s.writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
 			"error": "not a png, jpeg, gif or webp (checked against the bytes, not the name)",
 		})
 		return
 	}
 
 	if err := os.MkdirAll(s.root.UploadsDir(), 0o755); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the uploads directory"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the uploads directory"})
 		return
 	}
 
 	name := fmt.Sprintf("%s-%s.%s", time.Now().UTC().Format("20060102-150405"), slugUpload(r.URL.Query().Get("name")), ext)
 	if err := os.WriteFile(s.root.UploadFile(name), body, 0o644); err != nil { //nolint:gosec // 0o644 is the board's repo-wide file-mode policy; see the note in init.go
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot write the file"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot write the file"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	s.writeJSON(w, http.StatusOK, map[string]any{
 		"url":   uploadDir + "/" + name,
 		"bytes": len(body),
 		"type":  mime,
@@ -177,7 +177,7 @@ func (s *server) serveUpload(w http.ResponseWriter, rest string) {
 func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 	entries, err := os.ReadDir(s.root.UploadsDir())
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"files": []any{}})
+		s.writeJSON(w, http.StatusOK, map[string]any{"files": []any{}})
 		return
 	}
 	files := []map[string]any{}
@@ -195,5 +195,5 @@ func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 			"at":    info.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+	s.writeJSON(w, http.StatusOK, map[string]any{"files": files})
 }

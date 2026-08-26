@@ -97,20 +97,51 @@ func (j *journal) rotateLocked() {
 	_ = os.Rename(j.path, j.path+".1")
 }
 
-// tail returns the last `limit` entries, oldest first. Reads the whole file: at
-// the rotation cap this is a few MB, and a journal viewer asks for it once.
+// tail returns the last `limit` entries, oldest first, across the kept
+// generations.
+//
+// It read only journal.jsonl, so the whole point of keeping a generation was
+// lost: the instant the file rotated, `aboard journal --limit 40` on a board
+// that had just written its first entry showed ONE line and the other forty
+// sat readable in journal.jsonl.1 with nothing willing to open them. Rotation
+// existed to bound the file, not to make history disappear at 16 MiB.
+//
+// Oldest generation first, so the concatenation is in time order and the
+// existing "keep the last `limit`" trim still means what it says. Reads the
+// whole of both: at the cap that is ~32 MB worst case, and a journal viewer
+// asks once.
 func (j *journal) tail(limit int) []json.RawMessage {
 	j.mu.Lock()
 	path := j.path
 	j.mu.Unlock()
 
+	// Oldest kept generation first, then the live file.
+	paths := make([]string, 0, journalKeep+1)
+	for i := journalKeep; i >= 1; i-- {
+		paths = append(paths, fmt.Sprintf("%s.%d", path, i))
+	}
+	paths = append(paths, path)
+
+	out := make([]json.RawMessage, 0, limit)
+	for _, p := range paths {
+		out = appendJournalLines(out, p, limit)
+	}
+	return out
+}
+
+// appendJournalLines reads one generation onto `out`, keeping at most `limit`.
+// A missing file is not an error: journal.jsonl.1 does not exist until the first
+// rotation, which is the normal case for the life of most boards.
+func appendJournalLines(out []json.RawMessage, path string, limit int) []json.RawMessage {
 	f, err := os.Open(path)
 	if err != nil {
-		return []json.RawMessage{}
+		return out
 	}
 	defer func() { _ = f.Close() }()
 
-	out := make([]json.RawMessage, 0, limit)
+	// 8 MiB, not maxJournalLine (4 MiB): unifying them would SHRINK this reader,
+	// and a scanner that hits its cap stops silently. Whatever is already on disk
+	// stays readable.
 	scan := bufio.NewScanner(f)
 	scan.Buffer(make([]byte, 0, 64<<10), 8<<20)
 	for scan.Scan() {

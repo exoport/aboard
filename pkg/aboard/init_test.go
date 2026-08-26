@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -353,3 +354,63 @@ func idNumber(id string) int {
 	}
 	return n
 }
+
+// `init --gitignore` failing at its LAST step reported total failure over a
+// board it had just written — so the reader deleted nothing, re-ran the
+// corrected command, and got "a board already exists at …". The tool
+// contradicted itself across two runs, and the second message was the one that
+// looked authoritative.
+//
+// The exit status still says it failed: something the user asked for did not
+// happen. What changes is that the result names what DOES exist.
+func TestInitReportsWhatItCreatedWhenGitignoreFails(t *testing.T) {
+	dir := t.TempDir()
+	// A .gitignore that cannot be written: a DIRECTORY where the file goes.
+	// Portable, and it needs no uid games.
+	if err := os.MkdirAll(filepath.Join(dir, ".gitignore"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := Init(InitConfig{Dir: dir, Gitignore: true})
+	if err == nil {
+		t.Fatal("writing .gitignore over a directory succeeded")
+	}
+	if res.StateFile == "" {
+		t.Fatal("the result names no state file, so the caller cannot say what exists")
+	}
+	if _, statErr := os.Stat(res.StateFile); statErr != nil {
+		t.Fatalf("the board was not created after all: %v", statErr)
+	}
+	if len(res.Created) == 0 {
+		t.Error("Created is empty though the board, its directories and its README were written")
+	}
+	if !containsPath(res.Created, res.StateFile) {
+		t.Errorf("Created does not list the state file: %v", res.Created)
+	}
+	if res.GitignoreState != GitignoreFailed {
+		t.Errorf("GitignoreState = %q, want %q — a structured caller cannot tell this from a success",
+			res.GitignoreState, GitignoreFailed)
+	}
+	// And the message says what is still owed, so the reader adds one line
+	// rather than starting over.
+	for _, want := range []string{res.StateFile, GitignoreLine} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+}
+
+// The happy path is unchanged, which is the half a partial-result refactor puts
+// at risk.
+func TestInitStillReportsCleanlyWhenGitignoreWorks(t *testing.T) {
+	dir := t.TempDir()
+	res, err := Init(InitConfig{Dir: dir, Gitignore: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GitignoreState != GitignoreAdded {
+		t.Errorf("GitignoreState = %q, want %q", res.GitignoreState, GitignoreAdded)
+	}
+}
+
+func containsPath(list []string, want string) bool { return slices.Contains(list, want) }

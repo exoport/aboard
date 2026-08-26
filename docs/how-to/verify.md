@@ -75,10 +75,19 @@ identity:
 
 ## Verifying a `go install` build
 
-There is nothing to verify: `go install` builds from source you can read, and the Go
-module proxy's checksum database covers the module contents. What it does not give you
-is a release identity — such a binary reports `Version=dev` from `aboard version`. If
-you need a named, signed artifact, take the release archive.
+There is no signature to check, and there does not need to be one: `go install` builds
+from source you can read, and the Go module proxy's checksum database (`sum.golang.org`)
+covers the module contents, so a tampered module fails to build rather than installing
+quietly.
+
+What it does not give you is **provenance for a binary**. A `go install
+github.com/exoport/aboard/cmd/aboard@v0.1.0` binary reports `0.1.0` from `aboard
+version` — the same string a release archive reports — so the version is no help in
+telling the two apart. **Only the signature distinguishes them**: the archive's
+`cosign` certificate names the workflow, the repo and the tag that produced those exact
+bytes, and nothing about a locally compiled binary can. Take the release archive when
+you need to prove where a binary came from; `go install` is for when you are content to
+trust the toolchain that built it.
 
 ## Why the local snapshot build is unsigned
 

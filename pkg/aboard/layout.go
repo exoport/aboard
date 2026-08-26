@@ -218,6 +218,51 @@ func (r Root) SkillReference() string {
 	return filepath.Join(string(r), ".claude", "skills", "aboard", "references", "reference.generated.md")
 }
 
+// RecipesReadme is the note `aboard init` leaves in the recipes directory saying
+// what it is for. Here rather than in init.go because it is a path under
+// `.aboard/`, and those are joined in one file.
+func (r Root) RecipesReadme() string { return filepath.Join(r.RecipesDir(), "README.md") }
+
+// RecipeFile names one recipe inside a recipe directory. The directory is the
+// caller's — three of the four tiers are not under `.aboard/` at all — but the
+// join still belongs here, so nothing outside this file has to reason about
+// separators.
+func RecipeFile(dir, name string) string { return filepath.Join(dir, name) }
+
+// TempFileBeside names a scratch file in the same directory as `path`, for a
+// write-then-rename. Same directory because rename is only atomic within one
+// filesystem, and named here because it is a path join.
+//
+// The name carries the pid and a random number: os.CreateTemp would do this too,
+// but it also hard-codes mode 0600, which is the wrong mode for the board (see
+// writeAtomic).
+func TempFileBeside(path string, n uint64) string {
+	return filepath.Join(filepath.Dir(path), fmt.Sprintf(".aboard-%d-%d.json", os.Getpid(), n))
+}
+
+// DevWebFile names one file inside a --dev web tree. The tree need not be under
+// the project root at all — it is whatever --dev-dir points at — so Root has no
+// opinion about it, but the join is still a join.
+func DevWebFile(dir, name string) string { return filepath.Join(dir, name) }
+
+// LegacyBoardDir is the spike's state directory in a given checkout — `.board/`,
+// which aboard never reads. Named here so the cobra tree does not join a path
+// either: `no filepath.Join outside layout.go` is a rule about the whole tree,
+// and one exemption in another package is how a rule stops being one.
+func LegacyBoardDir(start string) string { return filepath.Join(start, legacyDirName) }
+
+// legacyDirName is the spike's directory name. A constant beside DirName so the
+// two are read together.
+const legacyDirName = ".board"
+
+// SkillRecipes is the skill's generated recipe index — the built-in recipes as a
+// markdown table, emitted by `recipes index`. The third generated artifact, and
+// the one that had no drift gate: adding or renaming a built-in left this file
+// describing a set that no longer existed, with nothing failing anywhere.
+func (r Root) SkillRecipes() string {
+	return filepath.Join(string(r), ".claude", "skills", "aboard", "references", "recipes.md")
+}
+
 // GeneratedControls is the control module the renderers import, emitted from the
 // same manifest. A development path: it exists in aboard's own checkout and
 // nowhere else, and the staleness check treats its absence as "nothing to check"

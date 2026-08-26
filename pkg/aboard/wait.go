@@ -321,7 +321,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	}
 	pred, err := parsePredicate(forWhat)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 			"got":   forWhat,
 		})
@@ -332,7 +332,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("timeout"); raw != "" {
 		secs, err := strconv.Atoi(raw)
 		if err != nil || secs <= 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timeout must be whole seconds"})
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timeout must be whole seconds"})
 			return
 		}
 		timeout = time.Duration(secs) * time.Second
@@ -366,9 +366,9 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case ev := <-wt.ch:
-		writeJSON(w, http.StatusOK, ev)
+		s.writeJSON(w, http.StatusOK, ev)
 	case <-timer.C:
-		writeJSON(w, http.StatusOK, pokeEvent{Event: "timeout"})
+		s.writeJSON(w, http.StatusOK, pokeEvent{Event: "timeout"})
 	case <-r.Context().Done():
 		// The caller hung up. Nothing to write; the deferred remove drops the
 		// waiter and the button's count falls on its own.
@@ -392,7 +392,7 @@ func (s *server) handlePoke(w http.ResponseWriter, r *http.Request) {
 
 	released, ev := s.waits.release(body.By, body.Note)
 	s.broadcastWaiters()
-	writeJSON(w, http.StatusOK, map[string]any{
+	s.writeJSON(w, http.StatusOK, map[string]any{
 		"ok":       true,
 		"released": released,
 		"at":       ev.At,
@@ -402,7 +402,7 @@ func (s *server) handlePoke(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleWaiters(w http.ResponseWriter, _ *http.Request) {
 	list, last := s.waits.snapshot()
-	writeJSON(w, http.StatusOK, map[string]any{
+	s.writeJSON(w, http.StatusOK, map[string]any{
 		"waiting":  len(list),
 		"waiters":  list,
 		"lastPoke": last,

@@ -1,10 +1,19 @@
-# The embedded UI is hashed, not just served. `capsHash` is computed over the
-# bytes of pkg/aboard/web/views/*.spec.json, and `aboard capabilities --check`
-# fails when the committed skill reference was generated for a different hash.
-# A line-ending conversion (a Windows autocrlf checkout rewriting LF -> CRLF)
-# changes those bytes, so the check would fail on the Windows CI runner for a
-# tree that is byte-identical to the one that passed on Linux. Treat the whole
-# embedded tree as text git must not touch.
+# `-text` on the embedded tree is LOAD-BEARING, and the reason is worth stating
+# exactly, because the obvious version of it names a command CI never runs.
+#
+# `capsHash` is computed over the BYTES of pkg/aboard/web/views/*.spec.json. A
+# Windows checkout with `core.autocrlf=true` rewrites LF -> CRLF, so those bytes
+# differ from the ones on Linux and the hash moves — for a tree that is otherwise
+# identical.
+#
+# What actually FAILS is `make test` on the windows-latest runner in ci.yml, not
+# `aboard capabilities --check` (no CI job runs that): the Go suite compares the
+# COMMITTED views/controls.generated.js against a copy generated in memory from
+# the specs, and the in-memory one has LF endings whatever the checkout did. Same
+# shape for the recipe-index gate. `aboard capabilities --check` would fail too,
+# on a developer's Windows machine, which is the case that has no CI to catch it.
+#
+# So: treat the whole embedded tree as text git must not touch.
 pkg/aboard/web/** -text
 
 # Same reason, plus these are fixtures compared byte-for-byte: the recipe
@@ -16,5 +25,8 @@ pkg/aboard/example/** -text
 
 # The generated files are written by the binary and diffed against the working
 # tree by `make caps`. A rewritten line ending would show as a diff on every
-# checkout on the other platform.
+# checkout on the other platform. Both of them: the reference is
+# `*.generated.md`, and the recipe index is `recipes.md`, which does not carry
+# the word "generated" in its name and was therefore not covered here.
 .claude/skills/aboard/references/*.generated.md -text
+.claude/skills/aboard/references/recipes.md -text

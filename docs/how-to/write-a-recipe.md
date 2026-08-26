@@ -143,6 +143,11 @@ If `list` does not show it, the frontmatter did not validate — the row is not 
 dropped, so read what `list` says about it. The usual cause is `name` disagreeing with
 the filename.
 
+**A recipe directory is flat.** `.aboard/recipes/team/my-move.md` is not loaded: the
+precedence order is four fixed tiers, and nesting would add a fifth axis with no rule
+for what shadows what. A subdirectory holding `.md` files is listed as an invalid entry
+saying so, rather than dropped — the same rule as every other file it cannot use.
+
 ## How an agent reaches it
 
 Two routes, and they are the same route:

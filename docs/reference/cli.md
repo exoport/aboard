@@ -445,6 +445,8 @@ other command finds the board and how restart.sh stops the right process.
 --base-path serves the whole board under a URL prefix, for putting it behind a
 reverse proxy or inside another tool's routing. The prefix is injected into the
 shell, so every fetch, the SSE stream and an html tab's iframe all build from it.
+Because it is injected, it is also validated: one or more /segments of letters,
+digits, dot, underscore, tilde or hyphen. Anything else is a usage error.
 
 Examples:
 

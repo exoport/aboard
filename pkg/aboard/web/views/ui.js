@@ -556,7 +556,12 @@ export function mountUi(root, ctx) {
           // Board-local links (#tab=…) and http(s) only: a data-only description
           // must not be able to produce a javascript: link.
           if (/^(#|\/|https?:\/\/)/.test(href)) {
-            a.href = href;
+            // A ROOT-ABSOLUTE href is a board path and has to carry the base
+            // prefix, exactly as `image` above already does. It was assigned
+            // verbatim, so under `serve --base-path /brd` every /uploads/… link a
+            // ui tab drew went to the server root and 404'd — the one component
+            // whose whole job is to point somewhere, pointing nowhere.
+            a.href = href.startsWith('/') ? api(href) : href;
             if (/^https?:/.test(href)) { a.target = '_blank'; a.rel = 'noreferrer noopener'; }
           }
           a.textContent = asText(node.label) || href;

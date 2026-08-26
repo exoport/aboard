@@ -144,7 +144,14 @@ const TYPES = {
   form:    { label: 'Form',     mount: mountForm,    blurb: 'Ask for structured answers: sliders, choices, text.',
              init: () => ({ title: 'Questions', intro: '', fields: [] }) },
   markup:  { label: 'Markup',   mount: mountMarkup,  blurb: 'An image with a drawing layer. Point at part of a screenshot.',
-             init: () => ({ image: 'assets/mock-screen.svg', caption: 'Draw on this to point at something.', regions: [], strokes: [] }) },
+             // The SPEC's shape, not the spike's. This returned
+             // { image, caption, regions, strokes } — four keys markup.js has
+             // never read — so a markup tab made in the browser started with a
+             // state no renderer touches and no image, while the generated
+             // reference told every agent the starting shape was
+             // { layout, images }. The renderer repairs it on mount, which is
+             // exactly why nobody noticed.
+             init: () => ({ layout: 'stacked', images: [] }) },
   chat:    { label: 'Chat',     mount: mountChat,    blurb: 'A work channel. Agents coordinate here where you can watch and interject.',
              init: () => ({ messages: [] }) },
   notes:   { label: 'Notes',    mount: mountNotes,   blurb: 'Free text. The escape hatch for anything the other types do not fit.',

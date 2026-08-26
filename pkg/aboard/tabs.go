@@ -100,7 +100,13 @@ func isHuman(by string) bool { return by == actorHuman }
 
 // reconcileTabs applies the guarantees above and stamps `touched` on every
 // tab an agent actually changed. Returns the tab list to persist.
-func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
+//
+// `logger` is an argument rather than a package-level log.Printf because a host
+// embedding this tree chooses where its logs go (Options.Logger, see aboard.go),
+// and the one line this function writes — an agent tried to delete a tab — is
+// exactly the line that host wants. Options.Log() is never nil, so callers pass
+// it straight through.
+func reconcileTabs(currentRaw, incomingRaw []byte, by string, logger *log.Logger) ([]tab, error) {
 	var cur, inc board
 	if len(currentRaw) > 0 {
 		if err := json.Unmarshal(currentRaw, &cur); err != nil {
@@ -142,6 +148,13 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 			} else {
 				t.Touched.By, t.Touched.At = by, now
 			}
+			// Guarantee 4 applies to a tab being CREATED as much as to one being
+			// changed, and this branch skipped it entirely: a new tab could
+			// arrive carrying `seen: {"human": "…"}`, so the dot the human relies
+			// on to notice it was pre-extinguished by the write that made it.
+			// There is no previous map by definition, which is exactly why the
+			// filter has to run rather than be short-circuited.
+			t.Seen = mergeSeen(nil, t.Seen, by)
 			out = append(out, t)
 			continue
 		}
@@ -219,7 +232,7 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 		if gone.Touched == nil {
 			gone.Touched = &touchMark{By: by, At: now, Note: "removal requested"}
 		}
-		log.Printf("tab %q (%s) was dropped by %s — restored as a removal request", gone.Name, id, by)
+		logger.Printf("tab %q (%s) was dropped by %s — restored as a removal request", gone.Name, id, by)
 		out = insertAt(out, gone, indexOf(order, id))
 	}
 
@@ -346,8 +359,17 @@ func restoreAcks(v any, acks map[string]map[string]any) bool {
 // mergeSeen keeps every actor's read stamp except the writer's own, which the
 // writer is free to move. A write that drops the map entirely (most writes, since
 // most agents never touch it) leaves everyone's stamps intact.
+//
+// The filter runs whether or not there was a previous map, and that is the fix:
+// it used to short-circuit on `len(prev) == 0` and hand back whatever the write
+// contained, so on a tab that had never carried a `seen` map an agent could
+// PLANT one — `{"human": "<a time in the future>"}` — and the human's "changed
+// since I last looked" dot would never light for that tab again. Guarantee 4 is
+// "an agent may set its own key and nobody else's", and a guarantee with a
+// condition on it is not one. Tab CREATION had the same hole from the other
+// direction and is now routed through here too.
 func mergeSeen(prev, next map[string]string, by string) map[string]string {
-	if len(prev) == 0 {
+	if len(prev) == 0 && len(next) == 0 {
 		return next
 	}
 	out := map[string]string{}

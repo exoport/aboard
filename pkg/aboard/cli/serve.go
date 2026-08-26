@@ -27,10 +27,19 @@ other command finds the board and how restart.sh stops the right process.
 
 --base-path serves the whole board under a URL prefix, for putting it behind a
 reverse proxy or inside another tool's routing. The prefix is injected into the
-shell, so every fetch, the SSE stream and an html tab's iframe all build from it.`,
+shell, so every fetch, the SSE stream and an html tab's iframe all build from it.
+Because it is injected, it is also validated: one or more /segments of letters,
+digits, dot, underscore, tilde or hyphen. Anything else is a usage error.`,
 		Args:    cobra.NoArgs,
 		Example: "  aboard serve\n  aboard serve --dev\n  aboard serve --base-path /aboard",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Before the root is even resolved: the declared table says exit 2
+			// means "detected before anything was contacted", and a base path
+			// that cannot be one is exactly that. Serve refuses it again for an
+			// embedder that never came through this command.
+			if err := aboard.ValidateBasePath(basePath); err != nil {
+				return usageErr(err)
+			}
 			root, err := projectRoot(cmd)
 			if err != nil {
 				return err

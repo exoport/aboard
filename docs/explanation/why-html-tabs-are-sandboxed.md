@@ -13,6 +13,16 @@ The blast radius is closed off two ways rather than assumed away.
 `sandbox="allow-scripts"` and **without** `allow-same-origin`. Its origin is opaque, so it
 cannot reach into the board shell's DOM, its storage, or its cookies.
 
+The same policy is *also* stated in the response's own CSP, as a leading
+`sandbox allow-scripts` directive, so it holds when the document is fetched
+**standalone**. That case is not hypothetical — `/tab/<id>/html` is how a screenshot is
+taken and how a human checks a widget without the shell around it — and until
+2026-08-26 the page ran on the board's real origin there, with the board's storage
+reachable from it. The two sandboxes intersect rather than conflict, so nothing changes
+for a framed tab. Call it what it is: **hardening, not an egress fix.**
+`sandbox allow-scripts` blocks popups and form submission but *not* a page navigating
+itself, so it closes none of the gap that `connect-src` closes.
+
 **2. No network egress.** The response carries a Content-Security-Policy whose
 `connect-src` is `'none'`. `fetch`, `XHR`, `WebSocket` and form posts are all refused.
 Inline script and inline style are allowed — that is the entire point of the type — and

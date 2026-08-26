@@ -547,3 +547,8 @@ The web tree is compiled into the binary, so after editing anything under
 from disk while iterating. After editing a `*.spec.json` or a built-in recipe, run
 `make caps` and commit what it writes: it regenerates the control module, the
 generated reference and the recipe index, then asserts they match.
+
+All of that is **aboard's own checkout**. In a project that only copied this
+skill there is no Makefile and no spec to edit; the generated references are
+refreshed straight from the binary — see the block under
+[SKILL.md](../SKILL.md)'s `aboard status` paragraph.

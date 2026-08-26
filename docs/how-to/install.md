@@ -14,9 +14,12 @@ go install github.com/exoport/aboard/cmd/aboard@latest
 The binary lands at `$(go env GOPATH)/bin/aboard`; make sure that directory is on your
 `PATH`. Needs Go 1.26 or later.
 
-A `go install` build reports `Version=dev` from `aboard version` rather than a release
-tag — it is built from source without goreleaser's ldflags. Pin a release instead with
-`@v0.1.0` if you want a version you can name.
+A `go install` build carries no goreleaser ldflags, so its identity comes from Go's own
+build information: `aboard version` reports the **module version** it was installed at.
+`@v0.1.0` reports `0.1.0`; `@latest` on an untagged commit reports a pseudo-version like
+`0.0.0-20260826031230-f67e682b8f8a`, which names the commit but is not a release. Pin a tag
+with `@v0.1.0` if you want a version you can say out loud. `dev` is what a binary with no
+module and no VCS information at all reports — you will not normally see it.
 
 ## Option 2 — Release archive
 

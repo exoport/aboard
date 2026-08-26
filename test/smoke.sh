@@ -90,9 +90,13 @@ BROWSER=""
 for c in chromium chromium-browser google-chrome google-chrome-stable; do
   if command -v "$c" >/dev/null 2>&1; then BROWSER="$c"; break; fi
 done
+# No browser is not a pass. This exited 0 with nothing tested at all, which is
+# the same failure as a skipped section and worse: it skipped the WHOLE suite.
+# Exit 2 rather than 1 — it is the environment that is wrong, not the code.
 if [ -z "$BROWSER" ]; then
-  echo "no chromium-family browser found; skipping" >&2
-  exit 0
+  echo "no chromium-family browser found — the browser suite cannot run" >&2
+  echo "install chromium, or set BROWSER=<path> if it is somewhere unusual" >&2
+  exit 2
 fi
 
 if ! curl -sf -o /dev/null "$BASE/aboard.json"; then
@@ -106,6 +110,19 @@ check() {
 }
 check_ge() {
   if [ "$2" -ge "$3" ] 2>/dev/null; then echo "  ok   $1 ($2 >= $3)"; else echo "  FAIL $1 (want >= $3, got $2)"; FAILED=1; fi
+}
+# A section that cannot run is a FAILURE, not a pass.
+#
+# Ten sections used to print "skip ..." and let the suite exit 0, so a third
+# of the checks could be absent with nothing to say so. Two ways that happened
+# and both were reachable: no ./aboard binary (`make clean`, `make install`,
+# `make dev` — now impossible, `make smoke` depends on `build`), and a board
+# without the tab the section needs. The second is the reason this reports what
+# it NEEDED rather than merely that it was skipped: the fix is almost always
+# `aboard init --example` in the scratch project, and the message has to say so.
+need() {
+  echo "  FAIL $1 — this section did not run. It needs: $2"
+  FAILED=1
 }
 waiting_count() {
   curl -s "$BASE/waiters" | node -e "
@@ -121,6 +138,10 @@ echo "== views mount and render =="
 SMOKE_LOG=$(timeout 90 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
   --virtual-time-budget=10000 --dump-dom "$BASE/test/smoke.html" 2>/dev/null \
   | grep -o 'SMOKE_RESULT.*' | head -1 | sed 's/SMOKE_RESULT //' || true)
+# `|| FAILED=1` rather than letting `set -e` abort here: a single COUNT-LOW used
+# to take the other ninety checks down with it, so the log stopped at the first
+# problem and the run had to be repeated to find the second. Fail the suite at
+# the end, having run all of it.
 printf '%s' "$SMOKE_LOG" \
   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
       let lines;
@@ -128,12 +149,15 @@ printf '%s' "$SMOKE_LOG" \
       catch { console.error('  could not parse smoke output'); process.exit(1); }
       let bad = 0;
       for (const l of lines) {
-        const fail = /THREW|MISSING EXPORT|ERROR|REJECTION/.test(l);
+        // COUNT-LOW is emitted by smoke.html's threshold table: a renderer that
+        // mounted but produced none of its characteristic output. Nine such probes
+        // printed a bare number and were read by nothing until 2026-08-26.
+        const fail = /THREW|MISSING EXPORT|ERROR|REJECTION|COUNT-LOW/.test(l);
         if (fail) bad++;
         console.log((fail ? '  FAIL ' : '  ok   ') + l);
       }
       process.exit(bad ? 1 : 0);
-    })"
+    })" || FAILED=1
 
 # "It mounted" is not "it rendered the right text". kv resolved its pairs array
 # but not the values inside it, so a {bind} came out as "[object Object]" — a
@@ -231,7 +255,7 @@ if [ -x ./aboard ]; then
   check "a gate export carries the reasons" \
     "$(ab export decisions 2>/dev/null | grep -c 'Why:' | awk '{print ($1>0)?"yes":"no"}')" "yes"
 else
-  echo "  skip no ./aboard binary — run make build"
+  need "a tab exports as markdown and CSV" "the ./aboard binary — run make build"
 fi
 
 echo "== html tabs can be framed where the board is actually used =="
@@ -254,6 +278,11 @@ if [ -n "$HTML_TAB" ]; then
   case "$CSP" in
     *"connect-src 'none'"*) echo "  ok   html tab still has no network egress" ;;
     *) echo "  FAIL connect-src is no longer 'none' — that IS the containment"; FAILED=1 ;;
+  esac
+  # The opaque origin, for a STANDALONE fetch — which is exactly what this curl is.
+  case "$CSP" in
+    *"sandbox allow-scripts"*) echo "  ok   a standalone html tab is still sandboxed" ;;
+    *) echo "  FAIL the CSP lost its sandbox directive ($CSP)"; FAILED=1 ;;
   esac
 
   # A literal <\/script> in a widget silently swallows the whole script: the
@@ -284,7 +313,7 @@ if [ -n "$HTML_TAB" ]; then
   done
   check "no pre-rename bridge name survives in the served frame" "${STALE:-none}" "none"
 else
-  echo "  skip no html tab on this board"
+  need "the html tab bridge and its containment" "an html tab on this board — aboard init --example"
 fi
 
 # An html block inside a stack asks for /tab/<tabId>/<blockId>/html, because that
@@ -327,7 +356,7 @@ if [ -n "$BLOCK_PATH" ]; then
   done
   check "a wrong block id says so instead of 404ing blankly" "${BAD:-none}" "none"
 else
-  echo "  skip no stack tab has an html block"
+  need "an html block inside a stack" "a stack tab with an html block — aboard init --example"
 fi
 
 echo "== the board describes itself (and the skill cannot silently disagree) =="
@@ -380,7 +409,40 @@ if [ -x ./aboard ]; then
         +(missingMount.length?', no mount for: '+missingMount:'')+')');
       if(!ok) process.exitCode=1;
     });
-  "
+  " || FAILED=1
+
+  # And the STARTING SHAPE must agree too, which nothing checked. `markup`'s
+  # TYPES.init returned { image, caption, regions, strokes } — four keys
+  # markup.js has never read — while its spec declared { layout, images } and the
+  # generated reference told every agent that was the starting shape. A tab made
+  # in the browser therefore began with a state no renderer touches; the renderer
+  # repaired it on mount, which is exactly why it survived.
+  #
+  # KEY SETS, not values: the spec's init is an illustration (html's body text,
+  # ui's example child), and asserting the prose would be asserting the wrong
+  # thing. Which keys a new tab starts with is the contract.
+  printf '%s' "$(./aboard capabilities 2>/dev/null)" | node -e "
+    const fs=require('fs'), vm=require('vm');
+    let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+      let declared={};
+      try { for(const t of (JSON.parse(d).types||[])) declared[t.type]=t.init||{}; } catch {}
+      const shell=fs.readFileSync(process.env.WEB+'/aboard.html','utf8');
+      const block=shell.slice(shell.indexOf('const TYPES = {'), shell.indexOf('const \$tabs'));
+      const bad=[];
+      for(const m of block.matchAll(/^\s{2}(\w+):\s*\{[\s\S]*?init:\s*\(\)\s*=>\s*\((\{[\s\S]*?\})\)\s*\}/gm)){
+        const type=m[1];
+        if(!(type in declared)) continue;
+        let got;
+        try { got=vm.runInNewContext('('+m[2]+')'); } catch(e) { bad.push(type+': unparseable init'); continue; }
+        const a=Object.keys(got).sort().join(','), b=Object.keys(declared[type]).sort().join(',');
+        if(a!==b) bad.push(type+': shell {'+a+'} vs spec {'+b+'}');
+      }
+      const ok=bad.length===0;
+      console.log((ok?'  ok   ':'  FAIL ')+'every TYPES.init starts with the keys its spec declares'
+        +(ok?'':' — '+bad.join('; ')));
+      if(!ok) process.exitCode=1;
+    });
+  " || FAILED=1
 
   # Controls: the declaration and the code must not drift apart, checked in BOTH
   # directions and neither of them by matching prose.
@@ -453,7 +515,7 @@ if [ -x ./aboard ]; then
   done
   check "the advertised routes answer" "${MISSING:-none}" "none"
 else
-  echo "  skip no ./aboard binary — run make build"
+  need "the board describes itself: spec/mount parity, capsHash, the controls module" "the ./aboard binary — run make build"
 fi
 
 echo "== the agent hears about a bad write, not the human =="
@@ -572,7 +634,7 @@ if [ -x ./aboard ]; then
     check "a version the board does not write is stamped, not stored" "$STAMPED" "3"
   fi
 else
-  echo "  skip no ./aboard binary — run make build"
+  need "the agent hears about a bad write" "the ./aboard binary — run make build"
 fi
 
 echo "== journal, watch, predicates, uploads =="
@@ -638,10 +700,10 @@ if [ -x ./aboard ]; then
           process.stdout.write(ok ? 'yes' : 'no');
         })" "$PROBE_ID")" "yes"
   else
-    echo "  skip the board has no tabs to rename"
+    need "the journal records a rename" "at least one tab on this board — aboard init --example"
   fi
 else
-  echo "  skip no ./aboard binary — run make build"
+  need "journal, watch, predicates and uploads" "the ./aboard binary — run make build"
 fi
 
 check_ge "the journal records writes" "$(jfield)" "1"
@@ -712,7 +774,7 @@ if [ -n "$ACT_TAB" ]; then
     });
   "
 else
-  echo "  skip no tab declares state.actions"
+  need "the action strip records an intent" "a tab declaring state.actions — aboard init --example"
 fi
 
 echo "== the stream tells a page which code it should be running =="
@@ -760,19 +822,25 @@ if [ -n "$RO_TAB" ]; then
       const noDrag = !/draggable=\"true\"/.test(d);
       const noEdit = !/contenteditable=\"true\"/i.test(d);
       // In read-only mode a card's foot holds its id chip and nothing else, so
-      // one chip per card means no controls were rendered. An EMPTY board is a
-      // legitimate state — the queue is empty when nothing is outstanding — and
-      // requiring cards > 0 made 'nothing to do' look like a failure.
+      // one chip per card means no controls were rendered.
+      //
+      // cards > 0 is REQUIRED, and that is the whole point of this line. The
+      // fixture shipped bb71 with nodes: [], so cards === chips === 0 and all
+      // three negatives were trivially true — a renderer patched to emit drag
+      // handles and editable titles passed this check. An empty queue is a
+      // legitimate state on a real board; it is not a legitimate state for the
+      // board this suite is aimed at, which is why the example fixture now
+      // carries three cards across its three columns.
       const bare = chips === cards;
-      const ok = badge && noDrag && noEdit && bare;
+      const ok = badge && noDrag && noEdit && bare && cards > 0;
       console.log((ok ? '  ok   ' : '  FAIL ') + 'read-only kanban: badge=' + badge +
         ' no-drag=' + noDrag + ' no-edit=' + noEdit + ' cards=' + cards + ' chips=' + chips +
-        (cards === 0 ? ' (empty queue, which is a valid state)' : ''));
+        (cards === 0 ? ' (no cards: the negatives below are vacuous — aboard init --example)' : ''));
       if (!ok) process.exitCode = 1;
     });
-  "
+  " || FAILED=1
 else
-  echo "  skip no read-only kanban on this board"
+  need "the read-only kanban" "a kanban with state.readOnly and cards — aboard init --example"
 fi
 
 echo "== notify channel: wait, waiters, poke =="
@@ -832,7 +900,7 @@ if [ -x ./aboard ]; then
   check "a poke releases everyone, so nobody is left waiting" "$(waiting_count)" "0"
   rm -f "$WAITLOG"
 else
-  echo "  skip no ./aboard binary — run make build for the `wait` end-to-end check"
+  need "the wait/waiters/poke round trip" "the ./aboard binary — run make build"
 fi
 
 # The button itself: assert the rendered control, not the source text that builds

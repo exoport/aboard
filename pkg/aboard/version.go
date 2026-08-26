@@ -57,26 +57,41 @@ type BuildIdentity struct {
 	GitCommit string `json:"gitCommit,omitempty"`
 }
 
-// Build resolves the identity in three steps, most authoritative first: the
-// linker stamps, then Go's own build info for THIS module, then "dev".
+// Build resolves the identity in four steps, most authoritative first: the
+// linker stamps, then Go's own build info for THIS module (VCS revision, then
+// module version), then "dev".
 //
 // Go stamps the VCS revision into a plain `go build`, so an unstamped local build
 // still reports the commit it came from, with "+dirty" when the tree had
-// uncommitted changes — which, on this project, it usually does.
+// uncommitted changes — which, on this project, it usually does. "dev" is what a
+// binary with NO build info at all reports, which is rarer than three of this
+// project's documents used to claim.
 func Build() BuildIdentity {
+	info, ok := debug.ReadBuildInfo()
+	return resolveBuild(Version, BuildDate, GitCommit, info, ok)
+}
+
+// resolveBuild is Build with its one input made an argument.
+//
+// Split out so the `go install module@version` case can be TESTED. It cannot be
+// tested through Build(): a `go test` binary carries no VCS settings and no
+// module version, so every unstamped path collapses to "dev" there — which is
+// exactly how three documents came to claim that a `go install` build reports
+// `dev`. It reports the module version (verified with a real file-proxy
+// `go install`: 0.1.0), or a VCS pseudo-version for a plain `go build`.
+func resolveBuild(version, buildDate, gitCommit string, info *debug.BuildInfo, ok bool) BuildIdentity {
 	// Placeholders are cleared FIRST, not tested for later. The Makefile stamps
 	// `dev` and `unknown` in a tree with no git, so those strings arrive through
 	// the same channel as real provenance — and a value only ever gets ONE chance
 	// to be filled in below. Leaving them in place is how `GitCommit: "unknown"`
 	// survived to be reported as a commit hash.
 	id := BuildIdentity{
-		Version:   realStamp(Version),
-		BuildDate: realStamp(BuildDate),
-		GitCommit: realStamp(GitCommit),
+		Version:   realStamp(version),
+		BuildDate: realStamp(buildDate),
+		GitCommit: realStamp(gitCommit),
 	}
 
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
+	if !ok || info == nil {
 		if id.Version == "" {
 			id.Version = devVersion
 		}

@@ -413,10 +413,32 @@
           "working",
           "done"
         ],
-        "nodes": [],
+        "nodes": [
+          {
+            "id": "bb194",
+            "order": 0,
+            "status": "backlog",
+            "title": "Screenshot the gate tab after a verdict",
+            "note": "Waiting on the human to record one. Nothing to do until then."
+          },
+          {
+            "id": "bb195",
+            "order": 0,
+            "status": "working",
+            "title": "Fold the export CSV columns into the reference",
+            "note": "agent-1 has this. The rows are right; the column headings are not."
+          },
+          {
+            "id": "bb196",
+            "order": 0,
+            "status": "done",
+            "title": "Rename the periwinkle token to --agent",
+            "note": "Shipped. A write naming the old word now warns instead of drawing nothing."
+          }
+        ],
         "readOnly": true
       },
-      "note": "Where work lands. Empty means nothing is outstanding."
+      "note": "Where work lands: agent-owned, read-only, so the human reads it and never has to tidy it. One card per column here to show the three states; an empty queue means nothing is outstanding."
     },
     {
       "id": "bb72",

@@ -18,7 +18,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -225,7 +224,7 @@ func projectRoot(cmd *cobra.Command) (aboard.Root, error) {
 // the name changed. Not a migration — nothing is read out of it — just a
 // sentence so the reader stops looking.
 func legacyBoardHint(start string) string {
-	if info, err := os.Stat(filepath.Join(start, ".board")); err == nil && info.IsDir() {
+	if info, err := os.Stat(aboard.LegacyBoardDir(start)); err == nil && info.IsDir() {
 		return " (this directory has a .board/ from the board spike — aboard keeps its state in " +
 			aboard.DirName + "/ and does not read the old one)"
 	}

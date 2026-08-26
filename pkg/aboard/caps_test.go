@@ -2,6 +2,9 @@ package aboard
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/exoport/aboard/pkg/aboard/web"
@@ -29,8 +32,15 @@ func TestCapsHashIsStable(t *testing.T) {
 }
 
 // The manifest describes the BOARD, not the process serving it, so a board
-// hosted by ape must hash identically to a standalone one. Asserted on the field
-// rather than trusted, because it is the reason the rename was ordered last.
+// hosted by ape must hash identically to a standalone one.
+//
+// This used to read `if m.App != AppName`, which is a constant compared to
+// itself: buildManifest takes no host, so the assertion held whatever anyone did
+// to the two host identities, and the property it named was never checked. What
+// makes it real is the three-way separation — the manifest's app name is
+// NEITHER host's invocation name, and the two hosts are distinct from each
+// other, so a future edit that made the manifest report its host has to break
+// one of these lines.
 func TestManifestAppIsHostIndependent(t *testing.T) {
 	m, err := buildManifest(web.FS)
 	if err != nil {
@@ -38,6 +48,33 @@ func TestManifestAppIsHostIndependent(t *testing.T) {
 	}
 	if m.App != AppName {
 		t.Fatalf("manifest app = %q, want %q", m.App, AppName)
+	}
+	if HostStandalone == HostApe {
+		t.Fatal("the two host identities are the same string; nothing below distinguishes them")
+	}
+	// `aboard` the app and `aboard` the standalone host spell the same, which is
+	// exactly the confusion this guards: the point is that ape's mount does NOT
+	// change the answer.
+	if m.App == HostApe {
+		t.Errorf("the manifest reports the host (%q) rather than the board", m.App)
+	}
+	// And the mechanism, asserted rather than described: NEITHER host's
+	// invocation name appears anywhere in the manifest the binary emits. Running
+	// Capabilities twice and comparing the two outputs would prove nothing —
+	// nothing in this package takes a host, so both runs are the same call — and
+	// a self-comparison dressed up as a two-host comparison is the same defect
+	// this test was fixed for.
+	var buf strings.Builder
+	if _, err := Capabilities(Root(t.TempDir()), web.FS, "json", "", false, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), HostApe) {
+		t.Errorf("the manifest mentions the host %q; it describes the board, not the process serving it", HostApe)
+	}
+	// The board's own name is in there, and it is not either host's by accident:
+	// it is AppName, which the assertions above pin against both hosts.
+	if !strings.Contains(buf.String(), `"app": "`+AppName+`"`) {
+		t.Errorf("the manifest does not report the app name %q", AppName)
 	}
 }
 
@@ -76,5 +113,134 @@ func TestManifestHasTypes(t *testing.T) {
 	}
 	if len(m.Commands) != len(Commands()) {
 		t.Fatalf("manifest carries %d commands, table declares %d", len(m.Commands), len(Commands()))
+	}
+}
+
+// The recipe index was the one `make caps` artifact with no drift gate. Renaming
+// or adding a built-in left `.claude/skills/aboard/references/recipes.md`
+// describing a set that no longer existed — a table naming a recipe that
+// `aboard recipes show` cannot find — and nothing failed anywhere: not the Go
+// suite, not the shell suite, not `capabilities --check`.
+//
+// It is checkable where the two others are not universally so, because it is
+// generated from the BUILT-IN recipes, which are compiled into the binary.
+func TestTheGeneratedRecipeIndexIsNotStale(t *testing.T) {
+	want, err := generatedRecipeIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := repoRoot(t)
+	got, err := os.ReadFile(root.SkillRecipes())
+	if err != nil {
+		t.Fatalf("reading the generated recipe index: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != strings.TrimSpace(want) {
+		t.Errorf("%s no longer matches the built-in recipes — run `make caps`", root.SkillRecipes())
+	}
+}
+
+// And `capabilities --check` sees it, which is what makes `make caps`'s last
+// line a gate rather than a formality.
+func TestCapabilitiesCheckCatchesRecipeIndexDrift(t *testing.T) {
+	root := Root(t.TempDir())
+	dir := filepath.Dir(root.SkillRecipes())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.SkillRecipes(), []byte("# recipes\n\nnothing like the real table\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out strings.Builder
+	code, err := Capabilities(root, web.FS, "json", "", true, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitFailed {
+		t.Errorf("exit %d, want %d — a drifted recipe index was not reported", code, ExitFailed)
+	}
+	if !strings.Contains(out.String(), "recipes.md") {
+		t.Errorf("the report does not name the stale file: %s", out.String())
+	}
+}
+
+// A project that copied the binary but not the skill has nothing to be stale,
+// exactly as for the reference. This is the case that made `--check` fail in a
+// bare project once already.
+func TestCapabilitiesCheckIsQuietWithNoSkillCopied(t *testing.T) {
+	var out strings.Builder
+	code, err := Capabilities(Root(t.TempDir()), web.FS, "json", "", true, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitOK {
+		t.Errorf("exit %d, want 0 — a missing skill is nothing to check", code)
+	}
+}
+
+// repoRoot is this checkout, reached from the package directory. The generated
+// skill files live in the repo and not in the embedded tree, so a test that
+// checks them has to say where the repo is.
+func repoRoot(t *testing.T) Root {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Root(abs)
+}
+
+// `--check` treats a MISSING generated file as "nothing to check". A file that
+// is PRESENT and unreadable is a different thing entirely, and answering
+// "current" for it is the one failure mode a gate must not have — it is exactly
+// the shape of the recipe-index hole this whole check was added to close.
+func TestCapabilitiesCheckDoesNotCallAnUnreadableFileCurrent(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file func(Root) string
+	}{
+		{"the controls module", Root.GeneratedControls},
+		{"the recipe index", Root.SkillRecipes},
+		{"the skill reference", Root.SkillReference},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := Root(t.TempDir())
+			// A DIRECTORY where the file goes: readable listing, unreadable file,
+			// and it needs no uid games.
+			if err := os.MkdirAll(tc.file(root), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			var out strings.Builder
+			code, err := Capabilities(root, web.FS, "json", "", true, &out)
+			if err == nil && code == ExitOK {
+				t.Errorf("%s was present and unreadable, and was reported as nothing to check: %s", tc.name, out.String())
+			}
+		})
+	}
+}
+
+// The stale messages are the ONLY instruction a reader in a project that copied
+// the skill and not the Makefile ever sees. `make caps` is a target in aboard's
+// own checkout; naming it alone was the false claim the review filed against
+// SKILL.md, and it lived in these two strings as well.
+func TestTheStaleMessagesNameARemedyThatRunsAnywhere(t *testing.T) {
+	root := Root(t.TempDir())
+	dir := filepath.Dir(root.SkillReference())
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.SkillReference(), []byte("# not the reference\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	code, err := Capabilities(root, web.FS, "json", "", true, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitFailed {
+		t.Fatalf("exit %d, want %d — a drifted reference was not reported", code, ExitFailed)
+	}
+	if !strings.Contains(out.String(), AppName+" capabilities --format md") {
+		t.Errorf("the stale message names no remedy that runs outside aboard's checkout:\n%s", out.String())
 	}
 }

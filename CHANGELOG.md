@@ -42,6 +42,46 @@
   re-marshals through its own structs on the first accepted write, so key order
   moves with nothing else, and comparing the text made a freshly initialised
   board treat the human's first concurrent edit as a collision.
+- **fix: a `--base-path` with a quote in it injected script into the shell.** The
+  prefix is spliced into `window.ABOARD_BASE = "…"`, so it is validated now —
+  `/segments` of letters, digits, dot, underscore, tilde or hyphen, refused as a
+  usage error from `serve` and again inside `Serve`.
+- **fix: the state file keeps mode 0644 through a write** (respecting the umask,
+  and preserving a mode its owner chose). `os.CreateTemp` creates at 0600 and the
+  rename carried it, so the board dropped out of reach of the other tools the
+  developer runs, on the server's first accepted write.
+- **fix: an agent cannot plant a `seen` stamp for somebody else** on a tab that
+  had none, or on a tab it is creating. Guarantee 4 had a condition on it.
+- **fix: `aboard journal` sees history across a rotation** — `tail` read only the
+  live file, so the kept generation was unreachable the instant it existed.
+- **fix: one unreadable or dangling recipe file no longer hides every recipe**,
+  the built-ins included. It is listed with its reason, like every other file
+  discovery cannot use. A recipe in a SUBDIRECTORY is reported too, rather than
+  silently dropped: recipe directories are flat.
+- **fix: `aboard init` reports what it created when `--gitignore` fails.** It
+  reported total failure over a board it had just written, so the corrected retry
+  then failed with "a board already exists". It also no longer announces a board
+  it failed to create: a partial run says what does exist and stops there.
+- **fix: a `ui` link with a root-absolute href honours `--base-path`.**
+- **fix: a new `markup` tab starts with the state its renderer reads.** The shell
+  seeded `{image, caption, regions, strokes}`; `markup.js` reads `{layout, images}`.
+- **fix: `POST /` no longer returns the board shell.** The shell is GET-only, which
+  is what the HTTP reference always claimed. The reference's refusal table is right
+  now too: an unmatched `GET` outside the static allow-list is `403`, not `404`, and
+  the four outcomes are listed in the order the server decides them.
+- **`aboard capabilities --check`'s stale messages name a remedy that runs anywhere.**
+  They said "run `make caps`" — a target in aboard's own checkout, which the projects
+  that copy the skill do not have. And the check no longer reports "nothing to check"
+  for a generated file that is present but unreadable.
+- **fix: engine logging goes through `Options.Logger` without exception** — a
+  dropped tab and an unserialisable reply went to the standard logger, where a
+  host embedding the tree could not redirect them.
+- **hardening: an `html` tab's CSP carries `sandbox allow-scripts`**, so the opaque
+  origin holds when the document is fetched standalone rather than framed.
+  `connect-src 'none'` is still the containment.
+- **`capsHash` moved `9facfc76` → `6ff337ed`**: the command table declares
+  subcommands, so `recipes list` and `recipes show` and their flags are part of the
+  described surface and appear in the generated reference.
 
 - **feat: aboard, ported from the `board` spike** — a single Go binary serving a
   shared visual board for a human and one or more agent sessions, with the whole

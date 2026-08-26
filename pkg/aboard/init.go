@@ -99,6 +99,10 @@ const (
 	GitignoreAdded    = "added"
 	GitignorePresent  = "present"
 	GitignoreNotAsked = "not-asked"
+	// GitignoreFailed: --gitignore was asked for and could not be done, AFTER the
+	// board was written. A structured caller needs to tell that from "not-asked",
+	// which is a success.
+	GitignoreFailed = "failed"
 )
 
 // Init creates a board root, or completes one that is missing its document.
@@ -155,31 +159,36 @@ func Init(cfg InitConfig) (InitResult, error) {
 		return InitResult{}, fmt.Errorf("a board already exists at %s — %s", res.StateFile, hint)
 	}
 
+	// From here on a failure returns the PARTIAL result rather than a zero one.
+	// `init --gitignore` failing at its last step reported total failure having
+	// already written the board, so the reader deleted nothing, re-ran, and got
+	// "a board already exists" — the tool having told them, twice, something that
+	// was not true. What was created is in res.Created; the caller prints it.
 	for _, d := range []string{root.Dir(), root.RunDir(), root.UploadsDir(), root.RecipesDir()} {
 		made, err := mkdirIfMissing(d)
 		if err != nil {
-			return InitResult{}, err
+			return res, err
 		}
 		if made {
 			res.Created = append(res.Created, d)
 		}
 	}
 
-	readme := filepath.Join(root.RecipesDir(), "README.md")
+	readme := root.RecipesReadme()
 	if _, err := os.Stat(readme); os.IsNotExist(err) {
 		if err := os.WriteFile(readme, []byte(recipesReadme), 0o644); err != nil { //nolint:gosec // see the file-mode note above
-			return InitResult{}, fmt.Errorf("writing %s: %w", readme, err)
+			return res, fmt.Errorf("writing %s: %w", readme, err)
 		}
 		res.Created = append(res.Created, readme)
 	}
 
 	doc, tabs, err := initialDocument(cfg.Example)
 	if err != nil {
-		return InitResult{}, err
+		return res, err
 	}
 	res.Tabs = tabs
 	if err := os.WriteFile(res.StateFile, doc, 0o644); err != nil { //nolint:gosec // see the file-mode note above
-		return InitResult{}, fmt.Errorf("writing %s: %w", res.StateFile, err)
+		return res, fmt.Errorf("writing %s: %w", res.StateFile, err)
 	}
 	res.Created = append(res.Created, res.StateFile)
 
@@ -187,7 +196,12 @@ func Init(cfg InitConfig) (InitResult, error) {
 		res.GitignoreFile = root.GitignoreFile()
 		state, err := ensureGitignore(res.GitignoreFile)
 		if err != nil {
-			return InitResult{}, err
+			// The board EXISTS. Say so, and say what is still owed — the one line
+			// the user has to add themselves — rather than reporting a failure
+			// whose only honest reading is "nothing happened".
+			res.GitignoreState = GitignoreFailed
+			return res, fmt.Errorf("%w — the board itself was created at %s; add %s to %s yourself",
+				err, res.StateFile, GitignoreLine, res.GitignoreFile)
 		}
 		res.GitignoreState = state
 	}

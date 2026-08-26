@@ -31,7 +31,7 @@ func applyTarget(t *testing.T) (Root, *submitted) {
 		body, _ := io.ReadAll(r.Body)
 		last.doc = map[string]any{}
 		_ = json.Unmarshal(body, &last.doc)
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": 9})
+		(&server{}).writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": 9})
 	}))
 	t.Cleanup(srv.Close)
 

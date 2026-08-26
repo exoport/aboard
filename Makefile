@@ -167,8 +167,13 @@ caps: build        ## Regenerate the generated controls module, skill reference 
 #
 #   aboard init --example --gitignore   # in /tmp/probe, once
 #   PROJECT=/tmp/probe make smoke       # server already serving that directory
+#
+# `smoke: build` because five of its sections used to degrade to a printed skip
+# when ./aboard was absent — reachable by `make clean`, `make install` (which
+# removes the binary) and `make dev` — and the suite still exited 0. Real spec
+# drift passed with no binary and failed with one.
 .PHONY: smoke
-smoke:             ## Headless browser suite against a RUNNING server (PROJECT=<dir>, required; local only).
+smoke: build       ## Headless browser suite against a RUNNING server (PROJECT=<dir>, required; local only).
 	PROJECT="$(PROJECT)" ./test/smoke.sh
 
 # SHOT_TABS is passed straight through: `make shot SHOT_TABS="bb133 bb22#help"`.

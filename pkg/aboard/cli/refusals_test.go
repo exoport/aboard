@@ -312,3 +312,36 @@ func keyDiff(a, b map[string]any) string {
 	}
 	return "yaml is missing " + strings.Join(missing, ",") + "; yaml has extra " + strings.Join(extra, ",")
 }
+
+// The partial-result change made `init` print what it created when a step fails.
+// That is right for the case it was built for — `--gitignore` failing over a
+// board that WAS written — and wrong for every earlier step, because
+// `res.StateFile` is the path Init intends and is filled in before anything is
+// written. Printing "created <it>" unconditionally announced a board that does
+// not exist, immediately above an error saying it does not, which is the same
+// self-contradiction across two lines instead of across two runs.
+func TestInitDoesNotClaimABoardItFailedToCreate(t *testing.T) {
+	dir := t.TempDir()
+	// A FILE where .aboard/uploads/ has to be a directory: the mkdir fails after
+	// .aboard/ itself was made, and before the document is written.
+	if err := os.MkdirAll(filepath.Join(dir, ".aboard"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".aboard", "uploads"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, _ := exitOf(t, "--cwd", dir, "init")
+	if code == aboard.ExitOK {
+		t.Fatal("init succeeded with a file where uploads/ has to be a directory")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".aboard", "aboard.json")); err == nil {
+		t.Fatal("the board was written after all; this test is asserting the wrong case")
+	}
+	if strings.Contains(out, "created "+filepath.Join(dir, ".aboard", "aboard.json")) {
+		t.Errorf("init announced a board that does not exist:\n%s", out)
+	}
+	if strings.Contains(out, "start it with") {
+		t.Errorf("init told the reader to serve a board that was never created:\n%s", out)
+	}
+}

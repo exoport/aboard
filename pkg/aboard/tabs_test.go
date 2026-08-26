@@ -2,6 +2,8 @@ package aboard
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 	"strings"
 	"testing"
 )
@@ -44,7 +46,7 @@ func TestAgentCannotClearAnotherActorsSeen(t *testing.T) {
 		State: json.RawMessage(`{"text":"two"}`),
 	})
 
-	out, err := reconcileTabs(current, incoming, "agent-1")
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +69,7 @@ func TestAgentMaySetOnlyItsOwnSeen(t *testing.T) {
 		Seen:  map[string]string{"agent-1": "T-mine", "human": "FORGED", "agent-2": "FORGED"},
 	})
 
-	out, err := reconcileTabs(current, incoming, "agent-1")
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +93,7 @@ func TestHumanWriteIsTakenAsIs(t *testing.T) {
 	)
 	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
 
-	out, err := reconcileTabs(current, incoming, "human")
+	out, err := reconcileTabs(current, incoming, "human", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +121,7 @@ func TestNoteOnlyEditIsMarkedAndJournaled(t *testing.T) {
 		Note:  "something an agent decided instead",
 	})
 
-	out, err := reconcileTabs(current, incoming, "agent-1")
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +160,7 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 		current := boardJSON(t, base)
 		incoming := boardJSON(t, tc.mutate(base))
 
-		out, err := reconcileTabs(current, incoming, "agent-1")
+		out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 		if err != nil {
 			t.Fatalf("%s: %v", tc.what, err)
 		}
@@ -183,7 +185,7 @@ func TestUnknownActorGetsAgentPowersOnly(t *testing.T) {
 	// A write that drops one tab and clears the other's marker.
 	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
 
-	out, err := reconcileTabs(current, incoming, "unknown")
+	out, err := reconcileTabs(current, incoming, "unknown", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +212,7 @@ func TestAgentCannotUnreadAChatMessage(t *testing.T) {
 		State: json.RawMessage(`{"messages":[{"id":"bb2","text":"hi"}]}`),
 	})
 
-	out, err := reconcileTabs(current, incoming, "agent-1")
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +240,7 @@ func TestAgentWriteCannotClearAPendingRemoval(t *testing.T) {
 		State: json.RawMessage(`{"text":"two"}`),
 	})
 
-	out, err := reconcileTabs(current, incoming, "agent-1")
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,11 +262,100 @@ func TestAHumanWriteAnswersAPendingRemoval(t *testing.T) {
 	})
 	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
 
-	out, err := reconcileTabs(current, incoming, actorHuman)
+	out, err := reconcileTabs(current, incoming, actorHuman, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tabByID(t, out, "bb1").PendingRemoval != nil {
 		t.Error("the human declined the removal and the request came back anyway")
+	}
+}
+
+// testLogger swallows the "a tab was dropped" line these tests deliberately
+// provoke. Passing log.Default() would print it into the suite's output on every
+// guarantee-1 case, which reads as a failure.
+func testLogger() *log.Logger { return log.New(io.Discard, "", 0) }
+
+// Guarantee 4 had a condition on it, and a guarantee with a condition is not
+// one. `mergeSeen` short-circuited when the tab carried no previous `seen` map
+// and returned the write's own map verbatim — so on a tab that had never been
+// stamped, an agent could PLANT a stamp for the human and the "changed since I
+// last looked" dot would never light for that tab again.
+func TestAnAgentCannotPlantASeenStampOnATabThatHadNone(t *testing.T) {
+	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{},
+		"seen":{"human":"2099-01-01T00:00:00.000Z","agent-1":"2026-08-26T00:00:00.000Z"}}]}`)
+
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := out[0].Seen
+	if _, planted := seen["human"]; planted {
+		t.Error("an agent planted a seen stamp for the human on a tab that had none")
+	}
+	if seen["agent-1"] != "2026-08-26T00:00:00.000Z" {
+		t.Errorf("the writer's own stamp was lost: %v", seen)
+	}
+}
+
+// The same hole from the other direction: tab CREATION skipped the filter
+// altogether, so a new tab could arrive with the human's dot already put out by
+// the very write that made it.
+func TestANewTabCannotArriveWithSomebodyElsesSeenStamp(t *testing.T) {
+	current := []byte(`{"tabs":[]}`)
+	incoming := []byte(`{"tabs":[{"id":"bb9","name":"Questions","type":"form","state":{},
+		"seen":{"human":"2099-01-01T00:00:00.000Z","agent-2":"2099-01-01T00:00:00.000Z","agent-1":"2026-08-26T00:00:00.000Z"}}]}`)
+
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("want one tab, got %d", len(out))
+	}
+	for _, actor := range []string{"human", "agent-2"} {
+		if _, planted := out[0].Seen[actor]; planted {
+			t.Errorf("a new tab arrived carrying a seen stamp for %q", actor)
+		}
+	}
+	if out[0].Seen["agent-1"] != "2026-08-26T00:00:00.000Z" {
+		t.Errorf("the creator's own stamp was dropped: %v", out[0].Seen)
+	}
+	// And it is still marked as new, which is the other half of the human
+	// noticing it.
+	if out[0].Touched == nil {
+		t.Error("a new tab arrived with no touch marker")
+	}
+}
+
+// The common case must not regress: a write that never mentions `seen` at all —
+// which is most writes — leaves every stamp exactly as it was.
+func TestAWriteThatIgnoresSeenLeavesEveryStampAlone(t *testing.T) {
+	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{},
+		"seen":{"human":"2026-08-01T00:00:00.000Z","agent-2":"2026-08-02T00:00:00.000Z"}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
+
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out[0].Seen["human"] != "2026-08-01T00:00:00.000Z" || out[0].Seen["agent-2"] != "2026-08-02T00:00:00.000Z" {
+		t.Errorf("a write that never touched seen changed it: %v", out[0].Seen)
+	}
+}
+
+// And a tab that genuinely has no stamps still writes none, rather than an empty
+// object nobody asked for.
+func TestATabWithNoSeenStaysWithoutOne(t *testing.T) {
+	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
+
+	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out[0].Seen) != 0 {
+		t.Errorf("an empty seen map was invented: %v", out[0].Seen)
 	}
 }

@@ -80,9 +80,22 @@ aboard journal --limit 20  # who changed what recently, including other sessions
 `aboard status` reports: running (use it), a stale record, or nothing (start it
 with `aboard serve`). It also prints a `caps` line — the hash of what this board
 can actually do. **If it warns that the skill reference was generated for a
-different hash, this skill is describing a board that no longer exists**: run
-`aboard capabilities dag` (or any type) for the truth, and `make caps` to
-regenerate [references/reference.generated.md](references/reference.generated.md).
+different hash, this skill is describing a board that no longer exists**: ask
+`aboard capabilities dag` (or any type) for the truth rather than reading the
+stale file, then regenerate the two generated references with the binary you
+have:
+
+```bash
+aboard capabilities --format md > .claude/skills/aboard/references/reference.generated.md
+aboard recipes index                > .claude/skills/aboard/references/recipes.md
+aboard capabilities --check   # 0 when they match the binary
+```
+
+Those three run anywhere the binary does. **`make caps` is not the remedy here**:
+it is a target in aboard's own checkout, and this skill is copied into projects
+that have no such Makefile — which is most of them. Use `make caps` only when you
+are working in the aboard repository itself, where it also rebuilds the control
+module the renderers import.
 
 `aboard capabilities` needs no running server and answers on a fresh checkout, in
 a project that never copied this skill. **Do not reconstruct the surface from
