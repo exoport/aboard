@@ -190,6 +190,10 @@ available targets; `test/shot.sh` exited 0 when every screenshot FAILED; and the
 baseline test asserted two wall-clock millisecond comparisons measured inside a shared machine's
 Chromium, which flaked once and would again.
 
+### 10a. The make targets are the gate  ☑ `b1dc79c` (added 2026-08-26 on the human's instruction: pinned tools updated, the pre-commit hook and CI run `make lint`/`make fmt-check`)
+
+### 10b. The human's answers to four §10 questions  ☐ (brief `brief-11-human-decisions.md`: `bb372` dropped; example prose says "the agent"; notify acknowledgement is a toast; `JournalEntry.Before` carries the whole tab)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **`bb372` `boards`**: the proposed `~/.aboard/known-roots.json` registry written by `aboard serve`
