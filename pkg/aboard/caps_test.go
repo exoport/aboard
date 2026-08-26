@@ -244,3 +244,66 @@ func TestTheStaleMessagesNameARemedyThatRunsAnywhere(t *testing.T) {
 		t.Errorf("the stale message names no remedy that runs outside aboard's checkout:\n%s", out.String())
 	}
 }
+
+// The committed skill reference must still match the binary.
+//
+// `capabilities --check` says so, `make caps` runs it, and test/smoke.sh used to
+// run it too — but smoke.sh never ran in CI and `make caps` is something a
+// person remembers. This is the same assertion as a Go test, which is the only
+// place it runs on every push. It is the sibling of
+// TestTheGeneratedRecipeIndexIsNotStale and of the cli package's
+// TestTheGeneratedCLIReferenceIsNotStale; the three generated files now fail the
+// same way.
+func TestTheGeneratedSkillReferenceIsNotStale(t *testing.T) {
+	root := repoRoot(t)
+	var out strings.Builder
+	code, err := Capabilities(root, web.FS, "json", "", true, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitOK {
+		t.Errorf("`aboard capabilities --check` exits %d in this checkout — run `make caps` and commit what it writes:\n%s",
+			code, out.String())
+	}
+}
+
+// One type can be asked for on its own — the cheap per-type answer a resuming
+// session actually uses. And an unknown one is refused rather than answered with
+// the whole manifest, which is what would happen if the filter silently fell
+// through.
+func TestOneTypeCanBeAskedForOnItsOwn(t *testing.T) {
+	var out strings.Builder
+	code, err := Capabilities(Root(t.TempDir()), web.FS, "json", "dag", false, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+	var m struct {
+		Types []struct {
+			Type string `json:"type"`
+		} `json:"types"`
+		Commands []any `json:"commands"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &m); err != nil {
+		t.Fatalf("unreadable manifest: %v", err)
+	}
+	if len(m.Types) != 1 || m.Types[0].Type != "dag" {
+		t.Errorf("asking for one type answered with %d: %+v", len(m.Types), m.Types)
+	}
+	// The command table and the routes are dropped for a single type: the point
+	// of the per-type form is that it is short.
+	if len(m.Commands) != 0 {
+		t.Errorf("the per-type manifest still carries the whole command table")
+	}
+
+	var bad strings.Builder
+	code, err = Capabilities(Root(t.TempDir()), web.FS, "json", "definitely-not-a-type", false, &bad)
+	if err == nil {
+		t.Error("an unknown type was answered instead of refused")
+	}
+	if code != ExitUsage {
+		t.Errorf("an unknown type exits %d, want %d", code, ExitUsage)
+	}
+}

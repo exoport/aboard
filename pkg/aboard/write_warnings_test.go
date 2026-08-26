@@ -152,3 +152,34 @@ func containsSubstring(haystack []string, needle string) bool {
 	}
 	return false
 }
+
+// The tenth detector, and the one whose absence was worst: a `version` no
+// renderer accepts blanks the WHOLE board rather than one component.
+//
+// It happened. `docs`-era schema.md showed `"version": 2` for a schema that had
+// been 3 since v3 shipped, an agent copied the example it was reading, `apply`
+// wrote it through, and aboard.html blanked the board in front of the human one
+// round trip after being told it was ready. The write is STAMPED rather than
+// refused — the content was fine, and failing a good write over a field the
+// caller should not set is the worse trade — plus this warning, so the stale
+// source still gets fixed. Both halves matter: the stamp saves the human, the
+// warning reaches the agent.
+func TestAStaleSchemaVersionIsReportedToTheWriter(t *testing.T) {
+	got := wrongVersion([]byte(`{"version":2,"tabs":[]}`))
+	if !strings.Contains(got, `says "version": 2`) {
+		t.Errorf("a stale version was not reported: %q", got)
+	}
+	if !strings.Contains(got, "stamped") {
+		t.Errorf("the warning does not say the server fixed it anyway: %q", got)
+	}
+
+	// Absent is not wrong: omitting `version` is the CORRECT thing for a caller
+	// to do, since the server owns the field. Warning about it would be the noise
+	// that teaches people to skip stderr.
+	if got := wrongVersion([]byte(`{"tabs":[]}`)); got != "" {
+		t.Errorf("omitting version was reported as a mistake: %q", got)
+	}
+	if got := wrongVersion([]byte(`{"version":3,"tabs":[]}`)); got != "" {
+		t.Errorf("the current version was reported as stale: %q", got)
+	}
+}

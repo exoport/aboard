@@ -100,3 +100,64 @@ func TestAWrongHTMLPathSaysWhatWasWrong(t *testing.T) {
 		}
 	}
 }
+
+// The bridge is a NAME contract, in both directions: the widget calls
+// `aboard.set()` as a bare global and the parent matches on the `__aboard`
+// envelope property. Rename one half and the frame posts messages the parent
+// silently drops — no error anywhere, and a widget that looks like it works.
+//
+// Checked here rather than only in the shell suite because the shell suite is
+// being retired, and because a rename is exactly the kind of change that passes
+// every other test in this file.
+func TestTheServedFrameCarriesTheBridgeUnderItsAboardNames(t *testing.T) {
+	srv := testServer(t, htmlTabBoard)
+	rec := httptest.NewRecorder()
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	body := rec.Body.String()
+
+	for _, want := range []string{"window.aboard", "__ABOARD_DATA__"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the served frame does not define %s — the bridge is renamed or gone", want)
+		}
+	}
+	// The pre-rename spellings. `claude` survives in views/chat.js deliberately,
+	// because that is an ACTOR name in old transcripts; these are API names and
+	// there is nothing to be compatible with.
+	for _, gone := range []string{"window.board", "__BOARD_DATA__", "__board"} {
+		if strings.Contains(body, gone) {
+			t.Errorf("the served frame still carries the pre-rename name %s", gone)
+		}
+	}
+}
+
+// A literal `<\/script>` written into raw HTML swallows the rest of the
+// document: the escape is only correct inside a JS string literal, and in markup
+// the browser never sees the closing tag at all. The static content still
+// renders, nothing runs, and it reads as a styling problem. Cost an hour once.
+func TestTheServedFrameTerminatesItsScript(t *testing.T) {
+	srv := testServer(t, htmlTabBoard)
+	rec := httptest.NewRecorder()
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	body := rec.Body.String()
+
+	if !strings.Contains(body, "</script>") {
+		t.Error("the served frame has no real </script> — everything after the bridge is inside a script that never closes")
+	}
+	if strings.Contains(body, `<\/script>`) {
+		t.Error(`the served frame contains a literal <\/script>, which the browser does not read as a closing tag`)
+	}
+}
+
+// A block path must serve the BLOCK's document, not the parent's. A stack has no
+// state.html of its own, so reading the wrong level yields the empty-tab
+// placeholder — which looks like an empty widget rather than a wrong lookup, and
+// is precisely how the blank-frame defect presented.
+func TestABlockPathDoesNotServeTheEmptyTabPlaceholder(t *testing.T) {
+	srv := testServer(t, htmlTabBoard)
+
+	rec := httptest.NewRecorder()
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb2/bb3/html", http.NoBody), "bb2/bb3")
+	if strings.Contains(rec.Body.String(), "An agent sets") {
+		t.Error("the block path served the empty-tab placeholder instead of the block's own html")
+	}
+}

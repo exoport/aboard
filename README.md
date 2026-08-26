@@ -216,12 +216,12 @@ make ci-local      # the full pre-push gate
 CI runs build + test on both Linux and Windows, and lint + govulncheck on Linux, for
 every push to `main` and every pull request. Windows is not a formality: root discovery
 walks upward through path separators and the state file is written through a
-same-directory temp + rename, and both behave differently there. The browser suite (`make smoke`) and the screenshot tool
-(`make shot`) are **local only** — they drive a real headless chromium against a running
-server, so a CI run could only skip them, and a gate that always skips reads as a pass.
-Both take `PROJECT=<dir>` to say which board to run against. The suite writes to that
-board, so it insists on being told: give it a scratch project
-(`aboard init --example --gitignore`) rather than your own.
+same-directory temp + rename, and both behave differently there. The browser suite (`make e2e`) and the screenshot tool
+(`make shot`) are **local only** — they drive a real Chromium, so a CI run could only
+skip them, and a gate that always skips reads as a pass. `make e2e` needs nothing
+started and no project of its own: it seeds a temporary board and serves the engine
+in-process, so it cannot reach a board you care about. `make shot` needs a running
+server and takes `PROJECT=<dir>` to say which one, defaulting to this checkout.
 Working conventions, hard rules and the gotcha list are in [CLAUDE.md](CLAUDE.md).
 
 ## License

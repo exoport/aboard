@@ -85,6 +85,8 @@ func TestRootPaths(t *testing.T) {
 		{"LogsDir", root.LogsDir(), j(".aboard", "run", "logs")},
 		{"LogFile", root.LogFile("bb42"), j(".aboard", "run", "logs", "bb42.log")},
 		{"ShotsDir", root.ShotsDir(), j(".aboard", "run", "shots")},
+		{"E2EDir", root.E2EDir(), j(".aboard", "run", "e2e")},
+		{"E2ECase", root.E2ECase("TestBridge"), j(".aboard", "run", "e2e", "TestBridge")},
 		{"DevDir", root.DevDir(), j("pkg", "aboard", "web")},
 		{"SkillReference", root.SkillReference(), j(".claude", "skills", "aboard", "references", "reference.generated.md")},
 		{"GeneratedControls", root.GeneratedControls(), j("pkg", "aboard", "web", "views", "controls.generated.js")},

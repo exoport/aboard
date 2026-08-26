@@ -48,7 +48,7 @@ aboard capabilities ui                     # what this board can do — no serve
 aboard recipes list                        # every recipe available here, with scope and shadowing
 aboard recipes show show-a-structure       # one recipe's body; --template for just the JSON skeleton
 aboard version                             # which binary is this
-make caps | smoke | shot | build | test | lint | status
+make caps | e2e | shot | build | test | lint | status
 ```
 
 Every command takes `--cwd DIR` on the root, to resolve the project from
@@ -505,8 +505,9 @@ with no explanation is a mystery. `aboard poke` is the same gesture from the
 other side, for handing off to another session (`agent-1` finishes, pokes,
 `agent-2` wakes).
 
-`make smoke` pokes the board as part of testing it, so it will release you. Do not
-run the suite while another session is waiting for something that matters.
+The browser suite (`make e2e`) drives its own temporary board, so it cannot release
+you — that was true of the shell suite it replaced, which poked whatever board it
+was aimed at.
 
 ## Guarantees you can rely on
 

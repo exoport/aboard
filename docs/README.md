@@ -30,6 +30,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [How to write a recipe](how-to/write-a-recipe.md)
 - [How to embed aboard in ape](how-to/embed-in-ape.md)
 - [How to verify a release artifact](how-to/verify.md)
+- [How to run the browser suite](how-to/run-the-browser-suite.md) — `make e2e`: what it needs, what it leaves behind when it fails, and the checks it inherited from the retired shell suite
 
 ### Reference — _technical descriptions_
 

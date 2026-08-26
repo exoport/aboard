@@ -1,0 +1,129 @@
+{
+  "why": [
+    "The interaction fixture, laid over the board `aboard init --example` seeds.",
+    "It is a SEPARATE file, not an edit to pkg/aboard/example/aboard.json, because",
+    "everything in here would be wrong in the example: a gate row waiting on a",
+    "verdict is a decision the human never asked for, marks on a mock screenshot",
+    "are somebody else's annotations, and a notes tab duplicates what the stack",
+    "already demonstrates. The example is what a real project starts from; this is",
+    "what a driver needs to have something to grab.",
+    "",
+    "`patch` merges recursively into the tab with that id \u2014 objects merge, arrays",
+    "replace whole \u2014 so `bb128.state.pending` arrives without erasing the decided",
+    "row the `undo` control lives on. `add` appends new tabs.",
+    "",
+    "`bb132` gains options because the example ships the vote tab with an empty ballot \u2014 a vote with nothing to score renders its empty state, and every scoring gesture would be untestable against it."
+  ],
+  "patch": {
+    "bb22": {
+      "state": {
+        "layout": "side-by-side",
+        "images": [
+          {
+            "id": "img1",
+            "src": "assets/mock-screen.svg",
+            "caption": "before.svg",
+            "regions": [
+              {
+                "id": "r1",
+                "x": 0.08,
+                "y": 0.12,
+                "w": 0.3,
+                "h": 0.18,
+                "color": "mark",
+                "note": "A rectangle to resize and recolour."
+              },
+              {
+                "id": "r2",
+                "shape": "ellipse",
+                "x": 0.55,
+                "y": 0.45,
+                "w": 0.2,
+                "h": 0.2,
+                "color": "accent",
+                "note": "An ellipse, so the bulk recolour has two shapes to reach."
+              }
+            ],
+            "strokes": [
+              {
+                "id": "s1",
+                "points": [
+                  [
+                    0.2,
+                    0.7
+                  ],
+                  [
+                    0.3,
+                    0.74
+                  ],
+                  [
+                    0.42,
+                    0.68
+                  ]
+                ],
+                "color": "focus",
+                "note": "A pen stroke, which has no resize handles by design."
+              }
+            ]
+          },
+          {
+            "id": "img2",
+            "src": "assets/mock-screen-after.svg",
+            "caption": "after.svg",
+            "regions": [],
+            "strokes": []
+          }
+        ]
+      }
+    },
+    "bb128": {
+      "state": {
+        "pending": [
+          {
+            "id": "bb201",
+            "by": "agent-e2e",
+            "risk": "low",
+            "title": "Run the browser suite against this board",
+            "detail": "Nothing here executes. The verdict is a record the asking session reads.",
+            "command": "make e2e"
+          }
+        ]
+      }
+    },
+    "bb132": {
+      "state": {
+        "options": [
+          {
+            "id": "opt-visual",
+            "label": "Visual regression baselines",
+            "note": "Pixel comparison per tab, after the interaction suite is stable."
+          },
+          {
+            "id": "opt-json",
+            "label": "The JSON hot paths",
+            "note": "Parse the document once per write instead of three times."
+          },
+          {
+            "id": "opt-mcp",
+            "label": "An agent-driven exploration pass",
+            "note": "Explore once, codify forever."
+          }
+        ]
+      }
+    }
+  },
+  "add": [
+    {
+      "id": "bb202",
+      "key": "scratch",
+      "name": "Scratch",
+      "type": "notes",
+      "note": "A notes tab of its own, so the driver can type into one without opening a stack first.",
+      "state": {
+        "text": "First line.\nSecond line.\n",
+        "markdown": false
+      }
+    }
+  ],
+  "nextId": 240
+}

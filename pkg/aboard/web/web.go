@@ -1,6 +1,5 @@
 // Package web carries the board's browser half: the shell, the stylesheet, the
-// renderers and their declarations, the vendored libraries, and the browser
-// smoke harness.
+// renderers and their declarations, the vendored libraries, and two probe pages.
 //
 // It is its own package for one mechanical reason: //go:embed cannot reach
 // upward out of the directory it is written in, so the whole web tree has to
@@ -19,8 +18,12 @@ import "embed"
 // "views/...", "lib/...", "assets/..." and "test/..." are the names the server
 // serves and the browser asks for.
 //
-// test/ is embedded on purpose: a shipped binary can then still self-check
-// against its own UI rather than against a working copy that may not exist.
+// test/ is embedded on purpose: a shipped binary can then still serve its own
+// probe pages — /test/mermaid-probe.html says which diagram types this bundle
+// renders, /test/theme-probe.html shows the resolved tokens — rather than
+// depending on a working copy that may not exist. The browser suite that used to
+// live here as smoke.html is now test/e2e/ in Go: it drives the real shell
+// instead of a page that reimplemented the mount contract.
 //
 //go:embed aboard.html app.css views lib assets test
 var FS embed.FS

@@ -152,6 +152,25 @@ straight.
 Use this sparingly. A shared board is the feature; two boards is a fallback for
 when the work genuinely does not overlap.
 
+## Driving the board yourself, in a browser
+
+There is a second kind of session worth knowing about: an agent with a browser,
+clicking around the real board to find what nobody thought to test. A DevTools
+MCP server (`chrome-devtools-mcp`, attached to a running board with
+`--browser-url`) gives click, drag, fill, screenshot, console and network;
+Playwright MCP gives accessibility-tree snapshots and click-by-ref instead. Either
+is a good way to hunt for the defect that only appears when you actually use the
+thing.
+
+It is a COMPLEMENT, not a gate, and the difference matters: agent exploration
+repeats itself — Slack's 200-run study found about a fifth of runs reproducing the
+same action sequence — so it is expensive per new finding and cannot be the thing
+that says a change is safe. The pattern is **explore once, codify forever**:
+whatever you find becomes a test in `test/e2e/`, which runs in a second and runs
+the same way tomorrow. If you are exploring, do it against a scratch board
+(`aboard init --example --gitignore` somewhere under `/tmp`), never the one the
+human is reading.
+
 ## Etiquette summary
 
 - Read before you write, always. The board may have moved.

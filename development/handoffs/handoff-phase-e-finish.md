@@ -69,8 +69,10 @@ first, then json/v2, no per-tab resources), then `handoff-13-features.md`.
 
 ## Still unproven, on purpose
 
-- The html bridge's WRITE half after the rename (a widget's `aboard.set()` reaching `state.data`)
-  needs a human click in a real browser; wire-level and read-half are verified.
+- ~~The html bridge's WRITE half after the rename (a widget's `aboard.set()` reaching `state.data`).~~
+  **Closed 2026-08-26**: `test/e2e` drives the sketch pad's Undo inside the sandboxed frame and reads
+  `state.data` back off the server, and does the same for an html block inside a stack
+  (`TestAWidgetWritesThroughTheBridge`, `TestAWidgetInsideAStackBlockWritesThroughTheBridge`).
 - The 11 open features of the 13-feature review are queued, not built.
 - The spike's own board was found DOWN mid-session and restarted with its own `restart.sh` on
   port 46624; nothing in its tree was written.

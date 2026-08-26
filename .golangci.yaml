@@ -1,6 +1,12 @@
 version: "2"
 run:
   issues-exit-code: 1
+  # The browser suite is behind //go:build e2e, so without this line golangci
+  # would not look at test/e2e/ at all — 4,400 lines of real code outside the
+  # lint that everything else in this repo passes. Adding coverage, not
+  # loosening it.
+  build-tags:
+    - e2e
 linters:
   default: all
   disable:

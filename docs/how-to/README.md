@@ -12,6 +12,7 @@ unlike [Reference](../reference/), they're goal-oriented rather than exhaustive.
 - [How to write a recipe](write-a-recipe.md)
 - [How to embed aboard in ape](embed-in-ape.md)
 - [How to verify a release artifact](verify.md)
+- [How to run the browser suite](run-the-browser-suite.md)
 
 ## Planned guides
 

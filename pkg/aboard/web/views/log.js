@@ -143,10 +143,20 @@ export function mountLog(root, ctx) {
     wrap.style.setProperty('--log-height', typeof h === 'number' ? `${h}px` : String(h));
   }
 
-  function paint() {
+  // One place that dresses the Follow button, because there are two ways to
+  // change what it reports and they used to disagree. The scroll handler below
+  // set only the LABEL, so after scrolling up the button read "Follow" while
+  // aria-pressed still said true and the tooltip still offered to stop
+  // following — the visual half moved and the accessible half did not. Found by
+  // the browser suite asserting the attribute rather than the text.
+  function paintFollowButton() {
     followBtn.textContent = follow ? 'Following' : 'Follow';
     followBtn.setAttribute('aria-pressed', String(follow));
     followBtn.title = follow ? 'Stop pinning to the newest line' : 'Pin to the newest line';
+  }
+
+  function paint() {
+    paintFollowButton();
 
     wrap.replaceChildren();
     if (!source()) {
@@ -220,7 +230,7 @@ export function mountLog(root, ctx) {
   // resumes it. Buttons are for intent, this is for reflex.
   wrap.addEventListener('scroll', () => {
     const atBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 24;
-    if (atBottom !== follow) { follow = atBottom; followBtn.textContent = follow ? 'Following' : 'Follow'; }
+    if (atBottom !== follow) { follow = atBottom; paintFollowButton(); }
   });
 
   applyHeight();

@@ -332,6 +332,30 @@ function localEdits() {
 // dropped without being offered first.
 const stashedTabs = new Map();   // tab id -> the human's version of that tab
 
+// Tabs the human removed HERE that the server has not accepted yet.
+//
+// A removal is the one local edit the merge could not represent. localEdits()
+// reports the tabs that CHANGED and the tabs that were ADDED; a tab that is gone
+// is neither, and `merged` is built from the server's tab list — so any reload
+// landing between `doc.tabs = filter(...)` and the save it is awaiting put the
+// tab straight back, permanently. The strip then showed a tab the server did not
+// have and only a page reload cleared it. Found by the browser suite, which
+// caught it once under `go test -shuffle=on` and then reproduced it on demand by
+// holding the POST open with a route interceptor.
+//
+// Cleared on an accepted push: the payload is `{...doc}`, which already lacks
+// these tabs, so acceptance IS the server confirming the removal. A removal that
+// is never accepted stays hidden until the page is reloaded, which is the honest
+// answer — it was never committed.
+const removedTabs = new Set();
+
+// withoutRemoved drops those tabs from a document just read off the server.
+function withoutRemoved(fresh) {
+  if (!removedTabs.size || !Array.isArray(fresh.tabs)) return fresh;
+  fresh.tabs = fresh.tabs.filter((t) => !removedTabs.has(t.id));
+  return fresh;
+}
+
 // Returns { merged, server, collided }, or null when the fresh copy could not be
 // read. `server` is the document EXACTLY as the server has it, before any of our
 // tabs were laid back over it — it is the new baseline, and it is a separate
@@ -349,7 +373,11 @@ async function mergeOntoFresh() {
   }
   if (!Array.isArray(fresh.tabs)) return null;
 
+  // `server` is the server's copy untouched, because it becomes the baseline and
+  // the baseline has to be what the other side actually holds. The MERGED
+  // document is what goes on screen, and that is where a pending removal applies.
   const server = snapshot(fresh);
+  withoutRemoved(fresh);
   const { changed, added } = localEdits();
   if (!changed.length && !added.length) return { merged: fresh, server, collided: [] };
 
@@ -437,6 +465,8 @@ async function pushDoc({ retries = 1 } = {}) {
   if (body.updatedAt) doc.updatedAt = body.updatedAt;
   if (body.rev !== undefined) doc.rev = body.rev;   // the base for the next write
   doc.lastEditedBy = 'human';
+  // Accepted, so every pending removal in that payload is now the server's too.
+  removedTabs.clear();
   // Accepted: this is now the state both sides agree on, so it becomes the
   // baseline any future conflict is measured against.
   baseline = snapshot(doc);
@@ -1137,6 +1167,9 @@ async function removeTab(tab) {
   }
 
   doc.tabs = tabs().filter((t) => t.id !== tab.id);
+  // Remembered across the await below: a reload arriving while the save is in
+  // flight rebuilds `doc` from the server, which still has this tab.
+  removedTabs.add(tab.id);
   const entry = mounted.get(tab.id);
   if (entry) {
     entry.root.remove();
@@ -1372,7 +1405,7 @@ async function load({ announce = false, merge = false } = {}) {
     }
   }
   const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
-  doc = await res.json();
+  doc = withoutRemoved(await res.json());
   baseline = snapshot(doc);
   return repaint({ announce });
 }
@@ -1507,7 +1540,16 @@ if (new URLSearchParams(location.search).get('probe') === '1') {
     get baseline() { return baseline; },
     get saveArmed() { return saveTimer !== null; },
     get stashed() { return stashedTabs; },
+    get removed() { return removedTabs; },
     snapshot, localEdits, load, save, pushDoc, mergeOntoFresh, repaint,
+    // The renderer registry itself. `init` is a FUNCTION here and a literal in
+    // views/<type>.spec.json, and the two must start a new tab with the same
+    // keys — markup's returned { image, caption, regions, strokes }, four keys
+    // markup.js has never read, while its spec told every agent the shape was
+    // { layout, images }. The check that caught that used to re-parse this block
+    // with a regex and eval the match in a Node vm; exposing the object lets the
+    // browser suite CALL the real function instead of reconstructing it.
+    types: TYPES,
   };
   document.documentElement.dataset.probe = 'ready';
 }

@@ -153,35 +153,44 @@ caps: build        ## Regenerate the generated controls module, skill reference 
 	@./$(BIN) capabilities --check
 	@echo "caps regenerated — check 'git diff' and commit the generated files"
 
-# The browser suite. Local only, never in CI: it drives a headless chromium
-# against a REAL running server, so it needs a board to exist. Two things it
-# will do that a Go test never does — it pokes the notify channel (releasing any
-# session genuinely blocked on `aboard wait`), and it takes ~50s, so do not run
-# it twice in one shell call and never start the server in the foreground of a
-# call that might time out.
+# The browser suite. Local only, never in CI: it drives a real Chromium against a
+# real board, and decision 13 of plan-1 stands — Go unit tests gate CI, the
+# browser suite is a local ritual.
 #
-# PROJECT says WHICH board, and it is REQUIRED, because the suite writes to it —
-# it applies documents, renames a tab and uploads an image. Aiming it at the repo
-# root means aiming it at whatever board lives there, so there is no default and
-# a bare `make smoke` prints how to make a scratch one.
+# It needs NO running server and NO PROJECT: the harness starts the engine
+# in-process on a temp root it seeds itself with `init --example` plus the
+# interaction fixture under test/e2e/testdata/. That is the whole reason it
+# replaced test/smoke.sh, which had to be aimed at somebody's board and WROTE to
+# it. Nothing here can touch a board you care about.
 #
-#   aboard init --example --gitignore   # in /tmp/probe, once
-#   PROJECT=/tmp/probe make smoke       # server already serving that directory
+# First run downloads ~330 MB (the Playwright driver and Chromium) into
+# ~/.cache/ms-playwright*; after that it is a few seconds of startup. The whole
+# suite is ~1 min, so do not run it twice in one shell call.
 #
-# `smoke: build` because five of its sections used to degrade to a printed skip
-# when ./aboard was absent — reachable by `make clean`, `make install` (which
-# removes the binary) and `make dev` — and the suite still exited 0. Real spec
-# drift passed with no binary and failed with one.
-.PHONY: smoke
-smoke: build       ## Headless browser suite against a RUNNING server (PROJECT=<dir>, required; local only).
-	PROJECT="$(PROJECT)" ./test/smoke.sh
+#   make e2e                          headless
+#   E2E_HEADED=1 make e2e             a visible browser, slowed down to watch
+#   E2E_TRACE=always make e2e         keep a trace for the tests that PASSED too
+#   E2E_KEEP=1 make e2e               keep the temp board after the run
+#   E2E_RUN='TestKanban.*' make e2e   one test (the gesture-coverage gate is skipped)
+#
+# `e2e: build` is not a dependency of the tests — `go test` builds its own
+# binary and the web tree is embedded in it. It is there so that a human staring
+# at a failure has a current ./aboard to drive the same board by hand.
+E2E_RUN ?= .
+
+.PHONY: e2e
+e2e: build         ## LOCAL ONLY: the real browser suite (playwright-go, //go:build e2e). No server or PROJECT needed.
+	go test -tags e2e -count=1 -timeout 10m -run '$(E2E_RUN)' -v ./test/e2e
 
 # SHOT_TABS is passed straight through: `make shot SHOT_TABS="bb133 bb22#help"`.
 # With none, shot.sh shoots its default set. LOOK at the pictures — every visual
 # regression this project has shipped passed the DOM assertions first.
-# PROJECT picks the board, as for `make smoke`, but here it is optional and
-# defaults to this checkout: shot.sh only reads the board and writes pictures
-# into its .aboard/run/shots/, where smoke.sh writes to the board itself.
+# PROJECT picks the board, and here it is optional and defaults to this
+# checkout: shot.sh only READS the board and writes pictures into its
+# .aboard/run/shots/. It is the one shell script left in test/ — `make e2e`
+# takes its own screenshots, but only of a temp board that is deleted, and
+# looking at a picture of the board you are actually working on is a different
+# job.
 .PHONY: shot
 shot:              ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="bb1 bb22#help"); a running server is required.
 	PROJECT="$(PROJECT)" ./test/shot.sh $(SHOT_TABS)
@@ -205,4 +214,5 @@ ci-local: test lint govulncheck docs-check xcompile-windows snapshot ## Run ever
 	@echo "Catches: Linux test failures, lint, vuln, doc links, Windows compile-time portability bugs, release-config regressions."
 	@echo "Does NOT catch: Windows runtime behaviour (use a push-to-branch + GitHub Actions Windows runner for that)."
 	@echo "Does NOT catch: anything only a browser sees. Run 'make caps' and check git diff is clean, then"
-	@echo "                'make smoke' and 'make shot' against a running server — and look at the pictures."
+	@echo "                'make e2e' (the browser suite; needs no server) and 'make shot' against a"
+	@echo "                running server — and look at the pictures."

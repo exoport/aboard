@@ -17,16 +17,17 @@ set -e
 cd "$(dirname "$0")/.."
 REPO=$PWD
 
-# Which board to shoot, same override as test/smoke.sh: a directory containing
-# `.aboard/`, defaulting to the repo root. Shots land inside THAT project, which
-# is what "shots land in the project rather than /tmp" was always supposed to
-# mean — the paths below were repo-root-relative, so pointing this at a scratch
-# board wrote its pictures into the repo.
+# Which board to shoot: a directory containing `.aboard/`, defaulting to the repo
+# root. Shots land inside THAT project, which is what "shots land in the project
+# rather than /tmp" was always supposed to mean — the paths below were
+# repo-root-relative, so pointing this at a scratch board wrote its pictures into
+# the repo.
 #
-# Unlike test/smoke.sh, this one keeps a default, and the difference is not an
-# oversight: smoke.sh WRITES to the board it is pointed at, so its default was a
-# trap and is now an error; this only reads the board and writes pictures into
-# it. The rule is "does it write", not consistency for its own sake.
+# This one KEEPS a default, and that is a rule about writing rather than about
+# consistency: the retired shell suite wrote to the board it was pointed at, so
+# its default was a trap and became a hard error; this only reads the board and
+# writes pictures into it. `make e2e`, which replaced that suite, drives a
+# temporary board of its own and takes no PROJECT at all.
 #
 # One tension to know about: a snap-confined chromium cannot write outside $HOME,
 # which is the whole reason shots go into the project rather than /tmp — so a
@@ -55,7 +56,8 @@ fi
 #
 # `|| true` under `set -e`: a failing command substitution aborts the script with
 # no message at all, which is how a hand-supplied PORT with no instance file
-# produced a silent exit 1 (see the same line in test/smoke.sh).
+# produced a silent exit 1. This is the last shell script in test/, so it is also
+# the last place that trap can be sprung.
 BASE=$(sed -n 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$INSTANCE" 2>/dev/null || true)
 [ -z "$BASE" ] && BASE="http://localhost:$PORT"
 

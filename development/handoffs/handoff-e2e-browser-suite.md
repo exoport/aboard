@@ -24,7 +24,7 @@ interaction surface is untested by construction:
 | diagram, notes, chat, form, log | type-and-save, Enter/Shift+Enter, Tab indent, scroll-to-unfollow, filter typing |
 | gate, vote, ui | record-only clicks: allow/deny/reason/undo, scores, button→intent, field→data.write |
 | shell | new-tab dialog, tab dblclick→`prompt()` rename, note strip, tab-strip right-click menu, notify button, help panel, deep links, the 409 stash notice ("Restore mine"/"Keep theirs"), `touched` Dismiss, pending-removal Keep/Remove, `confirm()` on remove |
-| html | **the bridge's write half**: a widget calling `aboard.set()` → postMessage → `views/html.js` → `state.data` — still "provable only by a human click" in every handoff since the rename |
+| html | **the bridge's write half**: a widget calling `aboard.set()` → postMessage → `views/html.js` → `state.data` — described as needing a human click in every handoff since the rename, until this suite drove it (`TestAWidgetWritesThroughTheBridge`) |
 
 The review at d6c2f84 reproduced two browser-side defects by hand in Chromium that no existing
 check could see: an SSE reload inside the 250 ms debounce discards the human's edit and flashes

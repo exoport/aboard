@@ -207,6 +207,21 @@ func (r Root) LogFile(tab string) string { return filepath.Join(r.LogsDir(), tab
 // snap-confined chromium cannot write outside $HOME.
 func (r Root) ShotsDir() string { return filepath.Join(r.RunDir(), "shots") }
 
+// E2EDir holds what the browser suite leaves behind when a test fails: the
+// Playwright trace, a screenshot, and the board document as it stood. Beside
+// the shots, and for the same reason — a machine-local artefact of a local
+// ritual, under a directory the project already gitignores whole.
+func (r Root) E2EDir() string { return filepath.Join(r.RunDir(), "e2e") }
+
+// E2ECase is one test's artefacts. The suite writes them TWICE: once under the
+// temporary board it drove, which is where the trace's own relative paths make
+// sense, and once here under the repo, because the temporary root is deleted
+// when the run ends and an artefact the human cannot find is not an artefact.
+//
+// The caller has already reduced the test name to something a filename can hold;
+// this does not sanitise it, exactly like LogFile above.
+func (r Root) E2ECase(name string) string { return filepath.Join(r.E2EDir(), name) }
+
 // DevDir is the web tree on disk, served instead of the embedded copy under
 // `serve --dev`. Only meaningful inside aboard's own checkout; --dev-dir
 // overrides it.

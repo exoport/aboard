@@ -3,6 +3,7 @@ package aboard
 import (
 	"io/fs"
 	"path"
+	"sort"
 	"strings"
 	"testing"
 
@@ -171,9 +172,10 @@ func TestGeneratedControlsModuleMatchesTheSpecs(t *testing.T) {
 }
 
 // The spec for the html renderer used to claim that an html BLOCK inside a stack
-// does not render. It does — the human clicked one and its state round-tripped —
-// and the sentence survived a whole commit series because nothing reads a
-// `notes` entry except a person.
+// does not render. It does, and `test/e2e` proves it every run
+// (TestAWidgetInsideAStackBlockWritesThroughTheBridge clicks the block's widget
+// and reads blocks[].state.data back off the server). The false sentence survived
+// a whole commit series because nothing reads a `notes` entry except a person.
 //
 // The claim is gone; this stops it coming back, and stops the opposite sentence
 // disappearing silently.
@@ -198,4 +200,43 @@ func TestHTMLSpecDoesNotDenyBlocksInStacks(t *testing.T) {
 	if !strings.Contains(joined, "blocks[].state.data") {
 		t.Errorf("html.spec.json does not say where a block's state lives:\n%s", joined)
 	}
+}
+
+// ADVISORY, never a failure: which renderers still make plain, undeclared
+// buttons.
+//
+// Whether a button is a CAPABILITY an agent should know about or merely an
+// affordance is a judgement no rule can make — a dialog's Cancel is not worth
+// declaring, a delete-row button is. So this reports and a person decides, which
+// is the honest version of the check that was originally planned as a DOM sweep.
+//
+// It was a `note` line in test/smoke.sh; here it is a t.Log, which means it is
+// printed by `go test -v` and by CI rather than only on the machine of whoever
+// remembered to run the shell suite.
+func TestWhichRenderersStillUsePlainButtons(t *testing.T) {
+	var users []string
+	for name, src := range viewSources(t) {
+		if name == "controls.js" {
+			continue
+		}
+		// `button(` not preceded by a dot or a word character: `controlsFor` and
+		// `iconButton` must not match, and neither must `.button(`.
+		for line := range strings.SplitSeq(src, "\n") {
+			i := strings.Index(line, "button(")
+			if i < 0 {
+				continue
+			}
+			if i > 0 {
+				prev := line[i-1]
+				if prev == '.' || prev == '_' || (prev >= 'a' && prev <= 'z') ||
+					(prev >= 'A' && prev <= 'Z') || (prev >= '0' && prev <= '9') {
+					continue
+				}
+			}
+			users = append(users, name)
+			break
+		}
+	}
+	sort.Strings(users)
+	t.Logf("plain (undeclared) buttons remain in: %s", strings.Join(users, " "))
 }
