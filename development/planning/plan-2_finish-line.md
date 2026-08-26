@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Item 1 done. Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–2 done. Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -64,7 +64,7 @@ recover. Tests: N concurrent POSTs off one base → exactly one 200 and the jour
 client disconnecting mid-broadcast under `-race -count=20`.
 **Done when** both reproductions from the review fail to reproduce and the tests exist.
 
-### 2. Review fixes B — behaviour mediums  ☐
+### 2. Review fixes B — behaviour mediums  ☑ `d432a90`
 
 Source: the review's Medium list, behaviour half (13 items): `apply` with no `updatedAt` refuses
 without `--force`; the CAS token becomes a monotonic revision (or the content hash) instead of a
