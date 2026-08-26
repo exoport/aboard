@@ -25,7 +25,12 @@ project exits non-zero with `this project's board is already running at <url>
 (pid N)` instead of taking the port.
 
 ```
-board running at http://localhost:46624 (pid 577548)
+aboard running at http://localhost:41837
+  project /home/you/proj
+  state   /home/you/proj/.aboard/aboard.json
+  pid     577548
+  since   2026-08-25T23:50:36Z
+  caps    58b40b03   (skill reference current)
 ```
 
 Killing it and starting your own takes the first session's server out from under
@@ -92,9 +97,26 @@ sign their name.
 `.aboard/run/instance.json` is the source of truth for "what is running here":
 
 ```json
-{ "app": "aboard", "project": "/home/you/proj", "port": 46624,
-  "url": "http://localhost:46624", "state": ".aboard/aboard.json", "pid": 577548 }
+{
+  "app": "aboard",
+  "host": "aboard",
+  "argv0": "aboard",
+  "version": "1.2.0",
+  "built": "2026-08-25T19:58:27-03:00",
+  "project": "/home/you/proj",
+  "port": 41837,
+  "url": "http://localhost:41837",
+  "state": "/home/you/proj/.aboard/aboard.json",
+  "pid": 577548,
+  "started": "2026-08-25T23:50:36Z"
+}
 ```
+
+Paths are absolute, and `url` carries the `--base-path` prefix when there is one
+— so probe `<url>/health`, never `:<port>/health`. A board served under a prefix
+answers nowhere else, and probing the bare root reports a live board as a stale
+record, which is the one sentence that sends a session off to restart a healthy
+server.
 
 Read it rather than assuming a port. `GET /health` returns the same record, which
 is how the binary tells its own board apart from an unrelated process squatting on

@@ -84,6 +84,7 @@ make snapshot      # goreleaser snapshot (no upload, no sign)
 make govulncheck   # scan for known vulnerabilities (pinned via bingo)
 make xcompile-windows  # cross-compile + cross-vet for Windows
 make ci-local      # the full pre-push gate
+make pre-commit    # run the pre-commit hooks across all files
 make tools tidy clean
 ```
 

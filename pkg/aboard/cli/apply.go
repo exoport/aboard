@@ -30,7 +30,7 @@ is not evidence that anything rendered.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Apply(root, boardName(cmd), by, aboard.WebFS(),
+			return aboard.Apply(cmd.Context(), root, boardName(cmd), by, aboard.WebFS(),
 				stdin(opts), stdout(opts), stderr(opts))
 		},
 	}

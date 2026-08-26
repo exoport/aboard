@@ -18,9 +18,9 @@ func boardJSON(t *testing.T, tabs ...tab) []byte {
 
 func tabByID(t *testing.T, tabs []tab, id string) tab {
 	t.Helper()
-	for _, got := range tabs {
-		if got.ID == id {
-			return got
+	for i := range tabs {
+		if tabs[i].ID == id {
+			return tabs[i]
 		}
 	}
 	t.Fatalf("no tab %s in %d", id, len(tabs))
@@ -84,7 +84,8 @@ func TestAgentMaySetOnlyItsOwnSeen(t *testing.T) {
 // markers, delete tabs, and reset read state. That asymmetry is the reason `by`
 // matters at all, so it is asserted rather than assumed.
 func TestHumanWriteIsTakenAsIs(t *testing.T) {
-	current := boardJSON(t,
+	current := boardJSON(
+		t,
 		tab{ID: "bb1", Name: "Plan", Type: "notes", Seen: map[string]string{"agent-2": "T"}},
 		tab{ID: "bb2", Name: "Gone", Type: "notes"},
 	)
@@ -174,7 +175,8 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 // "unknown" exactly like any other agent, or the default that server.go now
 // writes would be a way around every guarantee.
 func TestUnknownActorGetsAgentPowersOnly(t *testing.T) {
-	current := boardJSON(t,
+	current := boardJSON(
+		t,
 		tab{ID: "bb1", Name: "Plan", Type: "notes", Touched: &touchMark{By: "agent-2", At: "T"}},
 		tab{ID: "bb2", Name: "Queue", Type: "notes"},
 	)

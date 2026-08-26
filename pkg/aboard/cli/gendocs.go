@@ -10,6 +10,7 @@
 // It is HIDDEN for the same reason `recipes index` is: it maintains this repo,
 // it is not something a user of a board does, and a maintainer command in the
 // declared table would move capsHash for a surface no agent can use.
+
 package cli
 
 import (

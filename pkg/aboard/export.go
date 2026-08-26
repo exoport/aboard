@@ -15,10 +15,12 @@
 // decisions lead with their reasons, answers appear next to their questions, and
 // anything with no useful text form says so instead of emitting an empty section.
 // Where the two differ, that is the intent, not drift.
+
 package aboard
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -69,7 +71,7 @@ func Export(stateFile, tabID, format string, out, errOut io.Writer) error {
 	// id is nearly always a forgotten one.
 	fmt.Fprintf(errOut, "no tab %q. This board has:\n\n", tabID)
 	_ = exportList(stateFile, errOut)
-	return fmt.Errorf("pick one of the ids or keys above")
+	return errors.New("pick one of the ids or keys above")
 }
 
 func exportList(stateFile string, out io.Writer) error {
@@ -150,253 +152,330 @@ func tabMarkdown(name, typ, note string, st map[string]any) string {
 	return b.String()
 }
 
+// typeMarkdown renders one tab type's state as markdown, and is only the
+// DISPATCH. Every renderer's text form is its own function below.
+//
+// It used to be one switch carrying all eleven, which measured 70 branches: a
+// function nobody could change one arm of without reading the other ten. The
+// arms share nothing but the builder, so splitting them costs nothing and the
+// dispatch stays a table you can read in one screen.
+//
+// An unknown type returns "" on purpose — tabMarkdown turns that into "look at
+// it instead", which is the honest answer for a type with no text form.
 func typeMarkdown(typ string, st map[string]any) string {
-	var b strings.Builder
 	switch typ {
-
 	case "gate":
-		// Decisions lead with their reasons, because the reason is the half that
-		// evaporates and the half that stops the argument recurring.
-		decided := mapsOf(st["decided"])
-		if len(decided) > 0 {
-			b.WriteString("## Decisions\n\n")
-			for _, d := range decided {
-				verdict := str(d, "verdict")
-				if d["undone"] == true {
-					verdict += " (reversed)"
-				}
-				fmt.Fprintf(&b, "- **%s** — %s", str(d, "title"), verdict)
-				if at := str(d, "at"); at != "" {
-					fmt.Fprintf(&b, ", %s", at[:min(10, len(at))])
-				}
-				b.WriteString("\n")
-				if reason := str(d, "reason"); reason != "" {
-					late := ""
-					if str(d, "reasonAddedAt") != "" {
-						late = " _(reason added after the fact)_"
-					}
-					fmt.Fprintf(&b, "  - Why: %s%s\n", reason, late)
-				} else {
-					fmt.Fprintf(&b, "  - Why: _not recorded_ — ask before relying on this\n")
-				}
-				if edited := str(d, "editedTo"); edited != "" {
-					fmt.Fprintf(&b, "  - Changed before allowing:\n\n    ```\n    %s\n    ```\n",
-						strings.ReplaceAll(edited, "\n", "\n    "))
-				}
-			}
-			b.WriteString("\n")
-		}
-		if pending := mapsOf(st["pending"]); len(pending) > 0 {
-			b.WriteString("## Still waiting on a decision\n\n")
-			for _, p := range pending {
-				fmt.Fprintf(&b, "- **%s**", str(p, "title"))
-				if risk := str(p, "risk"); risk != "" {
-					fmt.Fprintf(&b, " (%s risk)", risk)
-				}
-				b.WriteString("\n")
-				if detail := str(p, "detail"); detail != "" {
-					fmt.Fprintf(&b, "  %s\n", detail)
-				}
-			}
-			b.WriteString("\n")
-		}
-
-	case "dag", "kanban":
-		nodes := mapsOf(st["nodes"])
-		if len(nodes) == 0 {
-			return ""
-		}
-		if typ == "kanban" {
-			for _, col := range stringsOf(st["columns"]) {
-				items := []map[string]any{}
-				for _, n := range nodes {
-					if str(n, "status") == col {
-						items = append(items, n)
-					}
-				}
-				fmt.Fprintf(&b, "## %s (%d)\n\n", col, len(items))
-				for _, n := range items {
-					fmt.Fprintf(&b, "- **%s**\n", str(n, "title"))
-					if note := str(n, "note"); note != "" {
-						fmt.Fprintf(&b, "  %s\n", note)
-					}
-				}
-				b.WriteString("\n")
-			}
-			break
-		}
-		var walk func(parent string, depth int)
-		walk = func(parent string, depth int) {
-			for _, n := range nodes {
-				p := str(n, "parent")
-				if p != parent {
-					continue
-				}
-				pad := strings.Repeat("  ", depth)
-				fmt.Fprintf(&b, "%s- **%s**", pad, str(n, "title"))
-				if status := str(n, "status"); status != "" {
-					fmt.Fprintf(&b, " — _%s_", status)
-				}
-				b.WriteString("\n")
-				if note := str(n, "note"); note != "" {
-					fmt.Fprintf(&b, "%s  %s\n", pad, note)
-				}
-				walk(str(n, "id"), depth+1)
-			}
-		}
-		walk("", 0)
-
+		return gateMarkdown(st)
+	case "dag":
+		return dagMarkdown(st)
+	case "kanban":
+		return kanbanMarkdown(st)
 	case "form":
-		fields := mapsOf(st["fields"])
-		if len(fields) == 0 {
-			return ""
-		}
-		if intro := str(st, "intro"); intro != "" {
-			fmt.Fprintf(&b, "%s\n\n", intro)
-		}
-		for _, f := range fields {
-			label := str(f, "label")
-			if label == "" {
-				label = str(f, "id")
-			}
-			value, _ := json.Marshal(f["value"])
-			fmt.Fprintf(&b, "- **%s** — %s\n", label, string(value))
-		}
-
+		return formMarkdown(st)
 	case "table":
-		cols := mapsOf(st["columns"])
-		rows := mapsOf(st["rows"])
-		if len(cols) == 0 || len(rows) == 0 {
-			return ""
-		}
-		head := make([]string, 0, len(cols))
-		for _, c := range cols {
-			label := str(c, "label")
-			if label == "" {
-				label = str(c, "id")
-			}
-			head = append(head, label)
-		}
-		fmt.Fprintf(&b, "| %s |\n|%s|\n", strings.Join(head, " | "), strings.Repeat("---|", len(head)))
-		for _, r := range rows {
-			cells := make([]string, 0, len(cols))
-			for _, c := range cols {
-				cells = append(cells, cellText(r[str(c, "id")]))
-			}
-			fmt.Fprintf(&b, "| %s |\n", strings.Join(cells, " | "))
-		}
-
+		return tableMarkdown(st)
 	case "vote":
-		options := mapsOf(st["options"])
-		if len(options) == 0 {
-			return ""
-		}
-		if q := str(st, "question"); q != "" {
-			fmt.Fprintf(&b, "**%s**\n\n", q)
-		}
-		ballots, _ := st["ballots"].(map[string]any)
-		for _, o := range options {
-			id := str(o, "id")
-			fmt.Fprintf(&b, "- **%s**", firstNonEmpty(str(o, "label"), id))
-			scores := []string{}
-			actors := make([]string, 0, len(ballots))
-			for actor := range ballots {
-				actors = append(actors, actor)
-			}
-			sort.Strings(actors)
-			for _, actor := range actors {
-				if m, ok := ballots[actor].(map[string]any); ok {
-					if v, ok := m[id]; ok {
-						scores = append(scores, fmt.Sprintf("%s %v", actor, v))
-					}
-				}
-			}
-			if len(scores) > 0 {
-				fmt.Fprintf(&b, " — %s", strings.Join(scores, ", "))
-			}
-			b.WriteString("\n")
-			if note := str(o, "note"); note != "" {
-				fmt.Fprintf(&b, "  %s\n", note)
-			}
-			// The comments are the reasoning, which is the point of exporting a
-			// vote at all — a bare score promotes nothing.
-			if comments, ok := o["comments"].(map[string]any); ok {
-				keys := make([]string, 0, len(comments))
-				for k := range comments {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				for _, k := range keys {
-					if text, ok := comments[k].(string); ok && text != "" {
-						fmt.Fprintf(&b, "  - %s: %s\n", k, text)
-					}
-				}
-			}
-		}
-
+		return voteMarkdown(st)
 	case "notes":
 		return str(st, "text") + "\n"
-
 	case "chat":
-		msgs := mapsOf(st["messages"])
-		if len(msgs) == 0 {
-			return ""
-		}
-		for _, m := range msgs {
-			fmt.Fprintf(&b, "**%s**", str(m, "by"))
-			if at := str(m, "at"); at != "" {
-				fmt.Fprintf(&b, " · %s", at)
-			}
-			fmt.Fprintf(&b, "\n\n%s\n\n", str(m, "text"))
-		}
-
+		return chatMarkdown(st)
 	case "markup":
-		images := mapsOf(st["images"])
-		if len(images) == 0 {
-			return ""
+		return markupMarkdown(st)
+	case "diagram":
+		return diagramMarkdown(st)
+	case tabTypeStack:
+		return stackMarkdown(st)
+	default:
+		return ""
+	}
+}
+
+// isoDateLen is the length of the date half of an RFC3339 stamp. A decision is
+// promoted with its DAY, not its second: the minute a verdict was recorded is
+// noise in someone else's spec.
+const isoDateLen = 10
+
+func gateMarkdown(st map[string]any) string {
+	var b strings.Builder
+	if decided := mapsOf(st["decided"]); len(decided) > 0 {
+		b.WriteString("## Decisions\n\n")
+		for _, d := range decided {
+			writeDecision(&b, d)
 		}
-		for _, im := range images {
-			fmt.Fprintf(&b, "## %s\n\n![%s](%s)\n\n",
-				firstNonEmpty(str(im, "caption"), str(im, "id")), str(im, "caption"), str(im, "src"))
-			for _, r := range mapsOf(im["regions"]) {
-				fmt.Fprintf(&b, "- `%s` at %s", str(r, "id"), pctBox(r))
-				if note := str(r, "note"); note != "" {
-					fmt.Fprintf(&b, " — %s", note)
-				}
-				b.WriteString("\n")
-			}
-			for _, s := range mapsOf(im["strokes"]) {
-				fmt.Fprintf(&b, "- `%s` freehand", str(s, "id"))
-				if note := str(s, "note"); note != "" {
-					fmt.Fprintf(&b, " — %s", note)
-				}
-				b.WriteString("\n")
+		b.WriteString("\n")
+	}
+	if pending := mapsOf(st["pending"]); len(pending) > 0 {
+		b.WriteString("## Still waiting on a decision\n\n")
+		for _, p := range pending {
+			fmt.Fprintf(&b, "- **%s**", str(p, "title"))
+			if risk := str(p, "risk"); risk != "" {
+				fmt.Fprintf(&b, " (%s risk)", risk)
 			}
 			b.WriteString("\n")
+			if detail := str(p, "detail"); detail != "" {
+				fmt.Fprintf(&b, "  %s\n", detail)
+			}
 		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
 
-	case "diagram":
-		src := str(st, "source")
-		if src == "" {
-			return ""
+// writeDecision renders one decided row. Decisions lead with their reasons,
+// because the reason is the half that evaporates and the half that stops the
+// argument recurring — so a decision with no reason says so out loud rather
+// than promoting a bare verdict into someone's spec.
+func writeDecision(b *strings.Builder, d map[string]any) {
+	verdict := str(d, "verdict")
+	if d["undone"] == true {
+		verdict += " (reversed)"
+	}
+	fmt.Fprintf(b, "- **%s** — %s", str(d, "title"), verdict)
+	if at := str(d, "at"); at != "" {
+		fmt.Fprintf(b, ", %s", at[:min(isoDateLen, len(at))])
+	}
+	b.WriteString("\n")
+	if reason := str(d, "reason"); reason != "" {
+		late := ""
+		if str(d, "reasonAddedAt") != "" {
+			late = " _(reason added after the fact)_"
 		}
-		fmt.Fprintf(&b, "```mermaid\n%s\n```\n", strings.TrimSpace(src))
+		fmt.Fprintf(b, "  - Why: %s%s\n", reason, late)
+	} else {
+		b.WriteString("  - Why: _not recorded_ — ask before relying on this\n")
+	}
+	if edited := str(d, "editedTo"); edited != "" {
+		fmt.Fprintf(b, "  - Changed before allowing:\n\n    ```\n    %s\n    ```\n",
+			strings.ReplaceAll(edited, "\n", "\n    "))
+	}
+}
 
-	case "stack":
-		blocks := mapsOf(st["blocks"])
-		if len(blocks) == 0 {
-			return ""
-		}
-		for _, blk := range blocks {
-			inner, _ := blk["state"].(map[string]any)
-			text := typeMarkdown(str(blk, "type"), inner)
-			if text == "" {
+func dagMarkdown(st map[string]any) string {
+	nodes := mapsOf(st["nodes"])
+	if len(nodes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	var walk func(parent string, depth int)
+	walk = func(parent string, depth int) {
+		for _, n := range nodes {
+			if str(n, "parent") != parent {
 				continue
 			}
-			fmt.Fprintf(&b, "## %s\n\n%s\n", firstNonEmpty(str(blk, "title"), str(blk, "type")), text)
+			pad := strings.Repeat("  ", depth)
+			fmt.Fprintf(&b, "%s- **%s**", pad, str(n, "title"))
+			if status := str(n, "status"); status != "" {
+				fmt.Fprintf(&b, " — _%s_", status)
+			}
+			b.WriteString("\n")
+			if note := str(n, "note"); note != "" {
+				fmt.Fprintf(&b, "%s  %s\n", pad, note)
+			}
+			walk(str(n, "id"), depth+1)
 		}
 	}
+	walk("", 0)
+	return b.String()
+}
 
+func kanbanMarkdown(st map[string]any) string {
+	nodes := mapsOf(st["nodes"])
+	if len(nodes) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, col := range stringsOf(st["columns"]) {
+		items := make([]map[string]any, 0, len(nodes))
+		for _, n := range nodes {
+			if str(n, "status") == col {
+				items = append(items, n)
+			}
+		}
+		fmt.Fprintf(&b, "## %s (%d)\n\n", col, len(items))
+		for _, n := range items {
+			fmt.Fprintf(&b, "- **%s**\n", str(n, "title"))
+			if note := str(n, "note"); note != "" {
+				fmt.Fprintf(&b, "  %s\n", note)
+			}
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func formMarkdown(st map[string]any) string {
+	fields := mapsOf(st["fields"])
+	if len(fields) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	if intro := str(st, "intro"); intro != "" {
+		fmt.Fprintf(&b, "%s\n\n", intro)
+	}
+	for _, f := range fields {
+		label := firstNonEmpty(str(f, "label"), str(f, "id"))
+		fmt.Fprintf(&b, "- **%s** — %s\n", label, jsonText(f["value"]))
+	}
+	return b.String()
+}
+
+func tableMarkdown(st map[string]any) string {
+	cols := mapsOf(st["columns"])
+	rows := mapsOf(st["rows"])
+	if len(cols) == 0 || len(rows) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	head := make([]string, 0, len(cols))
+	for _, c := range cols {
+		head = append(head, firstNonEmpty(str(c, "label"), str(c, "id")))
+	}
+	fmt.Fprintf(&b, "| %s |\n|%s|\n", strings.Join(head, " | "), strings.Repeat("---|", len(head)))
+	for _, r := range rows {
+		cells := make([]string, 0, len(cols))
+		for _, c := range cols {
+			cells = append(cells, cellText(r[str(c, "id")]))
+		}
+		fmt.Fprintf(&b, "| %s |\n", strings.Join(cells, " | "))
+	}
+	return b.String()
+}
+
+func voteMarkdown(st map[string]any) string {
+	options := mapsOf(st["options"])
+	if len(options) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	if q := str(st, "question"); q != "" {
+		fmt.Fprintf(&b, "**%s**\n\n", q)
+	}
+	ballots, _ := st["ballots"].(map[string]any)
+	for _, o := range options {
+		id := str(o, "id")
+		fmt.Fprintf(&b, "- **%s**", firstNonEmpty(str(o, "label"), id))
+		if scores := ballotScores(ballots, id); len(scores) > 0 {
+			fmt.Fprintf(&b, " — %s", strings.Join(scores, ", "))
+		}
+		b.WriteString("\n")
+		if note := str(o, "note"); note != "" {
+			fmt.Fprintf(&b, "  %s\n", note)
+		}
+		// The comments are the reasoning, which is the point of exporting a
+		// vote at all — a bare score promotes nothing.
+		writeComments(&b, o["comments"])
+	}
+	return b.String()
+}
+
+// ballotScores returns "<actor> <score>" for every actor who scored this
+// option, in actor order so two exports of the same board are byte-identical.
+func ballotScores(ballots map[string]any, optionID string) []string {
+	actors := make([]string, 0, len(ballots))
+	for actor := range ballots {
+		actors = append(actors, actor)
+	}
+	sort.Strings(actors)
+	scores := make([]string, 0, len(actors))
+	for _, actor := range actors {
+		m, ok := ballots[actor].(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, ok := m[optionID]; ok {
+			scores = append(scores, fmt.Sprintf("%s %v", actor, v))
+		}
+	}
+	return scores
+}
+
+func writeComments(b *strings.Builder, v any) {
+	comments, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	keys := make([]string, 0, len(comments))
+	for k := range comments {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if text, ok := comments[k].(string); ok && text != "" {
+			fmt.Fprintf(b, "  - %s: %s\n", k, text)
+		}
+	}
+}
+
+func chatMarkdown(st map[string]any) string {
+	msgs := mapsOf(st["messages"])
+	if len(msgs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, m := range msgs {
+		fmt.Fprintf(&b, "**%s**", str(m, "by"))
+		if at := str(m, "at"); at != "" {
+			fmt.Fprintf(&b, " · %s", at)
+		}
+		fmt.Fprintf(&b, "\n\n%s\n\n", str(m, "text"))
+	}
+	return b.String()
+}
+
+func markupMarkdown(st map[string]any) string {
+	images := mapsOf(st["images"])
+	if len(images) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, im := range images {
+		fmt.Fprintf(&b, "## %s\n\n![%s](%s)\n\n",
+			firstNonEmpty(str(im, "caption"), str(im, "id")), str(im, "caption"), str(im, "src"))
+		for _, r := range mapsOf(im["regions"]) {
+			writeMark(&b, r, "at "+pctBox(r))
+		}
+		for _, s := range mapsOf(im["strokes"]) {
+			writeMark(&b, s, "freehand")
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// writeMark renders one mark, badged with its own id — the same identifier that
+// is drawn on the image and printed in the tab's list, so a sentence naming it
+// resolves in all three places.
+func writeMark(b *strings.Builder, m map[string]any, where string) {
+	fmt.Fprintf(b, "- `%s` %s", str(m, "id"), where)
+	if note := str(m, "note"); note != "" {
+		fmt.Fprintf(b, " — %s", note)
+	}
+	b.WriteString("\n")
+}
+
+func diagramMarkdown(st map[string]any) string {
+	src := str(st, "source")
+	if src == "" {
+		return ""
+	}
+	return fmt.Sprintf("```mermaid\n%s\n```\n", strings.TrimSpace(src))
+}
+
+func stackMarkdown(st map[string]any) string {
+	blocks := mapsOf(st["blocks"])
+	if len(blocks) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, blk := range blocks {
+		inner, _ := blk["state"].(map[string]any)
+		text := typeMarkdown(str(blk, "type"), inner)
+		if text == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "## %s\n\n%s\n", firstNonEmpty(str(blk, "title"), str(blk, "type")), text)
+	}
 	return b.String()
 }
 
@@ -412,15 +491,33 @@ func cellText(v any) string {
 		}
 		return "no"
 	default:
-		body, _ := json.Marshal(v)
-		return string(body)
+		return jsonText(v)
 	}
 }
 
+// jsonText is the fallback rendering for a value with no text form of its own:
+// a form field holding an object, a table cell holding a list. The error is
+// SHOWN rather than swallowed — a silently blank cell in a promoted document is
+// the failure mode this whole file exists to avoid.
+func jsonText(v any) string {
+	body, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("_(unrenderable: %v)_", err)
+	}
+	return string(body)
+}
+
 func pctBox(r map[string]any) string {
+	// A mark's box is stored normalised 0..1; the export prints whole percents,
+	// and adding a half before truncating is what makes int() round rather than
+	// floor — 0.335 must read 34%, not 33%.
+	const (
+		asPercent    = 100
+		roundingBias = 0.5
+	)
 	num := func(key string) int {
 		if f, ok := r[key].(float64); ok {
-			return int(f*100 + 0.5)
+			return int(f*asPercent + roundingBias)
 		}
 		return 0
 	}
@@ -434,13 +531,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 /* ---------- csv ---------- */
@@ -487,5 +577,5 @@ func tabCSV(st map[string]any) (string, error) {
 	// `--format md`, not `-format md`. The single-dash spelling is the spike's
 	// grammar and it does not exist here; a message that hands the reader a flag
 	// the binary rejects costs them a round trip to find out the tool was wrong.
-	return "", fmt.Errorf("this tab has no rows or nodes to put in a csv — try `--format md`")
+	return "", errors.New("this tab has no rows or nodes to put in a csv — try `--format md`")
 }

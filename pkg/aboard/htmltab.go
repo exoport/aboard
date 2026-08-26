@@ -121,7 +121,7 @@ func htmlBlock(parent *tab, blockID string) (struct {
 		Title string
 		State json.RawMessage
 	}
-	if parent.Type != "stack" {
+	if parent.Type != tabTypeStack {
 		return out, fmt.Errorf("%s is not a stack, so it has no blocks", parent.ID)
 	}
 	var st struct {
@@ -139,7 +139,7 @@ func htmlBlock(parent *tab, blockID string) (struct {
 		if block.ID != blockID {
 			continue
 		}
-		if block.Type != "html" {
+		if block.Type != tabTypeHTML {
 			return out, fmt.Errorf("%s/%s is a %s block, not an html one", parent.ID, blockID, block.Type)
 		}
 		out.Title, out.State = block.Title, block.State
@@ -156,7 +156,7 @@ func htmlBlock(parent *tab, blockID string) (struct {
 // frame, with the static markup absent and no error anywhere. Everything else
 // about a block already worked: the bridge writes through the block's own ctx,
 // so aboard.set() lands in blocks[].state.data on its own.
-func (s *server) serveTabHTML(w http.ResponseWriter, r *http.Request, tabID string) {
+func (s *server) serveTabHTML(w http.ResponseWriter, _ *http.Request, tabID string) {
 	raw, err := os.ReadFile(s.stateFile)
 	if err != nil {
 		http.Error(w, "cannot read state", http.StatusInternalServerError)
@@ -196,7 +196,7 @@ func (s *server) serveTabHTML(w http.ResponseWriter, r *http.Request, tabID stri
 		if name == "" {
 			name = found.Name
 		}
-	} else if found.Type != "html" {
+	} else if found.Type != tabTypeHTML {
 		http.Error(w, "tab is not an html tab", http.StatusBadRequest)
 		return
 	}

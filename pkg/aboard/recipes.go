@@ -28,6 +28,7 @@
 // recipe shadowed by a higher tier is reported on the winner and still listed.
 // The alternative is a file the author is looking at, that the tool behaves as
 // though does not exist.
+
 package aboard
 
 import (
@@ -571,16 +572,22 @@ func RecipeIndexMarkdown(recipes []Recipe) string {
 // table and believes it is the whole set is wrong.
 const recipeIndexParagraph = "**The table above is only the recipes shipped in the binary. This project may\n" +
 	"have more.** Run `aboard recipes list` to see every recipe actually available\n" +
-	"here — it prints `name`, `scope`, `path` and `shadowed-by`, one row each, and it\n" +
-	"is the only complete answer, because a project's own recipes are files on disk\n" +
-	"that no generated document can know about. `aboard recipes show <name>` prints\n" +
-	"the recipe body to stdout; read it and follow it. If the recipe carries a tab\n" +
+	"here — one line per recipe (`name`, `scope`, `description`), and, indented\n" +
+	"under it, the file's path and anything it shadows. A clean built-in is one\n" +
+	"line; a recipe with something worth knowing about it is two, and says what.\n" +
+	"`aboard recipes list --output-format json` carries the whole record, including\n" +
+	"`whenToUse`, `tags`, `requires`, `hasTemplate` and `shadowedBy`. It is the only\n" +
+	"complete answer, because a project's own recipes are files on disk that no\n" +
+	"generated document can know about. `aboard recipes show <name>` prints the\n" +
+	"recipe body to stdout; read it and follow it. If the recipe carries a tab\n" +
 	"skeleton, `aboard recipes show <name> --template` prints just that JSON, ready to\n" +
-	"edit and hand to `aboard apply`. When two recipes share a name the first of\n" +
-	"`_apex/aboard/recipes/` → `_aboard/recipes/` → `.aboard/recipes/` → built-in\n" +
-	"wins, and `aboard recipes list` names the loser in `shadowed-by` rather than\n" +
-	"hiding it — a project that overrides a built-in recipe is doing something\n" +
-	"deliberate and you should be able to see what it replaced.\n"
+	"edit and hand to `aboard apply` — and a recipe with no skeleton exits non-zero\n" +
+	"naming itself, rather than printing an empty document you would apply as an\n" +
+	"empty tab. When two recipes share a name the first of `_apex/aboard/recipes/` →\n" +
+	"`_aboard/recipes/` → `.aboard/recipes/` → built-in wins, and the winning row\n" +
+	"names the file it shadowed rather than hiding it — a project that overrides a\n" +
+	"built-in recipe is doing something deliberate and you should be able to see\n" +
+	"what it replaced.\n"
 
 // mdCell makes a value safe for a markdown table cell: one line, pipes escaped.
 // Never truncated — a description too long for a table is a description to

@@ -98,7 +98,7 @@ func TestRootPaths(t *testing.T) {
 
 func TestRootResolve(t *testing.T) {
 	root := Root(filepath.FromSlash("/p"))
-	if got, want := root.Resolve("x.json"), filepath.Join("/p", "x.json"); got != want {
+	if got, want := root.Resolve("x.json"), filepath.Join(string(filepath.Separator)+"p", "x.json"); got != want {
 		t.Errorf("Resolve(relative) = %q, want %q — a relative path means relative to the ROOT, not the cwd", got, want)
 	}
 	abs := filepath.Join(string(filepath.Separator)+"elsewhere", "x.json")

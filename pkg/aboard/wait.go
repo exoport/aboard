@@ -19,16 +19,19 @@
 // go stale: if the session dies, the TCP connection dies with it and the count
 // drops. Nothing to heartbeat, nothing to expire, no registry file to clean up
 // — which is the whole reason the button can honestly claim someone is there.
+
 package aboard
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -116,13 +119,24 @@ func (h *waitHub) count() int {
 	return len(h.active)
 }
 
+// maxNoteLen caps a waiting session's note. It is shown in a header button, so
+// a long one would push the countdown off the strip; the cap truncates rather
+// than refuses, because losing the tail of a reason is better than losing the
+// waiter.
+const maxNoteLen = 140
+
+// eventPoke is three things on purpose, and they must never drift apart: the
+// default predicate, the kind of the predicate that only an explicit poke
+// releases, and the event name a released waiter prints.
+const eventPoke = "poke"
+
 // release wakes everyone and returns how many were actually reached, which is
 // what the button reports. Waiters are dropped from the set here rather than
 // waiting for each handler to unregister, so two clicks in a row cannot claim
 // the same session twice.
 func (h *waitHub) release(by, note string) (int, pokeEvent) {
 	ev := pokeEvent{
-		Event: "poke",
+		Event: eventPoke,
 		At:    time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		By:    by,
 		Note:  note,
@@ -182,10 +196,10 @@ type predicate struct {
 func parsePredicate(raw string) (predicate, error) {
 	fields := strings.Fields(strings.TrimSpace(raw))
 	if len(fields) == 0 {
-		return predicate{kind: "poke"}, nil
+		return predicate{kind: eventPoke}, nil
 	}
 	switch fields[0] {
-	case "poke", "change":
+	case eventPoke, "change":
 		if len(fields) > 1 {
 			return predicate{}, fmt.Errorf("%q takes no argument", fields[0])
 		}
@@ -210,7 +224,7 @@ func parsePredicate(raw string) (predicate, error) {
 // the document as written, `entry` the summary of what changed in it.
 func (p predicate) matches(doc []byte, entry JournalEntry) bool {
 	switch p.kind {
-	case "poke":
+	case eventPoke:
 		return false // only an explicit poke releases those
 	case "change":
 		return len(entry.Tabs) > 0
@@ -227,12 +241,7 @@ func (p predicate) matches(doc []byte, entry JournalEntry) bool {
 }
 
 func containsString(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, want)
 }
 
 // nodeHasStatus walks the document generically rather than knowing which tab or
@@ -308,7 +317,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 
 	forWhat := q.Get("for")
 	if forWhat == "" {
-		forWhat = "poke"
+		forWhat = eventPoke
 	}
 	pred, err := parsePredicate(forWhat)
 	if err != nil {
@@ -341,7 +350,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	// waiting agent should always fill this in: "waiting on form 15" is a
 	// reason to press the button, a bare label is a mystery.
 	note := q.Get("note")
-	if len(note) > 140 {
+	if len(note) > maxNoteLen {
 		note = note[:140]
 	}
 
@@ -366,16 +375,19 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// maxPokeBody caps a poke's payload: a name and a note, nothing else.
+const maxPokeBody = 4 << 10
+
 func (s *server) handlePoke(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		By   string `json:"by"`
 		Note string `json:"note"`
 	}
 	if r.Body != nil {
-		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&body)
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxPokeBody)).Decode(&body)
 	}
 	if body.By == "" {
-		body.By = "human"
+		body.By = actorHuman
 	}
 
 	released, ev := s.waits.release(body.By, body.Note)
@@ -413,7 +425,7 @@ func (s *server) broadcastWaiters() {
 // Wait blocks until the board is poked. It returns ExitOK when poked and
 // ExitTimeout when the timeout ran out — distinguishable so a script can tell
 // "the human said go" from "nobody came".
-func Wait(root Root, name, by, forWhat, note string, timeout time.Duration, out io.Writer) (int, error) {
+func Wait(ctx context.Context, root Root, name, by, forWhat, note string, timeout time.Duration, out io.Writer) (int, error) {
 	// Refused here rather than at the long poll, so a caller learns immediately
 	// instead of after the timeout on something that would never have fired.
 	if _, err := parsePredicate(forWhat); err != nil {
@@ -437,7 +449,11 @@ func Wait(root Root, name, by, forWhat, note string, timeout time.Duration, out 
 	// Give the HTTP client more rope than the server's own timeout, so a clean
 	// "timeout" answer always beats a client-side abort.
 	client := &http.Client{Timeout: timeout + 30*time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return ExitFailed, err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return ExitFailed, fmt.Errorf("waiting on %s: %w", inst.URL, err)
 	}
@@ -465,7 +481,7 @@ func Wait(root Root, name, by, forWhat, note string, timeout time.Duration, out 
 
 // Poke is the same gesture as the human's notify button, for an agent that wants
 // to hand off to another session without going through the browser.
-func Poke(root Root, name, by, note string, out io.Writer) error {
+func Poke(ctx context.Context, root Root, name, by, note string, out io.Writer) error {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		return err
@@ -474,7 +490,12 @@ func Poke(root Root, name, by, note string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(inst.URL+"/poke", "application/json", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.URL+"/poke", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("posting to %s: %w", inst.URL, err)
 	}

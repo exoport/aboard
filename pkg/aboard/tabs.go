@@ -1,9 +1,11 @@
 package aboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"time"
 )
 
@@ -73,7 +75,27 @@ type board struct {
 	Tabs []tab `json:"tabs"`
 }
 
-func isHuman(by string) bool { return by == "human" }
+// The two actor names every guarantee in this file keys off. Written once
+// because both mistakes fail OPEN and therefore silently: a `by` that is not
+// actorHuman is treated as an agent, and an absent one is stamped actorUnknown,
+// which has an agent's powers and no more. A typo in either literal would hand
+// out or withhold powers with nothing to report it.
+const (
+	actorHuman   = "human"
+	actorUnknown = "unknown"
+)
+
+// The two tab types the ENGINE has to know by name. Every other type is opaque
+// to Go — a name and a state blob the renderer owns — which is what "tabs are
+// data" means. These two are not: a stack's blocks are a second level of
+// (type, state) pairs the write checker and export must walk, and an html tab is
+// served from its own sandboxed route.
+const (
+	tabTypeStack = "stack"
+	tabTypeHTML  = "html"
+)
+
+func isHuman(by string) bool { return by == actorHuman }
 
 // reconcileTabs applies the guarantees above and stamps `touched` on every
 // tab an agent actually changed. Returns the tab list to persist.
@@ -97,18 +119,19 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	before := map[string]tab{}
 	order := []string{}
-	for _, t := range cur.Tabs {
-		before[t.ID] = t
-		order = append(order, t.ID)
+	for i := range cur.Tabs {
+		before[cur.Tabs[i].ID] = cur.Tabs[i]
+		order = append(order, cur.Tabs[i].ID)
 	}
 	after := map[string]tab{}
-	for _, t := range inc.Tabs {
-		after[t.ID] = t
+	for i := range inc.Tabs {
+		after[inc.Tabs[i].ID] = inc.Tabs[i]
 	}
 
 	out := make([]tab, 0, len(inc.Tabs)+2)
 
-	for _, t := range inc.Tabs {
+	for i := range inc.Tabs {
+		t := inc.Tabs[i]
 		prev, existed := before[t.ID]
 
 		if !existed {
@@ -203,7 +226,7 @@ func jsonEqual(a, b json.RawMessage) bool {
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	return string(ab) == string(bb)
+	return bytes.Equal(ab, bb)
 }
 
 func indexOf(ids []string, id string) int {
@@ -287,9 +310,7 @@ func restoreAcks(v any, acks map[string]map[string]any) bool {
 		if id, ok := t["id"].(string); ok {
 			if ack, known := acks[id]; known {
 				if by, ok := t["ackBy"].(string); !ok || by == "" {
-					for k, val := range ack {
-						t[k] = val
-					}
+					maps.Copy(t, ack)
 					changed = true
 				}
 			}
@@ -317,9 +338,7 @@ func mergeSeen(prev, next map[string]string, by string) map[string]string {
 		return next
 	}
 	out := map[string]string{}
-	for actor, at := range prev {
-		out[actor] = at
-	}
+	maps.Copy(out, prev)
 	for actor, at := range next {
 		// Only the writer may set the writer's own stamp; anything else it claims
 		// about another actor is ignored rather than trusted.

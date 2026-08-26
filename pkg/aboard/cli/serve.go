@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/exoport/aboard/pkg/aboard"
 	"github.com/spf13/cobra"
@@ -48,7 +48,7 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 				StateFile: root.Resolve(state),
 			}
 			if !dev && devDir != "" {
-				return usageErr(fmt.Errorf("--dev-dir has no effect without --dev"))
+				return usageErr(errors.New("--dev-dir has no effect without --dev"))
 			}
 			return aboard.Serve(cmd.Context(), opts, cfg)
 		},

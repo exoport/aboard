@@ -7,6 +7,7 @@
 // only place a status leaves the process. That is also what makes the commands
 // testable in-process: os.Exit inside a RunE would kill the test binary on the
 // first assertion.
+
 package cli
 
 import (

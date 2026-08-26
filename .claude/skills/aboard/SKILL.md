@@ -53,11 +53,11 @@ a near-miss. Run:
 aboard recipes list
 ```
 
-and tell the user which names exist here — it prints `name`, `scope`, `path` and
-`shadowed-by` for every recipe actually available in this project, which is more
-than the built-in set: a project can add its own under `_apex/aboard/recipes/`,
-`_aboard/recipes/` or `.aboard/recipes/`, and the first of those four wins on a
-name collision. [references/recipes.md](references/recipes.md) lists the
+and tell the user which names exist here — one line per recipe (name, scope,
+description), with the file's path and anything it shadows indented underneath,
+which is more than the built-in set: a project can add its own under
+`_apex/aboard/recipes/`, `_aboard/recipes/` or `.aboard/recipes/`, and the first
+of those four wins on a name collision. [references/recipes.md](references/recipes.md) lists the
 built-ins only, which is why `recipes list` is the complete answer.
 
 **Otherwise `$ARGUMENTS` is a plain description** (or empty). Proceed normally:
@@ -95,7 +95,9 @@ which is the failure that otherwise looks like success.
 `aboard status` or `.aboard/run/instance.json`, and give it to the user the first
 time:
 
-> Board is at http://localhost:46624 — `Ctrl/Cmd+Shift+P` → "Simple Browser: Show" → paste that URL.
+> Board is at http://localhost:41837 — `Ctrl/Cmd+Shift+P` → "Simple Browser: Show" → paste that URL.
+
+(That number is an EXAMPLE. This project derives its own; read it, do not copy it.)
 
 If there is no board at all, `aboard init` creates `.aboard/aboard.json` and the
 run directory and prints the gitignore line; `aboard init --example` seeds it with

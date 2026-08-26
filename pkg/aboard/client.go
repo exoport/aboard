@@ -3,9 +3,12 @@
 // Every one of them goes through the instance file to find the URL, so they all
 // fail the same recognisable way when nothing is running. None of them exits the
 // process: they return errors, and the cli layer decides what a status code is.
+
 package aboard
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +19,11 @@ import (
 	"strings"
 )
 
+// replyReadLimit caps what a reply body may cost us. Every response this file
+// reads is a status line or a short refusal; anything larger is a server that
+// has gone wrong, and reading it all would be the second thing to go wrong.
+const replyReadLimit = 4 << 10
+
 // Apply posts a board document to the running board instead of writing the file
 // directly. Direct writes have no compare-and-set, so two agents — or an agent
 // and the browser — can silently drop each other's changes; going through the
@@ -23,8 +31,8 @@ import (
 //
 // The base for the comparison is the `updatedAt` already inside the submitted
 // document: whatever was read before editing is exactly the right base.
-func Apply(root Root, name, by string, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
-	if by == "human" {
+func Apply(ctx context.Context, root Root, name, by string, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
+	if by == actorHuman {
 		// The human acts in the browser, and the guarantees in tabs.go key off
 		// this exact string: a write stamped `human` may delete tabs, clear
 		// `touched` markers and drop chat acks. An agent that borrowed the name
@@ -83,12 +91,17 @@ func Apply(root Root, name, by string, assets fs.FS, in io.Reader, out, errOut i
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(inst.URL+"/aboard.json", "application/json", strings.NewReader(string(payload)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.URL+"/aboard.json", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("posting to %s: %w", inst.URL, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	got, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	got, _ := io.ReadAll(io.LimitReader(resp.Body, replyReadLimit))
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -141,7 +154,7 @@ type StatusReport struct {
 }
 
 // Status collects everything `aboard status` reports.
-func Status(root Root, name string, assets fs.FS) StatusReport {
+func Status(ctx context.Context, root Root, name string, assets fs.FS) StatusReport {
 	rep := StatusReport{
 		Project:      root.String(),
 		Name:         name,
@@ -151,10 +164,10 @@ func Status(root Root, name string, assets fs.FS) StatusReport {
 	if m, err := buildManifest(assets); err == nil {
 		rep.CapsHash = m.Hash
 		rep.SkillCapsHash = stampedHash(root)
-		switch {
-		case rep.SkillCapsHash == "":
+		switch rep.SkillCapsHash {
+		case "":
 			rep.Skill = SkillAbsent
-		case rep.SkillCapsHash == m.Hash:
+		case m.Hash:
 			rep.Skill = SkillCurrent
 		default:
 			rep.Skill = SkillStale
@@ -175,7 +188,7 @@ func Status(root Root, name string, assets fs.FS) StatusReport {
 	rep.Port, rep.PID, rep.URL, rep.State = got.Port, got.PID, got.URL, got.State
 	rep.App, rep.Version, rep.Started = got.App, got.Version, got.Started
 
-	live := ProbeBoard(got.Port, got.Base)
+	live := ProbeBoard(ctx, got.Port, got.Base)
 	if live == nil {
 		return rep
 	}

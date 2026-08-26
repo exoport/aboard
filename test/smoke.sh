@@ -315,7 +315,20 @@ if [ -x ./aboard ]; then
   # plain button() rather than a declared control — but they go through the helper
   # like everything else, which is what makes this grep total instead of "total
   # except one file nobody remembers".
-  RAW=$(grep -l "createElement('button')" "$WEB"/views/*.js "$WEB"/aboard.html 2>/dev/null | grep -v 'views/controls.js' || true)
+  #    Comments are stripped first, and that is not fussiness: this check FIRED on
+  #    views/diagram.js, whose header comment records why its four buttons were
+  #    moved into a spec — and names the very call the fix stopped making. A check
+  #    that fails on a note explaining the rule teaches people to delete the note.
+  #    (Same family as the older `--dump-dom` bite, where the grep matched the
+  #    page's own inline script.)
+  RAW=""
+  for f in "$WEB"/views/*.js "$WEB"/aboard.html; do
+    case "$f" in *views/controls.js) continue ;; esac
+    if sed 's://.*::' "$f" | grep -q "createElement('button')"; then
+      RAW="$RAW $f"
+    fi
+  done
+  RAW=$(echo $RAW)
   check "every button goes through controls.js" "${RAW:-none}" "none"
 
   # 2. Every DECLARED control is actually used by its renderer. The other

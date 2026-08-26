@@ -16,13 +16,19 @@
 
 **The table above is only the recipes shipped in the binary. This project may
 have more.** Run `aboard recipes list` to see every recipe actually available
-here — it prints `name`, `scope`, `path` and `shadowed-by`, one row each, and it
-is the only complete answer, because a project's own recipes are files on disk
-that no generated document can know about. `aboard recipes show <name>` prints
-the recipe body to stdout; read it and follow it. If the recipe carries a tab
+here — one line per recipe (`name`, `scope`, `description`), and, indented
+under it, the file's path and anything it shadows. A clean built-in is one
+line; a recipe with something worth knowing about it is two, and says what.
+`aboard recipes list --output-format json` carries the whole record, including
+`whenToUse`, `tags`, `requires`, `hasTemplate` and `shadowedBy`. It is the only
+complete answer, because a project's own recipes are files on disk that no
+generated document can know about. `aboard recipes show <name>` prints the
+recipe body to stdout; read it and follow it. If the recipe carries a tab
 skeleton, `aboard recipes show <name> --template` prints just that JSON, ready to
-edit and hand to `aboard apply`. When two recipes share a name the first of
-`_apex/aboard/recipes/` → `_aboard/recipes/` → `.aboard/recipes/` → built-in
-wins, and `aboard recipes list` names the loser in `shadowed-by` rather than
-hiding it — a project that overrides a built-in recipe is doing something
-deliberate and you should be able to see what it replaced.
+edit and hand to `aboard apply` — and a recipe with no skeleton exits non-zero
+naming itself, rather than printing an empty document you would apply as an
+empty tab. When two recipes share a name the first of `_apex/aboard/recipes/` →
+`_aboard/recipes/` → `.aboard/recipes/` → built-in wins, and the winning row
+names the file it shadowed rather than hiding it — a project that overrides a
+built-in recipe is doing something deliberate and you should be able to see
+what it replaced.

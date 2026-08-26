@@ -147,7 +147,8 @@ tree produces no diff.`,
 			if err != nil {
 				return err
 			}
-			for _, r := range built {
+			for i := range built {
+				r := &built[i]
 				if !r.Valid() {
 					// A built-in that does not parse is a build defect, not a user
 					// error: it would emit a row of empty cells into a committed

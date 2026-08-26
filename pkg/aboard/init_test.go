@@ -1,6 +1,7 @@
 package aboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -97,7 +98,7 @@ func TestInitRefusesToOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) {
+	if !bytes.Equal(before, after) {
 		t.Error("the refused init changed the document anyway")
 	}
 }

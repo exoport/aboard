@@ -23,6 +23,7 @@
 // Three hashes rather than one, because a stylesheet does not need a reload: if
 // only the CSS moved, the page re-links app.css and keeps your scroll position,
 // your selection and your half-typed sentence.
+
 package aboard
 
 import (
@@ -142,6 +143,11 @@ func (s *server) uiPayload() string {
 	return string(b)
 }
 
+// uiWatchInterval is how often --dev re-hashes the asset tree. Fast enough that
+// a save reaches the open page before the human has switched windows, slow
+// enough that the hash is free.
+const uiWatchInterval = 400 * time.Millisecond
+
 // watchUI polls for asset changes in dev mode and pushes the new signature. In
 // embedded mode there is nothing to poll: the files live inside this process, so
 // the only way they change is a restart, and a restart is already covered by the
@@ -152,7 +158,7 @@ func (s *server) watchUI() {
 	}
 	last := s.ui.signature(s.assets)
 	for {
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(uiWatchInterval)
 		s.ui.mu.Lock()
 		s.ui.cached = nil // force a recompute
 		s.ui.mu.Unlock()

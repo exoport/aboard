@@ -18,6 +18,7 @@
 // Bounded from the start, because an append-only file that nobody prunes is the
 // same bug as a log tab inside aboard.json: rotate at a size cap, keep one older
 // generation, and store only the tabs a write actually touched.
+
 package aboard
 
 import (
@@ -147,11 +148,12 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 		_ = json.Unmarshal(currentRaw, &cur)
 	}
 	before := map[string]tab{}
-	for _, t := range cur.Tabs {
-		before[t.ID] = t
+	for i := range cur.Tabs {
+		before[cur.Tabs[i].ID] = cur.Tabs[i]
 	}
 
-	for _, t := range next {
+	for i := range next {
+		t := &next[i]
 		prev, existed := before[t.ID]
 		// The same comparison reconcileTabs makes, deliberately: one of them
 		// raises the dot on the tab and the other writes the journal line, and a
@@ -304,7 +306,7 @@ const (
 // The source is returned rather than printed here so the caller decides where it
 // says so: on stderr in human mode, and nowhere at all in json mode, where a
 // prose line would be something for jq to choke on.
-func JournalEntries(root Root, name string, limit int) ([]JournalEntry, string, error) {
+func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]JournalEntry, string, error) {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		entries, derr := journalFromDisk(root, limit)
@@ -313,7 +315,12 @@ func JournalEntries(root Root, name string, limit int) ([]JournalEntry, string, 
 		}
 		return entries, JournalFromDisk, nil
 	}
-	resp, err := http.Get(fmt.Sprintf("%s/journal?limit=%d", inst.URL, limit))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/journal?limit=%d", inst.URL, limit), http.NoBody)
+	if err != nil {
+		return nil, JournalFromServer, err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, JournalFromServer, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
 	}
@@ -327,6 +334,10 @@ func JournalEntries(root Root, name string, limit int) ([]JournalEntry, string, 
 	}
 	return payload.Entries, JournalFromServer, nil
 }
+
+// maxJournalLine caps one journal line. An entry is a summary — ids and a
+// sentence — so anything near this is a corrupt file, not a long day.
+const maxJournalLine = 4 << 20
 
 // journalFromDisk reads the same file the server appends to, through the same
 // tail() the endpoint uses — so the two answers cannot differ in shape, only in
@@ -384,7 +395,7 @@ func Watch(ctx context.Context, root Root, name string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inst.URL+"/watch", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, inst.URL+"/watch", http.NoBody)
 	if err != nil {
 		return err
 	}
@@ -400,7 +411,7 @@ func Watch(ctx context.Context, root Root, name string, out io.Writer) error {
 	// Unbuffered line-by-line copy, so a shell pipeline sees each change as it
 	// happens rather than when a buffer fills.
 	scan := bufio.NewScanner(resp.Body)
-	scan.Buffer(make([]byte, 0, 64<<10), 4<<20)
+	scan.Buffer(make([]byte, 0, 64<<10), maxJournalLine)
 	for scan.Scan() {
 		fmt.Fprintln(out, scan.Text())
 	}
@@ -414,9 +425,5 @@ func joinOr(items []string, empty string) string {
 	if len(items) == 0 {
 		return empty
 	}
-	out := items[0]
-	for _, s := range items[1:] {
-		out += ", " + s
-	}
-	return out
+	return strings.Join(items, ", ")
 }

@@ -22,6 +22,7 @@
 //	.aboard/run/shots/          screenshots from test/shot.sh
 //
 // A project ignores `.aboard/` wholesale and loses nothing it wanted to keep.
+
 package aboard
 
 import (

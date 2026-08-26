@@ -21,6 +21,7 @@
 // Everything reads the identity through Build(); nothing reads these variables
 // directly, so an unstamped build (go run, go install, a plain go build) still
 // answers with whatever Go itself recorded.
+
 package aboard
 
 import (
@@ -151,13 +152,21 @@ func BuildStamp() string {
 	return info.ModTime().UTC().Format(time.RFC3339)
 }
 
+// The placeholders a build system writes when it has nothing real to stamp. All
+// of them are recognised rather than picking a winner and silently breaking the
+// other, which is what a project inheriting ape's Makefile would hit.
+const (
+	unstampedUnknown = "unknown"
+	unstampedNone    = "none"
+)
+
 // realStamp reduces a stamped value to "" unless it is real provenance. The
 // Makefile falls back to `dev` and `unknown` in a tree with no git, and ape's
 // two commands historically used different placeholders — all of them are
 // recognised rather than picking a winner and silently breaking the other.
 func realStamp(v string) string {
 	switch trimmed := strings.TrimSpace(v); trimmed {
-	case "", devVersion, "unknown", "none":
+	case "", devVersion, unstampedUnknown, unstampedNone:
 		return ""
 	default:
 		return trimmed

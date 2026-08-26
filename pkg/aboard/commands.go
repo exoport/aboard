@@ -14,6 +14,7 @@
 // wrong source. It is the same seam as views/*.spec.json: the declaration is
 // canonical and the code is checked against it, rather than the code being
 // scraped and the scrape believed.
+
 package aboard
 
 // Exit codes. A small table, shared across commands so a code means one thing.
@@ -30,6 +31,11 @@ const (
 	ExitUsage   = 2
 	ExitTimeout = 3
 )
+
+// defaultOutputFormat is the value every --output-format flag falls back to.
+// Declared once here because the declared table is what the parity test asserts
+// the cobra tree against: a drifting default would be a real contract break.
+const defaultOutputFormat = "human"
 
 // Flag is one declared flag: what a caller may pass, and what it defaults to.
 // Type is pflag's own type name ("string", "int", "bool", "duration"), because
@@ -95,7 +101,7 @@ func Commands() []Command {
 			Name: "status",
 			Doc:  "report this project's running board, if any, and the caps beacon",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: "human", Doc: "human, json or yaml"},
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
 			},
 			Exits: commonExits(),
 		},
@@ -105,7 +111,7 @@ func Commands() []Command {
 			Flags: []Flag{
 				{Name: "example", Type: "bool", Def: "false", Doc: "seed the board with the example tabs compiled into this binary"},
 				{Name: "gitignore", Type: "bool", Def: "false", Doc: "append " + GitignoreLine + " to the project's .gitignore if it is not already ignored"},
-				{Name: "output-format", Type: "string", Def: "human", Doc: "human, json or yaml"},
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
 			},
 			Exits: commonExits(),
 		},
@@ -142,7 +148,7 @@ func Commands() []Command {
 			Doc:  "print recent accepted writes: when, who, which tabs",
 			Flags: []Flag{
 				{Name: "limit", Type: "int", Def: "40", Doc: "how many entries to print"},
-				{Name: "output-format", Type: "string", Def: "human", Doc: "human, json or yaml"},
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
 			},
 			Exits: commonExits(),
 		},
@@ -193,7 +199,7 @@ func Commands() []Command {
 			Name: "version",
 			Doc:  "print the build identity of this binary",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: "human", Doc: "human, json or yaml"},
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
 			},
 			Exits: commonExits(),
 		},

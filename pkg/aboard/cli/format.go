@@ -2,6 +2,7 @@
 //
 // Structured output goes to stdout and diagnostics to stderr, so a consumer can
 // pipe `--output-format json` straight into jq without filtering prose out of it.
+
 package cli
 
 import (

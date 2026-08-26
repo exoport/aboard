@@ -21,9 +21,9 @@ func fixtureRoot(t *testing.T) Root {
 
 func recipeByName(t *testing.T, list []Recipe, name string) Recipe {
 	t.Helper()
-	for _, r := range list {
-		if r.Name == name {
-			return r
+	for i := range list {
+		if list[i].Name == name {
+			return list[i]
 		}
 	}
 	t.Fatalf("no recipe named %q in %d discovered", name, len(list))

@@ -23,6 +23,7 @@
 // The file watcher polls a content hash rather than using an OS watcher. That
 // keeps the dependency list to cobra and, unlike a single-file watch, it survives
 // an editor that saves by rename.
+
 package aboard
 
 import (
@@ -35,6 +36,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"mime"
 	"net"
 	"net/http"
@@ -210,7 +212,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		journal:   newJournal(cfg.Root),
 	}
 
-	listener, chosen, err := srv.listen(cfg.Port, cfg.Root, cfg.Name)
+	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -269,9 +271,10 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 // means "derive one from the project root", then walk forward if that exact port
 // is already busy — but if the occupant turns out to be this project's own
 // board, say so and stop instead of starting a duplicate.
-func (s *server) listen(want int, root Root, name string) (net.Listener, int, error) {
+func (s *server) listen(ctx context.Context, want int, root Root, name string) (net.Listener, int, error) {
+	var lc net.ListenConfig
 	if want != 0 {
-		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", want))
+		ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", want))
 		if err != nil {
 			return nil, 0, fmt.Errorf("port %d is busy: %w", want, err)
 		}
@@ -279,19 +282,27 @@ func (s *server) listen(want int, root Root, name string) (net.Listener, int, er
 	}
 
 	first := DerivePort(root, name)
-	for i := 0; i < portTries; i++ {
+	for i := range portTries {
 		p := portBase + ((first - portBase + i) % portSpan)
-		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", p))
+		ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", p))
 		if err == nil {
 			return ln, p, nil
 		}
-		if other := probeOccupant(root, name, p); other != nil && other.Project == root.String() && other.Name == name {
+		if other := probeOccupant(ctx, root, name, p); other != nil && other.Project == root.String() && other.Name == name {
 			return nil, 0, fmt.Errorf("this project's board is already running at %s (pid %d)", other.URL, other.PID)
 		}
 		s.opts.Log().Printf("port %d busy, trying %d", p, portBase+((first-portBase+i+1)%portSpan))
 	}
 	return nil, 0, fmt.Errorf("no free port found in %d-%d after %d tries", portBase, portBase+portSpan-1, portTries)
 }
+
+// What a probe will spend on an occupant that may not be a board at all: a
+// local connection either answers in well under this or is not listening, and
+// the reply is a one-line instance record.
+const (
+	probeTimeout   = 400 * time.Millisecond
+	probeReadLimit = 4 << 10
+)
 
 // ProbeBoard asks whoever holds a port whether they are a board, and whose.
 //
@@ -304,9 +315,14 @@ func (s *server) listen(want int, root Root, name string) (net.Listener, int, er
 // --base-path answers at <base>/health and NOWHERE else: probing the bare root
 // made `aboard status` report a live prefixed board as a stale record, which is
 // the one sentence that sends a session off to restart a healthy server.
-func ProbeBoard(port int, base string) *Instance {
-	client := &http.Client{Timeout: 400 * time.Millisecond}
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d%s/health", port, NormalizeBasePath(base)))
+func ProbeBoard(ctx context.Context, port int, base string) *Instance {
+	client := &http.Client{Timeout: probeTimeout}
+	url := fmt.Sprintf("http://127.0.0.1:%d%s/health", port, NormalizeBasePath(base))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil
 	}
@@ -315,7 +331,7 @@ func ProbeBoard(port int, base string) *Instance {
 		return nil
 	}
 	var got Instance
-	if json.NewDecoder(io.LimitReader(resp.Body, 4<<10)).Decode(&got) != nil {
+	if json.NewDecoder(io.LimitReader(resp.Body, probeReadLimit)).Decode(&got) != nil {
 		return nil
 	}
 	if got.App != HostStandalone && got.App != HostApe {
@@ -330,15 +346,15 @@ func ProbeBoard(port int, base string) *Instance {
 // record names. Without the second try a prefixed board fails to recognise
 // ITSELF on restart and quietly starts a duplicate one port along, which is the
 // exact failure the recognition exists to prevent.
-func probeOccupant(root Root, name string, port int) *Instance {
-	if inst := ProbeBoard(port, ""); inst != nil {
+func probeOccupant(ctx context.Context, root Root, name string, port int) *Instance {
+	if inst := ProbeBoard(ctx, port, ""); inst != nil {
 		return inst
 	}
 	rec, err := RunningInstance(root, name)
 	if err != nil || rec.Port != port || rec.Base == "" {
 		return nil
 	}
-	return ProbeBoard(port, rec.Base)
+	return ProbeBoard(ctx, port, rec.Base)
 }
 
 func (s *server) writeInstance(root Root, name string) error {
@@ -364,7 +380,7 @@ func (s *server) writeInstance(root Root, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(root.InstanceFile(name), append(body, '\n'), 0o644)
+	return os.WriteFile(root.InstanceFile(name), append(body, '\n'), 0o644) //nolint:gosec // 0o644 is the board's repo-wide file-mode policy; see the note in init.go
 }
 
 func (s *server) removeInstance() {
@@ -419,16 +435,26 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if s.routeAPI(w, r, upath) {
+		return
+	}
+	s.routeUI(w, r, upath)
+}
+
+// routeAPI handles the endpoints something other than a browser page talks to:
+// the state document, the notify channel, the journal, the log sink, uploads.
+// It reports whether it recognised the path, so route can fall through to the
+// UI half rather than 404 twice.
+//
+// Split from routeUI because one switch carrying both measured 40 branches, and
+// the two halves have different rules: everything here answers a client and
+// names its method, everything there serves a file to a page.
+func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) bool {
 	switch {
-	case upath == "/" || upath == "/aboard.html":
-		s.serveShell(w, r)
 	case upath == "/aboard.json" && r.Method == http.MethodGet:
 		s.getState(w)
 	case upath == "/aboard.json" && r.Method == http.MethodPost:
 		s.postState(w, r)
-	case strings.HasPrefix(upath, "/tab/") && strings.HasSuffix(upath, "/html") && r.Method == http.MethodGet:
-		id := strings.TrimSuffix(strings.TrimPrefix(upath, "/tab/"), "/html")
-		s.serveTabHTML(w, r, id)
 	case upath == "/health" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, s.instance)
 	case upath == "/events" && r.Method == http.MethodGet:
@@ -453,6 +479,21 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 		s.handleUpload(w, r)
 	case upath == "/uploads" && r.Method == http.MethodGet:
 		s.handleUploads(w, r)
+	default:
+		return false
+	}
+	return true
+}
+
+// routeUI serves what a page asks for: the shell, an html tab's sandboxed
+// frame, an uploaded image, and the embedded (or --dev on-disk) assets.
+func (s *server) routeUI(w http.ResponseWriter, r *http.Request, upath string) {
+	switch {
+	case upath == "/" || upath == "/aboard.html":
+		s.serveShell(w, r)
+	case strings.HasPrefix(upath, "/tab/") && strings.HasSuffix(upath, "/html") && r.Method == http.MethodGet:
+		id := strings.TrimSuffix(strings.TrimPrefix(upath, "/tab/"), "/html")
+		s.serveTabHTML(w, r, id)
 	case strings.HasPrefix(upath, "/"+uploadDir+"/") && r.Method == http.MethodGet:
 		s.serveUpload(w, strings.TrimPrefix(upath, "/"+uploadDir+"/"))
 	case r.Method == http.MethodGet:
@@ -518,7 +559,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	// an agent-level one.
 	by, _ := incoming["__by"].(string)
 	if by == "" {
-		by = "unknown"
+		by = actorUnknown
 	}
 	delete(incoming, "__origin")
 	delete(incoming, "__base")
@@ -710,8 +751,9 @@ func (s *server) broadcast() {
 	s.pendingOrigin = ""
 	payload := `{"origin":null}`
 	if origin != "" {
-		b, _ := json.Marshal(map[string]string{"origin": origin})
-		payload = string(b)
+		if b, err := json.Marshal(map[string]string{"origin": origin}); err == nil {
+			payload = string(b)
+		}
 	}
 	s.mu.Unlock()
 
@@ -826,5 +868,11 @@ func writeJSON(w http.ResponseWriter, code int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(payload)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		// The status line is already on the wire, so there is no code left to
+		// change and the client sees a truncated body. Log it: a handler that
+		// cannot serialise its own reply is a bug, and silence is how it stays
+		// one.
+		log.Printf("writeJSON: encoding a %d reply: %v", code, err)
+	}
 }

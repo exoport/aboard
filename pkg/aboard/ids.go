@@ -43,7 +43,7 @@ import (
 // "bb147" is the current form; bare "147" and legacy "n147" are still read, which
 // is why this was always prefix-tolerant — the migration to "bb" needed no change
 // here, nor in any renderer, since they all parse ids with the same shape.
-var idSuffix = regexp.MustCompile(`^[a-z]*([0-9]+)$`)
+var idSuffix = regexp.MustCompile(`^[a-z]*(\d+)$`)
 
 // reconcileNextID returns the value of nextId to persist: never lower than what
 // either document already had, and always above every numeric id in use in
@@ -83,23 +83,38 @@ func reconcileNextID(incomingRaw, currentRaw []byte) int {
 	return high
 }
 
+// idCounter reads the numeric tail of an id value, or 0 for anything that is not
+// one. Anything that is not an id shaped like "<prefix><digits>" simply does not
+// raise the counter — a non-id "id" field is somebody else's data, not an error.
+func idCounter(v any) int {
+	s, ok := v.(string)
+	if !ok {
+		return 0
+	}
+	m := idSuffix.FindStringSubmatch(s)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
 // maxUsedID walks the whole document for "<prefix><digits>" ids and returns the
 // largest number seen. It scans generically rather than knowing each renderer's
 // shape, so a new tab type gets this for free.
 func maxUsedID(doc map[string]any) int {
-	max := 0
+	highest := 0
 	var walk func(any)
 	walk = func(v any) {
 		switch t := v.(type) {
 		case map[string]any:
 			for k, child := range t {
 				if k == "id" {
-					if s, ok := child.(string); ok {
-						if m := idSuffix.FindStringSubmatch(s); m != nil {
-							if n, err := strconv.Atoi(m[1]); err == nil && n > max {
-								max = n
-							}
-						}
+					if n := idCounter(child); n > highest {
+						highest = n
 					}
 					continue
 				}
@@ -112,7 +127,7 @@ func maxUsedID(doc map[string]any) int {
 		}
 	}
 	walk(doc)
-	return max
+	return highest
 }
 
 func toInt(v any) (int, bool) {

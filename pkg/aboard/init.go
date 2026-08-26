@@ -9,6 +9,7 @@
 // So init creates a root WHERE YOU STAND and refuses when that would produce a
 // second one — naming the root it found, because "it already exists" without a
 // path sends the reader off to run `find`.
+
 package aboard
 
 import (
@@ -34,6 +35,19 @@ import (
 var exampleFS embed.FS
 
 const exampleFile = "example/aboard.json"
+
+// A FILE-MODE NOTE, for the three //nolint:gosec below.
+//
+// Everything the board writes is 0o644, and that is a repo-wide policy, not an
+// oversight here: the state document, the uploads and the journal are read by
+// the developer's editor, by a VS Code extension running as them, and by every
+// other agent session in the project. gosec's G306 wants 0o600 for any file
+// written by a program, which is the right default for a service handling other
+// people's secrets and the wrong one for a project directory whose whole purpose
+// is to be shared between the tools the developer already runs.
+//
+// It is annotated at each call site rather than excluded in .golangci.yaml so
+// that a NEW write has to make the same decision consciously.
 
 // initActor is the author recorded on the document init writes. Not an agent
 // name and not "human": nobody edited anything, a command created a file, and
@@ -117,7 +131,8 @@ func Init(cfg InitConfig) (InitResult, error) {
 			return InitResult{}, fmt.Errorf(
 				"a board root already exists at %s (%s) — init does not walk up, and a second root here would be invisible from there. "+
 					"Run `aboard init` from that directory, or add a second board to it with `aboard init --name <name>`",
-				found, found.Dir())
+				found, found.Dir(),
+			)
 		}
 		root = found
 	}
@@ -152,7 +167,7 @@ func Init(cfg InitConfig) (InitResult, error) {
 
 	readme := filepath.Join(root.RecipesDir(), "README.md")
 	if _, err := os.Stat(readme); os.IsNotExist(err) {
-		if err := os.WriteFile(readme, []byte(recipesReadme), 0o644); err != nil {
+		if err := os.WriteFile(readme, []byte(recipesReadme), 0o644); err != nil { //nolint:gosec // see the file-mode note above
 			return InitResult{}, fmt.Errorf("writing %s: %w", readme, err)
 		}
 		res.Created = append(res.Created, readme)
@@ -163,7 +178,7 @@ func Init(cfg InitConfig) (InitResult, error) {
 		return InitResult{}, err
 	}
 	res.Tabs = tabs
-	if err := os.WriteFile(res.StateFile, doc, 0o644); err != nil {
+	if err := os.WriteFile(res.StateFile, doc, 0o644); err != nil { //nolint:gosec // see the file-mode note above
 		return InitResult{}, fmt.Errorf("writing %s: %w", res.StateFile, err)
 	}
 	res.Created = append(res.Created, res.StateFile)
@@ -297,7 +312,7 @@ func ensureGitignore(path string) (string, error) {
 		out += "\n"
 	}
 	out += GitignoreLine + "\n"
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(out), 0o644); err != nil { //nolint:gosec // see the file-mode note above
 		return "", fmt.Errorf("writing %s: %w", path, err)
 	}
 	return GitignoreAdded, nil

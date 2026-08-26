@@ -28,6 +28,7 @@
 // emission only removes drift when the declaration lives in the same directory as
 // the code it describes — so the change that adds a capability physically touches
 // the file that documents it.
+
 package aboard
 
 import (
@@ -41,6 +42,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -237,6 +239,15 @@ func buildManifest(assets fs.FS) (manifest, error) {
 	return m, nil
 }
 
+// unknownHash is what capsHash reports when the manifest will not marshal. It is
+// deliberately not "" — an empty hash reads as "not computed yet", and the
+// staleness check would then say nothing at all.
+const unknownHash = "unknown"
+
+// emDash fills a table cell that would otherwise be empty, so a reader can tell
+// "this control has no label" from "this table failed to render".
+const emDash = "—"
+
 // capsHash fingerprints the DESCRIBED SURFACE, not the source bytes.
 //
 // Deliberately not reusing uiSig (reload.go): that hashes file contents, so a
@@ -247,7 +258,7 @@ func capsHash(m manifest) string {
 	m.Hash = ""
 	body, err := json.Marshal(m)
 	if err != nil {
-		return "unknown"
+		return unknownHash
 	}
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:4])
@@ -267,7 +278,8 @@ func controlsModule(m manifest) string {
 	b.WriteString("// here so controls.js can look one up synchronously. Regenerate with `make caps`;\n")
 	b.WriteString("// the suite fails if this drifts from the specs.\n\n")
 	b.WriteString("export const CONTROLS = {\n")
-	for _, t := range m.Types {
+	for i := range m.Types {
+		t := &m.Types[i]
 		if len(t.Controls) == 0 {
 			continue
 		}
@@ -286,7 +298,8 @@ func controlsModule(m manifest) string {
 	// swatches and its tone lookup from the declaration, so the list an agent is
 	// told about and the list the code accepts cannot be two lists.
 	b.WriteString("export const PALETTES = {\n")
-	for _, t := range m.Types {
+	for i := range m.Types {
+		t := &m.Types[i]
 		if len(t.Tones) == 0 && len(t.Colors) == 0 {
 			continue
 		}
@@ -304,12 +317,27 @@ func controlsModule(m manifest) string {
 	return b.String()
 }
 
+// identRune reports whether r may appear at offset i of a bare JS identifier.
+// Digits are legal everywhere but the first position.
+func identRune(r rune, i int) bool {
+	switch {
+	case r == '_' || r == '$':
+		return true
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		return true
+	case r >= '0' && r <= '9':
+		return i > 0
+	default:
+		return false
+	}
+}
+
 // jsKey quotes an object key only when it is not a plain identifier, so the
 // generated file reads like something a person would have written.
 func jsKey(s string) string {
 	plain := s != ""
 	for i, r := range s {
-		if !(r == '_' || r == '$' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (i > 0 && r >= '0' && r <= '9')) {
+		if !identRune(r, i) {
 			plain = false
 			break
 		}
@@ -348,7 +376,8 @@ func manifestMarkdown(m manifest) string {
 	fmt.Fprintf(&b, "have said so. Run `make caps`.\n\n")
 
 	fmt.Fprintf(&b, "## Tab types\n\n")
-	for _, t := range m.Types {
+	for i := range m.Types {
+		t := &m.Types[i]
 		fmt.Fprintf(&b, "### %s — %s\n\n%s\n\n", t.Type, t.Label, t.Blurb)
 		if len(t.State) > 0 {
 			fmt.Fprintf(&b, "| state field | type | meaning |\n|---|---|---|\n")
@@ -369,7 +398,7 @@ func manifestMarkdown(m manifest) string {
 			for _, c := range t.Controls {
 				label := c.Label
 				if label == "" {
-					label = "—"
+					label = emDash
 				}
 				fmt.Fprintf(&b, "| `%s` | %s | %s |\n", c.ID, label, c.Doc)
 			}
@@ -387,7 +416,7 @@ func manifestMarkdown(m manifest) string {
 				c := t.Components[name]
 				props := strings.Join(c.Props, ", ")
 				if props == "" {
-					props = "—"
+					props = emDash
 				}
 				for _, prop := range c.Props {
 					if item, fixed := c.ItemProps[prop]; fixed {
@@ -481,9 +510,9 @@ func Capabilities(root Root, assets fs.FS, format, only string, check bool, out 
 	}
 
 	if only != "" {
-		for _, t := range m.Types {
-			if t.Type == only {
-				m.Types = []typeSpec{t}
+		for i := range m.Types {
+			if m.Types[i].Type == only {
+				m.Types = []typeSpec{m.Types[i]}
 				m.Commands, m.Root, m.Routes = nil, nil, nil
 				break
 			}
@@ -494,35 +523,7 @@ func Capabilities(root Root, assets fs.FS, format, only string, check bool, out 
 	}
 
 	if check {
-		// The generated MODULE is checked first and unconditionally: unlike the
-		// skill reference, it is not optional. The renderers import it, so a stale
-		// one means buttons whose labels disagree with their declarations — a
-		// wrong screen, not merely wrong documentation.
-		if got, err := os.ReadFile(root.GeneratedControls()); err == nil {
-			if !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace([]byte(controlsModule(m)))) {
-				fmt.Fprintf(out, "stale: %s no longer matches the specs (capsHash %s) — run `make caps`\n",
-					root.GeneratedControls(), m.Hash)
-				return ExitFailed, nil
-			}
-		}
-
-		want := manifestMarkdown(m)
-		got, err := os.ReadFile(root.SkillReference())
-		if err != nil {
-			// No reference HERE is not drift — a project that uses the board
-			// without copying the skill has nothing to be stale. Only a reference
-			// that exists and disagrees is a failure. (Found by running the binary
-			// in a bare project: the check failed where there was nothing to check.)
-			fmt.Fprintf(out, "no skill reference in this project (capsHash %s) — nothing to check\n", m.Hash)
-			return ExitOK, nil
-		}
-		if !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace([]byte(want))) {
-			fmt.Fprintf(out, "stale: %s no longer matches the binary (capsHash %s) — run `make caps`\n",
-				root.SkillReference(), m.Hash)
-			return ExitFailed, nil
-		}
-		fmt.Fprintf(out, "current: %s matches capsHash %s\n", root.SkillReference(), m.Hash)
-		return ExitOK, nil
+		return checkGenerated(root, m, out)
 	}
 
 	switch format {
@@ -548,7 +549,7 @@ func Capabilities(root Root, assets fs.FS, format, only string, check bool, out 
 // as an empty cell that might be a rendering bug.
 func orDash(s string) string {
 	if s == "" {
-		return "—"
+		return emDash
 	}
 	return s
 }
@@ -628,8 +629,8 @@ func writeWarnings(assets fs.FS, raw []byte) []string {
 		return nil
 	}
 	byType := map[string]typeSpec{}
-	for _, spec := range specs {
-		byType[spec.Type] = spec
+	for i := range specs {
+		byType[specs[i].Type] = specs[i]
 	}
 
 	var doc struct {
@@ -716,7 +717,7 @@ func checkTabState(byType map[string]typeSpec, where, typeName string, state map
 	// looking inside them. Nesting is capped at one level by the renderer, so the
 	// recursion is too — a deeper block would not mount, which the renderer says
 	// on screen.
-	if typeName == "stack" && depth < 1 {
+	if typeName == tabTypeStack && depth < 1 {
 		blocks, _ := state["blocks"].([]any)
 		for i, raw := range blocks {
 			block, ok := raw.(map[string]any)
@@ -755,7 +756,7 @@ func checkTabState(byType map[string]typeSpec, where, typeName string, state map
 // The second and third are why this exists. `kv` with `items`/`{k,v}` instead of
 // `pairs`/`{key,value}` produced a titled card wrapping an empty list, applied
 // clean, exit 0, twice in a row.
-func checkUITree(spec typeSpec, where string, node any, data map[string]any, path string) []string {
+func checkUITree(spec typeSpec, where string, node any, data map[string]any, nodePath string) []string {
 	// A bare string is a valid node: build() renders it as a paragraph.
 	if _, isText := node.(string); isText {
 		return nil
@@ -770,7 +771,7 @@ func checkUITree(spec typeSpec, where string, node any, data map[string]any, pat
 	component, known := spec.Components[typeName]
 	if !known {
 		return append(out, fmt.Sprintf("%s (ui): %s.type = %q is not in the catalog — it will render as a dashed marker. %s",
-			where, path, typeName, catalogHint(spec)))
+			where, nodePath, typeName, catalogHint(spec)))
 	}
 
 	allowed := map[string]bool{}
@@ -784,37 +785,50 @@ func checkUITree(spec typeSpec, where string, node any, data map[string]any, pat
 	for _, key := range sortedKeys(obj) {
 		if !allowed[key] {
 			out = append(out, fmt.Sprintf("%s (ui): %s is a %s, which does not read %q — it will be stored and draw nothing. %s reads: %s",
-				where, path, typeName, key, typeName, strings.Join(component.Props, ", ")))
+				where, nodePath, typeName, key, typeName, strings.Join(component.Props, ", ")))
 			continue
 		}
-		out = append(out, checkBind(where, fmt.Sprintf("%s.%s", path, key), obj[key], data)...)
+		propPath := nodePath + "." + key
+		out = append(out, checkBind(where, propPath, obj[key], data)...)
 		if key == "tone" {
-			out = append(out, checkPalette(where, fmt.Sprintf("%s.tone", path), obj[key], spec.Tones, "tone")...)
+			out = append(out, checkPalette(where, propPath, obj[key], spec.Tones, "tone")...)
 		}
-
-		// The element shape of an array prop, where the shape is fixed.
-		if itemProps, fixed := component.ItemProps[key]; fixed {
-			items, _ := obj[key].([]any)
-			for i, raw := range items {
-				item, ok := raw.(map[string]any)
-				if !ok {
-					continue
-				}
-				at := fmt.Sprintf("%s.%s[%d]", path, key, i)
-				for _, itemKey := range sortedKeys(item) {
-					if !contains(itemProps, itemKey) {
-						out = append(out, fmt.Sprintf("%s (ui): %s.%s is not read — a %s %s item is { %s }",
-							where, at, itemKey, typeName, key, strings.Join(itemProps, ", ")))
-						continue
-					}
-					out = append(out, checkBind(where, at+"."+itemKey, item[itemKey], data)...)
-				}
-			}
-		}
+		out = append(out, checkItemShape(where, obj, key, typeName, propPath, component, data)...)
 	}
 
 	for i, child := range childNodes(obj) {
-		out = append(out, checkUITree(spec, where, child.node, data, fmt.Sprintf("%s.%s[%d]", path, child.prop, i))...)
+		out = append(out, checkUITree(spec, where, child.node, data, fmt.Sprintf("%s.%s[%d]", nodePath, child.prop, i))...)
+	}
+	return out
+}
+
+// checkItemShape checks the ELEMENT shape of an array prop, where the shape is
+// fixed by the declaration. This is the `kv` case that started all of this: the
+// prop name was right and every item inside it was wrong, so the component
+// rendered its title and an empty list.
+func checkItemShape(where string, obj map[string]any, key, typeName, propPath string,
+	component componentSpec, data map[string]any,
+) []string {
+	itemProps, fixed := component.ItemProps[key]
+	if !fixed {
+		return nil
+	}
+	out := []string{}
+	items, _ := obj[key].([]any)
+	for i, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		at := fmt.Sprintf("%s[%d]", propPath, i)
+		for _, itemKey := range sortedKeys(item) {
+			if !contains(itemProps, itemKey) {
+				out = append(out, fmt.Sprintf("%s (ui): %s.%s is not read — a %s %s item is { %s }",
+					where, at, itemKey, typeName, key, strings.Join(itemProps, ", ")))
+				continue
+			}
+			out = append(out, checkBind(where, at+"."+itemKey, item[itemKey], data)...)
+		}
 	}
 	return out
 }
@@ -873,7 +887,7 @@ func checkBind(where, at string, value any, data map[string]any) []string {
 	// worse than no checker — it is the noise that teaches people to skip stderr.
 	var cursor any = data
 	found := true
-	for _, key := range strings.Split(bindPath, ".") {
+	for key := range strings.SplitSeq(bindPath, ".") {
 		step, isMap := cursor.(map[string]any)
 		if !isMap {
 			found = false
@@ -931,10 +945,38 @@ func sortedKeys(m map[string]any) []string {
 }
 
 func contains(list []string, want string) bool {
-	for _, got := range list {
-		if got == want {
-			return true
+	return slices.Contains(list, want)
+}
+
+// checkGenerated is `aboard capabilities --check`: does what is committed still
+// match what this binary would emit? Two files, and they are NOT the same kind
+// of claim, which is why the module is checked first and unconditionally.
+func checkGenerated(root Root, m manifest, out io.Writer) (int, error) {
+	// The renderers IMPORT the generated controls module, so a stale one means
+	// buttons whose labels disagree with their declarations — a wrong screen, not
+	// merely wrong documentation.
+	if got, err := os.ReadFile(root.GeneratedControls()); err == nil {
+		if !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace([]byte(controlsModule(m)))) {
+			fmt.Fprintf(out, "stale: %s no longer matches the specs (capsHash %s) — run `make caps`\n",
+				root.GeneratedControls(), m.Hash)
+			return ExitFailed, nil
 		}
 	}
-	return false
+
+	got, err := os.ReadFile(root.SkillReference())
+	if err != nil {
+		// No reference HERE is not drift — a project that uses the board without
+		// copying the skill has nothing to be stale. Only a reference that exists
+		// and disagrees is a failure. (Found by running the binary in a bare
+		// project: the check failed where there was nothing to check.)
+		fmt.Fprintf(out, "no skill reference in this project (capsHash %s) — nothing to check\n", m.Hash)
+		return ExitOK, nil //nolint:nilerr // a missing reference is the "nothing to check" case, not the read's failure
+	}
+	if !bytes.Equal(bytes.TrimSpace(got), bytes.TrimSpace([]byte(manifestMarkdown(m)))) {
+		fmt.Fprintf(out, "stale: %s no longer matches the binary (capsHash %s) — run `make caps`\n",
+			root.SkillReference(), m.Hash)
+		return ExitFailed, nil
+	}
+	fmt.Fprintf(out, "current: %s matches capsHash %s\n", root.SkillReference(), m.Hash)
+	return ExitOK, nil
 }

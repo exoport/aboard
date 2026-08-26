@@ -18,9 +18,11 @@
 // purpose: a size cap, an allow-list of image types checked against the bytes
 // rather than the claimed name, and a filename the SERVER chooses. Nothing the
 // caller sends is ever used as a path.
+
 package aboard
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,12 +52,25 @@ var uploadKinds = []struct {
 	{"webp", "image/webp", []byte("RIFF")}, // RIFF....WEBP, checked further below
 }
 
+// Where the RIFF form tag sits: bytes 8..12, after "RIFF" and the 4-byte size.
+const (
+	riffFormStart = 8
+	riffFormEnd   = 12
+)
+
+// maxSlugLen caps the readable half of an upload's filename. The id keeps it
+// unique, so the slug only has to be recognisable in a directory listing.
+const maxSlugLen = 40
+
 func sniffUpload(body []byte) (ext, mime string, ok bool) {
 	for _, kind := range uploadKinds {
-		if len(body) < len(kind.magic) || string(body[:len(kind.magic)]) != string(kind.magic) {
+		if len(body) < len(kind.magic) || !bytes.Equal(body[:len(kind.magic)], kind.magic) {
 			continue
 		}
-		if kind.ext == "webp" && !(len(body) > 12 && string(body[8:12]) == "WEBP") {
+		// A webp is a RIFF container: "RIFF", a 4-byte length, then "WEBP". The
+		// magic table only reaches the first four bytes, so the form tag has to
+		// be checked here or every RIFF file (wav, avi) would sniff as an image.
+		if kind.ext == "webp" && (len(body) <= riffFormEnd || string(body[riffFormStart:riffFormEnd]) != "WEBP") {
 			continue
 		}
 		return kind.ext, kind.mime, true
@@ -93,7 +108,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := fmt.Sprintf("%s-%s.%s", time.Now().UTC().Format("20060102-150405"), slugUpload(r.URL.Query().Get("name")), ext)
-	if err := os.WriteFile(s.root.UploadFile(name), body, 0o644); err != nil {
+	if err := os.WriteFile(s.root.UploadFile(name), body, 0o644); err != nil { //nolint:gosec // 0o644 is the board's repo-wide file-mode policy; see the note in init.go
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot write the file"})
 		return
 	}
@@ -120,7 +135,7 @@ func slugUpload(raw string) string {
 		case r == ' ' || r == '-' || r == '_' || r == '.':
 			b.WriteByte('-')
 		}
-		if b.Len() >= 40 {
+		if b.Len() >= maxSlugLen {
 			break
 		}
 	}

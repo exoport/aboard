@@ -139,6 +139,13 @@ linters:
           - dupl
           - gocyclo
           - gosec
+          # goconst: a test that asserts a wire value must SPELL it out.
+          # `if entries[0].By != "unknown"` pins the string the journal
+          # actually writes; rewriting it as `!= actorUnknown` would assert
+          # the constant against itself and pass however the constant
+          # changed — which is the one thing the test exists to catch.
+          # Fixture dates and type names repeat for the same reason.
+          - goconst
           # noctx: tests use http.Get/Post and net.Dial/Listen as the
           # simplest reach-and-poke shape; the SUT enforces context
           # discipline, not the test client.
@@ -159,6 +166,16 @@ linters:
       - linters:
           - govet
         text: declaration of "(err|ctx)" shadows declaration at
+      # The capability manifest's JSON keys are a WIRE CONTRACT, not a struct
+      # dump. `capsHash`, `rootFlags` and a flag's `default` are read by
+      # aboard.html, by views/controls.js, by `--format js`/`--format md` and by
+      # every generated file committed under .claude/skills/. tagliatelle is
+      # configured with use-field-name, so it wants the tag to track whatever the
+      # Go field happens to be called — which is exactly backwards here: the tag
+      # is the fixed half and the field name is ours to rename freely.
+      - linters:
+          - tagliatelle
+        path: pkg/aboard/(caps|commands)\.go
       # Recipe frontmatter is snake_case and that is the external contract:
       # `when_to_use`, `min_schema` are what a recipe author types at the top of
       # a .md file, and what the built-in recipes on disk already say. A wire

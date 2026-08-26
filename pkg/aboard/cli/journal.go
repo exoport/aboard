@@ -7,6 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// defaultJournalLimit is how many entries `aboard journal` prints unasked —
+// about a screenful, which is the window a session resuming after a context
+// clear actually reads.
+const defaultJournalLimit = 40
+
 func newJournalCmd(opts Options) *cobra.Command {
 	var (
 		limit        int
@@ -32,7 +37,7 @@ cannot be bypassed by an agent that forgot to record something.`,
 			if err != nil {
 				return err
 			}
-			entries, source, err := aboard.JournalEntries(root, boardName(cmd), limit)
+			entries, source, err := aboard.JournalEntries(cmd.Context(), root, boardName(cmd), limit)
 			if err != nil {
 				return err
 			}
@@ -46,7 +51,7 @@ cannot be bypassed by an agent that forgot to record something.`,
 				func() string { return aboard.JournalHuman(entries) })
 		},
 	}
-	cmd.Flags().IntVar(&limit, "limit", 40, "how many entries to print")
+	cmd.Flags().IntVar(&limit, "limit", defaultJournalLimit, "how many entries to print")
 	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
 	return cmd
 }

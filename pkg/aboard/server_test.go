@@ -25,13 +25,13 @@ func TestProbeBoardHonoursBasePath(t *testing.T) {
 
 	port := serverPort(t, srv.URL)
 
-	if got := ProbeBoard(port, "/x"); got == nil {
+	if got := ProbeBoard(t.Context(), port, "/x"); got == nil {
 		t.Error("a board under /x was not recognised when probed with its base")
 	}
-	if got := ProbeBoard(port, "x"); got == nil {
+	if got := ProbeBoard(t.Context(), port, "x"); got == nil {
 		t.Error("the base is normalised, so an unslashed one must work too")
 	}
-	if got := ProbeBoard(port, ""); got != nil {
+	if got := ProbeBoard(t.Context(), port, ""); got != nil {
 		t.Error("probing the bare root found something; the fixture only answers under /x")
 	}
 }
@@ -50,7 +50,7 @@ func TestProbeBoardAcceptsEitherIdentity(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(Instance{App: tc.app})
 		}))
-		got := ProbeBoard(serverPort(t, srv.URL), "") != nil
+		got := ProbeBoard(t.Context(), serverPort(t, srv.URL), "") != nil
 		srv.Close()
 		if got != tc.want {
 			t.Errorf("app %q: recognised=%v, want %v", tc.app, got, tc.want)

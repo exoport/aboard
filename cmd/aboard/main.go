@@ -5,6 +5,7 @@
 // in the tree that turns an outcome into an exit status, which is what lets the
 // same command tree be mounted inside another CLI without taking that host's
 // process down with it.
+
 package main
 
 import (

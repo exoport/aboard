@@ -12,10 +12,12 @@
 //
 // Bounded by construction: a per-file size cap with one rotation, and a tail-only
 // read API. A log nobody prunes is the same bug in a different place.
+
 package aboard
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -124,11 +126,11 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"lines": lines, "size": size})
 }
 
-// logCLI streams stdin into a tab's log, a line at a time, so a long-running
+// Log streams stdin into a tab's log, a line at a time, so a long-running
 // command shows up on the board as it happens rather than when it finishes:
 //
 //	go test ./... 2>&1 | aboard log bb42
-func Log(root Root, name, tab string, in io.Reader, out io.Writer) error {
+func Log(ctx context.Context, root Root, name, tab string, in io.Reader, out io.Writer) error {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		return err
@@ -146,7 +148,7 @@ func Log(root Root, name, tab string, in io.Reader, out io.Writer) error {
 		// Echo it too: piping output to the board should not mean losing it from
 		// the terminal you are watching.
 		fmt.Fprintln(out, line)
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(line+"\n"))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(line+"\n"))
 		if err != nil {
 			return err
 		}

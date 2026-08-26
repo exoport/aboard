@@ -14,12 +14,15 @@ differently.
 Four scopes, most specific first. The directory names are literal — they are not
 configurable:
 
-| scope      | directory                | intended lifetime                                    |
-| ---------- | ------------------------ | ---------------------------------------------------- |
-| `apex`     | `_apex/aboard/recipes/`  | the wider workspace's house style                    |
-| `workspace`| `_aboard/recipes/`       | committed, shared with the team                      |
-| `project`  | `.aboard/recipes/`       | this checkout only; gitignored with the rest of `.aboard/` |
-| `built-in` | compiled into the binary | ships everywhere the binary goes                     |
+| directory (what `recipes list` shows) | `scope` in `--output-format json` | intended lifetime                                          |
+| ------------------------------------- | --------------------------------- | ---------------------------------------------------------- |
+| `_apex/aboard/recipes/`               | `apex`                            | the wider workspace's house style                          |
+| `_aboard/recipes/`                    | `aboard`                          | committed, shared with the team                            |
+| `.aboard/recipes/`                    | `dot-aboard`                      | this checkout only; gitignored with the rest of `.aboard/` |
+| `built-in`                            | `builtin`                         | compiled in; ships everywhere the binary goes              |
+
+The human column shows the **directory**, not the scope name, and deliberately: a
+row reading `apex` does not tell anybody where to go and edit the file.
 
 **Lookup is first-wins by `name`, in that order.** A recipe in `_apex/aboard/recipes/`
 shadows one with the same name in `_aboard/recipes/`, which shadows `.aboard/recipes/`,
@@ -32,9 +35,13 @@ aboard recipes list
 aboard recipes list --output-format json
 ```
 
-That prints `name`, `scope`, `path` and `shadowed-by`, one row each. It is the only
-complete answer about what is available: the generated index in the skill lists what is
-compiled into the binary and cannot know about a project's own files.
+That prints one line per recipe — name, scope and description — with the file's path
+and anything it shadows indented underneath, and the footer counts the shadowed files.
+A clean built-in is one line; a recipe with something worth knowing about it is two.
+The JSON form carries the whole record (`whenToUse`, `tags`, `requires`, `hasTemplate`,
+`shadowedBy`). It is the only complete answer about what is available: the generated
+index in the skill lists what is compiled into the binary and cannot know about a
+project's own files.
 
 Pick the scope by who should have it. Something only you want, in one checkout →
 `.aboard/recipes/` (it is ignored, so it stays yours). Something the team should share
@@ -127,7 +134,7 @@ be applied as an empty tab.
 mkdir -p .aboard/recipes
 $EDITOR .aboard/recipes/my-move.md
 
-aboard recipes list                    # my-move should appear, scope "project"
+aboard recipes list                    # my-move should appear, scope ".aboard/recipes"
 aboard recipes show my-move            # the body, as an agent will read it
 aboard recipes show my-move --template # the skeleton, if it has one
 ```
