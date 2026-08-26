@@ -29,3 +29,24 @@ nothing open except plan-2 §10.
 `grep -rn 'TODO\|FIXME\|XXX\|not yet\|has not landed\|if it has not' --include=*.md . | grep -v _output |
 grep -v lib/mermaid | grep -v node_modules` returns only lines you can justify in the report,
 one by one; the ladder is green.
+
+## Leftovers surfaced by the item reviewers — dispose of each (fix, or record for the human)
+
+- `pkg/aboard/example/aboard.json` says "Claude" seven times in card titles/prose (e.g. "Claude
+  reads and reacts"), visible in every `aboard init --example` board. The clean-break rename
+  applied to the TOKEN and colour names, not to prose; whether the example's prose should name
+  "the agent" instead is one decision — record it under §10 of the plan as a question for the
+  human, do not edit the seven strings.
+- The notify button's "notified N sessions" confirmation is repainted away by the SSE `waiters`
+  frame the poke itself causes (recorded in `test/e2e/notify_test.go`). A ~1.5 s suppression of
+  `refreshWaiters` after a poke would fix it; it is an interface taste call — record under §10.
+- `test/shot.sh` exits 0 when every shot FAILS (a confined chromium outside `$HOME`). Fix it:
+  exit non-zero when no PNG was written, keeping the existing warning. One line; run it once.
+- `development/README.md` carries three findings item 3 queued (`--dev` symlink escape, sidecar
+  log file count, `BUILD_DATE`); keep them listed as open, with their reasons, under the §10
+  pointer.
+- Comments in `views/form.js`, `views/markup.js`, `pkg/aboard/web/test/mermaid-probe.html` still
+  say "Claude" — not user-facing; leave them, but say so in the report.
+- The `apply`/`--check` split and the receipts endpoint from item 6 are new CLI grammar: verify
+  the plan-1 CLI grammar table (`plan-1_port-from-spike.md`) lists `history`, `rendered`,
+  `uploads`, `apply --check/--strict/--label/--force` and NOT `boards`.
