@@ -352,7 +352,7 @@ func readRecipeFS(fsys fs.FS, dir, scope string, join func(string, string) strin
 			// has no recipes. It aborted the WHOLE discovery — every tier, the
 			// built-ins included — so a dangling symlink or a chmod 000 in
 			// .aboard/recipes/ took `aboard recipes list` down to an error and
-			// left an agent with no recipes at all, when the nine built-ins were
+			// left an agent with no recipes at all, when the built-ins were
 			// compiled into the binary it was running.
 			//
 			// The same rule the parser already follows: the file becomes a row
@@ -605,8 +605,8 @@ func RecipeListHuman(recipes []Recipe) string {
 			fmt.Fprintf(&b, "%s  shadows %s\n", pad, other)
 		}
 		// The path, but only where it is somewhere a reader can go and edit. A
-		// built-in's path is inside the binary, so printing it on all nine rows
-		// would be nine lines of noise around the two that matter.
+		// built-in's path is inside the binary, so printing it on all eleven rows
+		// would be eleven lines of noise around the two that matter.
 		if r.Scope != ScopeBuiltin {
 			fmt.Fprintf(&b, "%s  %s\n", pad, r.Path)
 		}

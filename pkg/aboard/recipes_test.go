@@ -167,9 +167,13 @@ func TestRecipeTemplateExtraction(t *testing.T) {
 		t.Errorf("the error does not name the recipe: %v", err)
 	}
 
-	// The staged user example carries a real template; it is in the fixture
-	// precisely so extraction is proven against a file nobody wrote for the test.
-	wizard, err := FindRecipe(root, "decision-wizard-with-live-summary")
+	// And against a file nobody wrote for the test: the decision wizard was
+	// STAGED in this fixture as a project recipe until it earned promotion, and
+	// it is a built-in now. It is read through an empty root on purpose — the
+	// fixture's copy is gone, because two copies of one document are two
+	// documents that can disagree, and the one an agent actually gets is the one
+	// compiled into the binary.
+	wizard, err := FindRecipe(Root(t.TempDir()), "decision-wizard-with-live-summary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +182,7 @@ func TestRecipeTemplateExtraction(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !json.Valid([]byte(got)) {
-		t.Errorf("the user example's template is not valid json:\n%s", got)
+		t.Errorf("the promoted recipe's template is not valid json:\n%s", got)
 	}
 }
 
@@ -211,8 +215,8 @@ func TestBuiltinRecipesAllParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(built) < 9 {
-		t.Fatalf("%d built-in recipes, want at least the nine that shipped", len(built))
+	if len(built) < 11 {
+		t.Fatalf("%d built-in recipes, want at least the eleven that shipped", len(built))
 	}
 	for _, r := range built {
 		if !r.Valid() {
@@ -410,7 +414,7 @@ func TestRecipesReadmeIsNotARecipe(t *testing.T) {
 
 // One file nobody can read is not a reason to report that the project has no
 // recipes. `readRecipeFS` returned an error for it, which aborted the WHOLE
-// discovery — every tier, the nine built-ins included — so a dangling symlink
+// discovery — every tier, the built-ins included — so a dangling symlink
 // or a chmod 000 in `.aboard/recipes/` took `aboard recipes list` down to a bare
 // error message while the recipes the agent needed sat compiled into the binary
 // it was running.
@@ -514,6 +518,82 @@ func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
 	for i := range found {
 		if found[i].Name == "notes" {
 			t.Errorf("a directory holding no recipes was reported: %q", found[i].Err)
+		}
+	}
+}
+
+// A built-in recipe's template is a SKELETON an agent hands to `aboard apply`
+// after filling it in, and both halves of that are asserted here.
+//
+// It must be a tab skeleton — no `id`, no `rev`, no `updatedAt`: those belong to
+// the document and to the server, and a template that carried one would teach
+// every agent that reads it to write a field the server owns. That is exactly
+// how the spike's stale `"version": 2` example got copied into a real write and
+// blanked a board.
+//
+// And it must APPLY CLEAN. `ui` is the type CLAUDE.md tells agents to prefer and
+// the one that fails silently and successfully: an unknown prop renders nothing
+// at all, `apply` still prints `applied`, and the only instrument left is the
+// human looking at the screen. A skeleton shipped in the binary would spread that
+// mistake to every project the binary reaches, so it is checked by the same
+// function the write path runs.
+func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
+	built, err := BuiltinRecipes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	withTemplate := map[string]bool{}
+	for _, r := range built {
+		if !r.HasTemplate {
+			continue
+		}
+		withTemplate[r.Name] = true
+
+		tmpl, err := r.TemplateJSON()
+		if err != nil {
+			t.Errorf("%s: %v", r.Name, err)
+			continue
+		}
+		var tab map[string]any
+		if err := json.Unmarshal([]byte(tmpl), &tab); err != nil {
+			t.Errorf("%s: the template is not a JSON object: %v", r.Name, err)
+			continue
+		}
+		for _, managed := range []string{"id", "rev", "updatedAt", "version", "lastEditedBy", "touched"} {
+			if _, present := tab[managed]; present {
+				t.Errorf("%s: the template sets %q, which the document or the server owns", r.Name, managed)
+			}
+		}
+		if _, ok := tab["type"].(string); !ok {
+			t.Errorf("%s: the template has no `type`, so nothing can render it", r.Name)
+		}
+
+		// Wrapped in a document exactly as `apply` receives one, and checked by
+		// the function the write path itself calls.
+		tab["id"] = "bb1"
+		doc, err := json.Marshal(map[string]any{"tabs": []any{tab}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if warnings := writeWarnings(WebFS(), doc); len(warnings) > 0 {
+			t.Errorf("%s: the shipped template warns on the write path:\n%s",
+				r.Name, strings.Join(warnings, "\n"))
+		}
+	}
+
+	// A floor, not the exact set: a later recipe may add a template and must not
+	// have to edit this list. These three are the ones whose whole point is a
+	// tab you can apply, and two of them are `ui` trees, where the write-time
+	// check above is the only thing standing between a wrong prop and a blank
+	// panel on somebody's screen.
+	for _, name := range []string{
+		"ask-for-a-decision",
+		"decision-wizard-with-live-summary",
+		"human-checklist",
+	} {
+		if !withTemplate[name] {
+			t.Errorf("%s ships no `%s` block", name, TemplateFence)
 		}
 	}
 }

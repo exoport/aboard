@@ -75,8 +75,13 @@ list left is that plan's §10 — the things gated on the human.
   says so); recipe scope names are `apex` / `aboard` / `dot-aboard` / `builtin`.
 - `init` in a directory that already IS a root but has no document completes instead of refusing.
 - NOTICE is added to the release archives (ape ships README + LICENSE only); a `vuln` CI job was kept.
-- The nine built-in recipes carry no `aboard-template` block (the spike wrote them as JS, not JSON);
-  only the user example (`testdata/recipes/.aboard/recipes/decision-wizard-with-live-summary.md`) has one.
+- ~~The nine built-in recipes carry no `aboard-template` block (the spike wrote them as JS, not JSON);
+  only the user example (`testdata/recipes/.aboard/recipes/decision-wizard-with-live-summary.md`) has one.~~
+  **Settled 2026-08-26 by plan-2 item 19**: the staged user example was promoted into
+  `pkg/aboard/recipes/builtin/` and `human-checklist` was written beside it, so three of the
+  eleven built-ins now carry a template and the fixture copy is gone — two copies of one
+  document are two documents that can disagree. The other eight still carry none, and that
+  stands: their bodies are JS helpers rather than tab skeletons.
 
 ## Still unproven, on purpose
 

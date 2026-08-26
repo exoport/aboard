@@ -61,6 +61,27 @@ lines and the ones with no user-visible surface — the suite, the extension —
   `history.scrollRestoration` is switched off, because it restores the DOCUMENT on
   whichever tab comes up first — right only by coincidence, and wrong the moment a
   `#tab=` link opens a different one.
+- **feat: two more built-in recipes, both `ui` tabs, both with a template you can apply.**
+  `decision-wizard-with-live-summary` is the spike's shape brought across and reviewed
+  against the current renderers: one `ui` tab of internal panels, N of them deciding and a
+  Summary panel bound to the same `state.data` the fields write, so it cannot go stale —
+  with the three reasons a cross-tab summary is impossible (a `bind` never leaves its tab,
+  a sandboxed `html` frame is posted only its own `state.data`, `stateFrom` resolves one
+  hop) re-checked against `views/ui.js`, `views/html.js` and `aboard.html` rather than
+  copied forward. Its `kv` advice is inverted from the source, because `kv` resolves a
+  `{bind}` on both sides now, and its read-back is `aboard export` — which renders a `ui`
+  tree — instead of a `curl | python3`. `human-checklist` is new, and answers a complaint:
+  a `stack` of instructions above a tick table made the human *"scroll top to bottom to
+  read the instruction and then go down for the check, up for the next instruction"*. One
+  card per item holds the explanation, the tick and a notes box together, with a live `kv`
+  header reading the same `items.<id>.done` paths the ticks write. Both recipes state what
+  the board cannot do as plainly as what it can: **a literal "3 of 8 done" is the one thing
+  not to write**, because nothing on the board computes and a typed count is wrong from the
+  first tick — the static count is of how many items there ARE, which is the agent's own
+  data, and the rest is `{bind}`. Count what was answered when you read the tab back.
+  `TestBuiltinTemplatesAreCleanTabSkeletons` now runs the write path's own checker over
+  every shipped skeleton, so a wrong `ui` prop in a built-in template fails the suite
+  instead of drawing an empty panel in whichever project the binary reached.
 - **fix: the board never calls a native dialog, so its questions survive a webview.**
   A VS Code webview — and any `<iframe>` whose `sandbox` omits `allow-modals` —
   SUPPRESSES `window.alert`/`confirm`/`prompt`: `confirm()` returns `false`, `prompt()`

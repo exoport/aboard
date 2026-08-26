@@ -128,6 +128,15 @@ That prints the JSON and nothing else, so it pipes. A recipe with no template bl
 exits non-zero and names the recipe, rather than printing an empty document that would
 be applied as an empty tab.
 
+Three built-ins carry one, and they are the worked examples of this format:
+`ask-for-a-decision`, a `form`; and the two `ui` tabs,
+`decision-wizard-with-live-summary` and `human-checklist`. Read one before writing your
+first — what their bodies carry is the judgement `aboard capabilities` cannot, such as
+why a summary has to live in the same tab as the fields it summarises, and why a literal
+"3 of 8 done" is the one thing not to put on a checklist when nothing on the board
+computes. This page deliberately keeps no list of the full set: `aboard recipes list` is
+the complete answer, and a hand-maintained copy of what ships is a copy that drifts.
+
 ## Try it
 
 ```bash
