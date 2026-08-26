@@ -152,7 +152,7 @@ cannot take the page down. Each verified per the handoff's Verification subsecti
 tests (the active-tab message is observable from the harness).
 **Done when** the extension's M2 and M4 no longer have a "if it has not landed" clause.
 
-### 8. The VS Code extension — implemented, not installed  ☑ aboard_vscode `6711c15` + `ca72ca6` (built out of order, in parallel with item 3, because it is a separate repo; a reconcile against items 7's landed contract happens in item 7/9)
+### 8. The VS Code extension — implemented, not installed  ☑ aboard_vscode `6711c15` + `ca72ca6` + `08c127c` (built out of order, in parallel with item 3, because it is a separate repo; a reconcile against items 7's landed contract happens in item 7/9)
 
 Source: `/home/diegos/_dev/exoport/aboard_vscode/docs/handoff.md` (§5 layout, §6 the two moving
 parts, §7 the tree, §8 milestones M1–M5). Scope: the repo scaffold exactly as §5 (`package.json`
@@ -173,7 +173,7 @@ Code, no hand-verification checklist (§11), no marketplace ladder (§9). Build 
 implemented as code with §10's hardening cases handled where they are pure logic, and the README
 says plainly that it is unverified in a real VS Code.
 
-### 9. Close the books  ☑ `<this commit>`
+### 9. Close the books  ☑ `8a0b923`
 
 Scope: CLAUDE.md's status and the skill reflect everything above; `development/README.md`'s order
 list is replaced by "see plan-2 — complete"; each handoff's Status line says done; the review file
