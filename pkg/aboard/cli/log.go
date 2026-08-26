@@ -26,7 +26,11 @@ losing it from the terminal you are watching.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Log(cmd.Context(), root, boardName(cmd), args[0], stdin(opts), stdout(opts))
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
+			return aboard.Log(cmd.Context(), root, name, args[0], stdin(opts), stdout(opts))
 		},
 	}
 }

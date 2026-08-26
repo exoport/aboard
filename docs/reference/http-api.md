@@ -33,6 +33,33 @@ prints the same table; the browser suite asserts that every declared path answer
 
 Anything not matched, and any method not listed for a matched path, is `404`.
 
+### Who is allowed to ask
+
+Two checks run in `route`, before anything looks at the path. The board has **no
+authentication** and cannot have any, so these are not authentication — they are the two
+things that stop a *browser* from being the thing that reaches it on somebody else's
+behalf.
+
+| check | applies to | refused with |
+| ----- | ---------- | ------------ |
+| **Host allow-list** — `localhost`, `127.0.0.1`, `[::1]`, with or without a port | every route, `/health` included | `403`, naming the allow-list |
+| **Same-origin** — `Sec-Fetch-Site: cross-site`, or an `Origin` that is present and is not this server's own | every mutating method (anything but `GET`/`HEAD`/`OPTIONS`) | `403`, naming the header that refused it |
+
+What still passes, and must: `Sec-Fetch-Site` of `same-origin`, `same-site` or `none`; no
+`Origin` header at all, which is curl, `aboard apply` and every other non-browser client;
+and the board's own page, whose `Origin` matches its `Host`.
+
+The Host check is the DNS-rebinding guard. The bind is loopback, but *any* name that
+resolves to `127.0.0.1` reaches it, and a page served from that name is then same-origin
+with the board — able to read `/aboard.json`, `/journal` and `/health`, which discloses
+the absolute project path and the pid. A name is not accepted merely because it resolves
+to loopback; that is the attack. `403` rather than `421`: `421` invites a client to retry
+on a fresh connection, and this is a deliberate refusal rather than a misdirection.
+
+**Behind a reverse proxy**, forward a loopback `Host` upstream — nginx's `proxy_pass
+http://127.0.0.1:<port>/` does this by default. A proxy configured to pass the original
+public `Host` through will be refused, which is the check doing its job.
+
 ### Base path
 
 With `serve --base-path /prefix`, the prefix is stripped before routing, so every route
@@ -52,20 +79,35 @@ The whole document, with three control fields alongside the board's own:
 
 | field       | meaning                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------ |
-| `__base`    | The `updatedAt` this write was based on. Omit only for an unconditional write.                 |
+| `__base`    | The `rev` of the document this write was built from — a number, or its decimal string. Omit (or send `null`) only for an unconditional write; a `__base` that is present and is neither is `400`, because ignoring it would skip the check the caller asked for. |
 | `__by`      | The actor. `"human"` from the browser; an agent name from the CLI. Absent means `"unknown"`, which gets agent-level powers only. |
 | `__origin`  | An opaque client id, echoed on the SSE frame so a browser can ignore the notification for its own write. Defaults to `"browser"`. |
 
 All three are stripped before the document is written.
 
-**Compare-and-set.** If `__base` is present and does not equal the live `updatedAt`, the
-write is refused with `409` and the live value:
+**Compare-and-set.** The token is `rev`, a counter the server increments on every accepted
+write (see [the state file](state-file.md#the-document)). If `__base` is present and does
+not equal the live `rev`, the write is refused with `409`, the live revision, and a
+sentence saying how far behind the caller is:
 
 ```json
-{ "error": "conflict", "live": "2026-08-25T11:04:02.117Z" }
+{
+  "error": "conflict",
+  "live": "43",
+  "base": "41",
+  "reason": "your base is rev 41 and the board is at rev 43 — re-read the document, redo the edit, apply again"
+}
 ```
 
-Re-read, redo the edit, and post again. The check is whole-document, so any concurrent
+Re-read, redo the edit, and post again.
+
+The token used to be `updatedAt`, and a millisecond timestamp is not a token: two writes
+inside one millisecond share a string, so a base built from the first still matched after
+the second had landed — 4 collisions in 60 sequential writes, each an accepted write that
+destroyed another. A **non-numeric `__base`** is read as one of those old timestamps and
+is accepted only while the live document has no `rev` of its own — a board whose last
+write predates the counter, and which gets one on that very write. After that it is
+refused with a message saying `__base` must be the `rev`. The check is whole-document, so any concurrent
 write conflicts with any other; that is coarse on purpose, and the browser handles its
 own case by merging rather than discarding what the human just typed.
 
@@ -82,28 +124,32 @@ The lock is process-local: it orders the writers inside ONE server and nothing e
 That is why `apply` posts here rather than writing the file itself, which is what puts
 an agent's write in the same queue as the browser's. It is also why a second server on
 one project has to be prevented a level up: `serve` recognises this project's own board
-on the port it derives and refuses to start beside it — but an explicit `--port` or
-`PORT` is taken literally and skips that check, so two servers on one state file is
-something you can still ask for, and no lock in either of them would see the other. See
+before it binds and refuses to start beside it, whether the port was derived or given
+explicitly with `--port`/`PORT`. (The explicit port used to skip that check, so two
+servers on one state file was one flag away — and neither lock would have seen the
+other.) See
 [why writes are serialised](../explanation/why-writes-are-serialised.md).
 
 **What the server stamps, whatever you sent:** `version` (this server writes its own
-schema version by definition), `nextId` (reconciled so it never regresses or falls
-behind an id in use), `updatedAt`, and `lastEditedBy`.
+schema version by definition), `rev` (the previous revision plus one), `nextId`
+(reconciled so it never regresses or falls behind an id in use), `updatedAt`, and
+`lastEditedBy`.
 
 **What the server enforces on the tab list:** the four guarantees — a dropped tab is
 restored as a removal request, a `touched` marker cannot be cleared by an agent, chat
 acknowledgements are carried forward, and an actor may stamp only its own `seen` key.
 See [why four guarantees are server-enforced](../explanation/why-four-guarantees-are-server-enforced.md).
 
-Success is `200`:
+Success is `200`, and carries the revision this write produced — which is the base for
+the caller's next one:
 
 ```json
-{ "ok": true, "updatedAt": "2026-08-25T11:05:31.004Z" }
+{ "ok": true, "rev": 44, "updatedAt": "2026-08-25T11:05:31.004Z" }
 ```
 
-Other statuses: `400` for a body that is not JSON, has no `tabs` array, or exceeds the
-body limit; `500` if the write itself failed. The write is atomic —
+Other statuses: `400` for a body that is not JSON, has no `tabs` array, exceeds the
+body limit, or carries a `__base` that is not a revision; `403` for a cross-site write or a non-loopback `Host` (see [who is allowed to
+ask](#who-is-allowed-to-ask)); `500` if the write itself failed. The write is atomic —
 temp file in the same directory, then rename — so a reader never sees a half-written
 document.
 

@@ -78,7 +78,7 @@ the one record neither side can rewrite.
 |---|---|
 | `GET /` | the board UI |
 | `GET /aboard.json` | current state |
-| `POST /aboard.json` | write, compare-and-set (`__base`, `__origin`, `__by`) |
+| `POST /aboard.json` | write, compare-and-set (`__base` is the document's `rev`; `__origin`, `__by`). Same-origin only |
 | `GET /events` | SSE: the state changed (`{origin}`), waiter count changed (`{waiters:n}`), and the UI signature (`{ui:{html,css,js}}`) — sent first on every connect so a page notices its own code changed and reloads |
 | `GET /health` | `{app, project, port, url, state, pid}` — who owns this port, and which binary is serving |
 | `GET /tab/<id>/html` | one `html` tab as a standalone sandboxed document |
@@ -103,13 +103,14 @@ assuming a port; the port is derived from the project root.
 
 ```jsonc
 { "version": 3,          // server-managed; stamped on every write
-  "updatedAt": "…",      // server-managed, and the compare-and-set base
+  "rev": 41,             // server-managed, and the compare-and-set base
+  "updatedAt": "…",      // server-managed; when, for a human reading this
   "lastEditedBy": "…",   // server-managed from --by
   "nextId": 148,         // server-managed id allocator
   "tabs": [ … ] }
 ```
 
-All four are the server's, not yours. Set none of them — a hand-written `version`
+All five are the server's, not yours. Set none of them — a hand-written `version`
 in particular is the one mistake that blanks the entire board rather than one
 field, since the browser will not render a schema it does not know.
 

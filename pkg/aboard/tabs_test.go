@@ -218,3 +218,53 @@ func TestAgentCannotUnreadAChatMessage(t *testing.T) {
 		t.Errorf("the ack was dropped: %s", tabByID(t, out, "bb1").State)
 	}
 }
+
+// Guarantee 1's other half. The restore branch covers a tab an agent DROPPED;
+// this covers the far commoner case — an agent carrying the whole document
+// through a read-modify-write with the field simply absent, because nothing it
+// did was about that tab. `pendingRemoval` was taken verbatim, so a routine write
+// by one session cancelled another's removal request and the human's banner
+// vanished with nothing to say it had ever been raised.
+func TestAgentWriteCannotClearAPendingRemoval(t *testing.T) {
+	current := boardJSON(t, tab{
+		ID: "bb1", Name: "Plan", Type: "notes",
+		State:          json.RawMessage(`{"text":"one"}`),
+		PendingRemoval: &removalAsk{By: "agent-2", At: "T0", Reason: "superseded by the new plan"},
+	})
+
+	// agent-1 edits the tab and says nothing about the request.
+	incoming := boardJSON(t, tab{
+		ID: "bb1", Name: "Plan", Type: "notes",
+		State: json.RawMessage(`{"text":"two"}`),
+	})
+
+	out, err := reconcileTabs(current, incoming, "agent-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := tabByID(t, out, "bb1").PendingRemoval
+	if got == nil {
+		t.Fatal("an agent write erased another agent's removal request")
+	}
+	if got.By != "agent-2" || got.Reason != "superseded by the new plan" {
+		t.Errorf("the request was rewritten rather than carried: %+v", got)
+	}
+}
+
+// And the human still answers it — that is what "only the human clears it" means,
+// and a carry-forward that applied to them too would make the request permanent.
+func TestAHumanWriteAnswersAPendingRemoval(t *testing.T) {
+	current := boardJSON(t, tab{
+		ID: "bb1", Name: "Plan", Type: "notes",
+		PendingRemoval: &removalAsk{By: "agent-2", At: "T0", Reason: "spent"},
+	})
+	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
+
+	out, err := reconcileTabs(current, incoming, actorHuman)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tabByID(t, out, "bb1").PendingRemoval != nil {
+		t.Error("the human declined the removal and the request came back anyway")
+	}
+}

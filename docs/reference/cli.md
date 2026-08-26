@@ -73,6 +73,10 @@ resolves nowhere, a colour name this board no longer has. They warn rather than
 refuse, because a spec can lag its renderer — but read them, because "applied"
 is not evidence that anything rendered.
 
+The compare-and-set base is the `rev` inside the document you submit — the one
+you read. A document with no `rev` is refused (exit 2) rather than written
+unconditionally; --force writes it anyway and says so on stderr.
+
 Examples:
 
 ```
@@ -84,6 +88,7 @@ Flags:
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--by` | string | `agent-1` | actor recorded in lastEditedBy and on every tab this write touched |
+| `--force` | bool | `false` | write without compare-and-set, overwriting anything since you read the document |
 
 Global flags:
 

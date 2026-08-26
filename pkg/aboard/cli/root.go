@@ -99,7 +99,36 @@ Start with:
 		newVersionCmd(opts),
 		newGenDocsCmd(opts),
 	)
+
+	// Argument-count errors are USAGE errors, and cobra hands them out untyped.
+	// Without this, `aboard export` with no argument exited 1 — indistinguishable
+	// from `aboard export nosuchtab`, which is a board that ran and could not find
+	// the tab — while the declared table advertises 2 for exactly this case.
+	//
+	// Applied by walking the finished tree rather than at each declaration: there
+	// are seventeen `Args:` in this package and a new command that forgot the
+	// wrapper would report the wrong status with nothing to notice it. One call
+	// here covers the tree, subcommands included, and it is asserted by
+	// TestArgumentCountErrorsExitUsage.
+	typeArgErrors(root)
 	return root
+}
+
+// typeArgErrors wraps every Args validator in the tree so its failures carry
+// exit 2. A nil validator is left alone: cobra treats that as "arbitrary args",
+// so there is nothing that can fail.
+func typeArgErrors(cmd *cobra.Command) {
+	if check := cmd.Args; check != nil {
+		cmd.Args = func(c *cobra.Command, args []string) error {
+			if err := check(c, args); err != nil {
+				return usageErr(err)
+			}
+			return nil
+		}
+	}
+	for _, sub := range cmd.Commands() {
+		typeArgErrors(sub)
+	}
 }
 
 // Execute runs the tree with a signal-cancelled context and returns the process
@@ -226,13 +255,26 @@ func looseRoot(cmd *cobra.Command) (aboard.Root, error) {
 // is answered the same way everywhere. A missing flag is not an error here — a
 // host that mounts this tree without the root flag still gets the environment
 // and the default.
-func boardName(cmd *cobra.Command) string {
+//
+// It VALIDATES, and it is the only place that has to: the name is interpolated
+// into `.aboard/aboard.<name>.json` and `.aboard/run/instance.<name>.json`, so
+// `--name ../../../../evil` used to write both files outside the project and
+// report success. Refused here, before any path is joined, and as a usage error
+// (exit 2) because nothing has been contacted yet.
+func boardName(cmd *cobra.Command) (string, error) {
+	name := ""
 	if cmd != nil {
-		if explicit, err := cmd.Flags().GetString("name"); err == nil && explicit != "" {
-			return explicit
+		if explicit, err := cmd.Flags().GetString("name"); err == nil {
+			name = explicit
 		}
 	}
-	return strings.TrimSpace(os.Getenv("ABOARD_NAME"))
+	if name == "" {
+		name = strings.TrimSpace(os.Getenv("ABOARD_NAME"))
+	}
+	if err := aboard.ValidateBoardName(name); err != nil {
+		return "", usageErr(err)
+	}
+	return name, nil
 }
 
 // envInt reads a positive integer from the environment, for the settings that

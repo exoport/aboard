@@ -15,17 +15,26 @@ invariant, and the shape of a tab.
 ```jsonc
 {
   "version": 3,                          // server-managed; the schema the renderers read
-  "updatedAt": "2026-08-25T11:03:09Z",   // server-managed; the compare-and-set base
+  "rev": 41,                             // server-managed; the compare-and-set base
+  "updatedAt": "2026-08-25T11:03:09Z",   // server-managed; when, for a human reading this
   "lastEditedBy": "agent-1",             // "human", or whatever --by was passed
   "nextId": 147,                         // server-managed; the id allocator
   "tabs": [ /* … */ ]
 }
 ```
 
-**Never set `version`, `updatedAt`, `lastEditedBy` or `nextId` yourself.** The server
-manages all four and stamps them on every accepted write. Leaving `updatedAt` exactly as
+**Never set `version`, `rev`, `updatedAt`, `lastEditedBy` or `nextId` yourself.** The
+server manages all five and stamps them on every accepted write. Leaving `rev` exactly as
 you read it is what makes the conflict check work; a write replaces the whole document,
 so always build from a fresh read.
+
+`rev` is a counter, incremented once per accepted write, and it is the **compare-and-set
+base** — see [`POST /aboard.json`](http-api.md#post-aboardjson). `updatedAt` used to be
+that base and is not any more: it is a millisecond clock, and two writes inside one
+millisecond produce the same string, so a base built from the first still matched after
+the second had landed. Measured at 4 collisions in 60 sequential writes, each one a
+provably stale write accepted with a `200`. `updatedAt` stays because it answers a
+different question — *when* — and nothing keys off it now.
 
 `version` is in that list because it once was not, and it cost a whole board: a schema
 example showed `"version": 2` long after the board had moved to 3, an agent copied the

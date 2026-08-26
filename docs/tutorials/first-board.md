@@ -124,7 +124,7 @@ hiding another's.
 Three things about that command, because they are the shape every board write takes:
 
 - **You submit the whole document, not a patch.** Read it, change it, apply it.
-- **The `updatedAt` inside the document you read is the compare-and-set base.** If the browser or another session wrote in between, `apply` refuses rather than clobbering them — re-read, redo, apply again.
+- **The `rev` inside the document you read is the compare-and-set base.** If the browser or another session wrote in between, `apply` refuses rather than clobbering them — re-read, redo, apply again. A document with no `rev` at all is refused before it is sent (exit 2), because a write with no base overwrites everything since the last read; `--force` is how you say you meant it.
 - **`--by` is not decoration.** It lands in `lastEditedBy` and on every tab the write touched, and it is what the human sees. `agent-1`, `agent-2`, `agent-<role>` — and `--by human` is refused from the CLI, because the CLI is not the human.
 
 Never edit `.aboard/aboard.json` in an editor while the server is running: that path

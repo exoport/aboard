@@ -174,7 +174,7 @@ const SchemaVersion = 3
 // every path listed answers.
 var declaredRoutes = []routeSpec{
 	{"GET", "/aboard.json", "current state"},
-	{"POST", "/aboard.json", "write, compare-and-set (__base, __origin, __by)"},
+	{"POST", "/aboard.json", "write, compare-and-set (__base is the document's rev; __origin, __by). same-origin only"},
 	{"GET", "/events", "SSE: state changes, waiter count, and the UI signature"},
 	{"GET", "/health", "who owns this port, and which binary is serving"},
 	{"GET", "/capabilities", "this manifest"},

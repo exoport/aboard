@@ -167,6 +167,166 @@ try {
   log.push(`kv bind probe: THREW ${err && err.message ? err.message : err}`);
 }
 
+// The shell's conflict machinery, driven against the real server.
+//
+// Two defects live here and neither is visible from the DOM alone: an SSE ping
+// arriving inside the 250 ms save debounce used to replace `doc` wholesale, so
+// the human's half-typed edit was swapped out behind the textarea and the
+// pending save posted the server's own copy back over it; and `baseline` was
+// never advanced after a merge, so the next conflict classified the copy the
+// merge had just adopted from an agent as the human's own edit and stashed it
+// under their name.
+//
+// The shell is driven through `?probe=1`, which hangs its document plumbing on
+// window. An iframe rather than an import: the bug is timing between a fetch, a
+// debounce and a reload, and a copy of those functions mounted in this page
+// would exercise none of it. Real browser tests replace this; until then the
+// code path is at least walked.
+try {
+  const frame = document.createElement('iframe');
+  frame.width = '900'; frame.height = '500';
+  frame.src = '../?nosse=1&probe=1';
+  host.append(frame);
+  await new Promise((done) => {
+    frame.addEventListener('load', done, { once: true });
+    setTimeout(done, 4000);
+  });
+  let P = null;
+  for (let i = 0; i < 60 && !P; i++) {
+    P = frame.contentWindow && frame.contentWindow.__aboardProbe;
+    if (!P) await new Promise((r) => setTimeout(r, 100));
+  }
+  if (!P) throw new Error('the shell never exposed __aboardProbe');
+  if (!P.doc || !Array.isArray(P.doc.tabs) || P.doc.tabs.length < 2) {
+    throw new Error('need at least two tabs to merge one against the other');
+  }
+
+  // The tab on screen, and any other one for the other writer. The edit is the
+  // tab's NOTE — human-authored text, shown in the note strip, and the one field
+  // no renderer rewrites on mount. Picking a state field instead made the probe
+  // depend on which tab happened to be last: an `html` tab's bridge and a
+  // `stateFrom` borrower both write state of their own, so a probe key planted
+  // there could be gone before the merge ever ran.
+  const active = frame.contentDocument.querySelector('[data-tab][data-active="yes"]');
+  let mine = P.doc.tabs.find((t) => t.id === (active && active.dataset.tab)) || P.doc.tabs[0];
+  const theirs = P.doc.tabs.find((t) => t.id !== mine.id);
+
+  // A key REORDERING is not an edit, and it has to be asserted separately from
+  // the merge below. `aboard init` writes the example board as authored JSON and
+  // GET /aboard.json serves those bytes, but the server re-marshals through its
+  // own structs on the first accepted write — so `note` is a tab's third key
+  // before and its last key after, with no value changed. The shell compared the
+  // JSON text, so on a freshly initialised board every tab the human had touched
+  // compared unequal to its own baseline and the merge called it a collision.
+  //
+  // The end-to-end probe below does catch that, but ONLY while the board is
+  // still virgin: one run normalises the file and every later run passes with
+  // the bug still in place. A check that fails on the first run and never again
+  // is one nobody watches fail, so the comparison is exercised on its own here.
+  const reordered = {};
+  for (const k of Object.keys(mine).reverse()) reordered[k] = mine[k];
+  P.doc.tabs = P.doc.tabs.map((t) => (t.id === mine.id ? reordered : t));
+  log.push('a key reordering is not an edit: ' + (P.localEdits().changed.length === 0));
+  mine = P.doc.tabs.find((t) => t.id === reordered.id);
+
+  const typed = 'probe note ' + Date.now();
+  const wasNote = mine.note;
+  const revBefore = P.baseline.rev;
+
+  // The human types, and the save is DEBOUNCED — not yet sent.
+  mine.note = typed;
+  P.repaint();
+  // The promise a VIEW would be holding: table.js flashes the cell on it,
+  // vote.js re-renders on it, html.js reports back into the widget on it. The
+  // reload below re-arms the debounce, which replaces the timer this promise was
+  // captured in — so it has to settle anyway, or a click just before a foreign
+  // write silently never finishes.
+  let viewSawTheSave = false;
+  P.save().then(() => { viewSawTheSave = true; });
+  if (!P.saveArmed) throw new Error('save() did not arm the debounce');
+
+  // Another writer lands inside that window. A real foreign write, through the
+  // same route an agent uses, so the reload below is the real thing.
+  const fresh = await (await fetch('../aboard.json', { cache: 'no-store' })).json();
+  fresh.tabs.find((t) => t.id === theirs.id).state = {
+    ...(theirs.state || {}), probeForeign: typed,
+  };
+  const wrote = await fetch('../aboard.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...fresh, __by: 'agent-probe', __origin: 'smoke-probe', __base: String(fresh.rev) }),
+  });
+  if (!wrote.ok) throw new Error('the foreign write was refused: ' + wrote.status);
+
+  // The ping the SSE handler would deliver.
+  await P.load({ announce: true, merge: true });
+
+  const after = P.doc.tabs.find((t) => t.id === mine.id);
+  const kept = !!after && after.note === typed;
+  // ...and it is still on screen, not merely in the document.
+  const onScreen = frame.contentDocument.getElementById('tab-note-text').textContent === typed;
+  const sawTheirs = (P.doc.tabs.find((t) => t.id === theirs.id) || {}).state?.probeForeign === typed;
+  const baseMoved = Number(P.baseline.rev) > Number(revBefore);
+  // The baseline is the SERVER's document, not the merged one: an unsaved edit
+  // that became the baseline would be classified as already-saved and dropped by
+  // the next merge, silently.
+  const baselineIsServer = !P.baseline.tabs.some((t) => t.id === mine.id && t.note === typed);
+  const rearmed = P.saveArmed;
+  log.push('merge on reload: kept=' + kept + ' onScreen=' + onScreen + ' foreign=' + sawTheirs
+    + ' baselineMoved=' + baseMoved + ' baselineIsServer=' + baselineIsServer
+    + ' rearmed=' + rearmed);
+
+  // And the re-armed save actually reaches the server, on top of the write that
+  // interrupted it.
+  await new Promise((r) => setTimeout(r, 900));
+  const settled = await (await fetch('../aboard.json', { cache: 'no-store' })).json();
+  const onDisk = (settled.tabs.find((t) => t.id === mine.id) || {}).note === typed;
+  const foreignOnDisk = (settled.tabs.find((t) => t.id === theirs.id) || {}).state?.probeForeign === typed;
+  log.push('rearmed save lands: mine=' + onDisk + ' theirs=' + foreignOnDisk
+    + ' viewNotified=' + viewSawTheSave);
+
+  // Round two: both sides change the SAME tab, which is a genuine collision. The
+  // server's copy wins — it is committed and another actor may have acted on it —
+  // and the human's version is stashed with a notice offering it back. The bug
+  // was in what happened NEXT: with the baseline left behind, the copy the merge
+  // had just adopted from the agent looked like a fresh human edit, so the second
+  // merge stashed THAT over the human's own words and "Restore mine" handed back
+  // the agent's text under their name.
+  const collide = P.doc.tabs.find((t) => t.id === mine.id);
+  const humanWords = 'the human wrote this ' + Date.now();
+  collide.note = humanWords;
+
+  const before2 = await (await fetch('../aboard.json', { cache: 'no-store' })).json();
+  before2.tabs.find((t) => t.id === mine.id).note = 'the agent wrote this';
+  const wrote2 = await fetch('../aboard.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...before2, __by: 'agent-probe', __origin: 'smoke-probe', __base: String(before2.rev) }),
+  });
+  if (!wrote2.ok) throw new Error('the colliding write was refused: ' + wrote2.status);
+
+  await P.load({ announce: true, merge: true });
+  const stashedFirst = (P.stashed.get(mine.id) || {}).note;
+  await P.load({ announce: true, merge: true });   // a second pass over the same tab
+  const stashedAfter = (P.stashed.get(mine.id) || {}).note;
+  log.push('a collision stashes the human copy and keeps it: first=' + (stashedFirst === humanWords)
+    + ' second=' + (stashedAfter === humanWords));
+
+  // Put the human's own sentence back. The suite writes to the board it is aimed
+  // at and that is understood, but a note is the human's words about their own
+  // tab, and leaving "probe note 1756…" sitting in the strip is the one artefact
+  // here that would read as somebody's writing rather than as test debris.
+  const restore = P.doc.tabs.find((t) => t.id === mine.id);
+  if (restore) {
+    if (wasNote === undefined) delete restore.note;
+    else restore.note = wasNote;
+    await P.save({ immediate: true });
+  }
+  frame.remove();
+} catch (err) {
+  log.push('merge probe: THREW ' + (err && err.message ? err.message : err));
+}
+
 await new Promise((r) => setTimeout(r, 2500));
 // The runtime half of the control check. A control whose id is not declared
 // renders a visible marker and sets data-undeclared, so one query over every

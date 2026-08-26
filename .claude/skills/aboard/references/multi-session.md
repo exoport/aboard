@@ -30,7 +30,7 @@ aboard running at http://localhost:41837
   state   /home/you/proj/.aboard/aboard.json
   pid     577548
   since   2026-08-25T23:50:36Z
-  caps    58b40b03   (skill reference current)
+  caps    9facfc76   (skill reference current)
 ```
 
 Killing it and starting your own takes the first session's server out from under

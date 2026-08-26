@@ -38,9 +38,13 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 			if port == 0 {
 				port = envInt("PORT", 0)
 			}
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
 			cfg := aboard.ServeConfig{
 				Root:      root,
-				Name:      boardName(cmd),
+				Name:      name,
 				Port:      port,
 				Dev:       dev,
 				DevDir:    devDir,

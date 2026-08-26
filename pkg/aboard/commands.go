@@ -120,6 +120,7 @@ func Commands() []Command {
 			Doc:  "read a board document on stdin and write it through the running board (compare-and-set)",
 			Flags: []Flag{
 				{Name: "by", Type: "string", Def: "agent-1", Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
+				{Name: "force", Type: "bool", Def: "false", Doc: "write without compare-and-set, overwriting anything since you read the document"},
 			},
 			Exits: commonExits(),
 		},

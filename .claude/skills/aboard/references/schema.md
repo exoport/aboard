@@ -3,17 +3,23 @@
 ```jsonc
 {
   "version": 3,                          // server-managed; the schema the renderers read
-  "updatedAt": "2026-08-22T11:03:09Z",   // server-managed; apply uses it as the CAS base
+  "rev": 41,                             // server-managed; apply uses it as the CAS base
+  "updatedAt": "2026-08-22T11:03:09Z",   // server-managed; when, for a human reading this
   "lastEditedBy": "agent-1",             // "human", or whatever --by was passed
   "nextId": 147,                         // server-managed; the id allocator
   "tabs": [ /* … */ ]
 }
 ```
 
-Never set `version`, `updatedAt`, `lastEditedBy` or `nextId` yourself — the server
-manages all four. Leaving `updatedAt` exactly as you read it is what makes the
-conflict check work. `aboard apply` replaces the whole document, so always build
-from a fresh `Read`.
+Never set `version`, `rev`, `updatedAt`, `lastEditedBy` or `nextId` yourself — the
+server manages all five. Leaving `rev` exactly as you read it is what makes the
+conflict check work; a document with no `rev` has no base, and `apply` refuses it
+rather than clobbering whatever landed since. `aboard apply` replaces the whole
+document, so always build from a fresh `Read`.
+
+`rev` is a counter, one per accepted write. `updatedAt` used to be the base and is
+not any more: it is a millisecond clock, so two writes inside one millisecond
+share a string and a stale base passes — measured, and it cost a human edit.
 
 `version` is in that list because it was NOT, and it cost a whole board: this file
 showed `"version": 2` long after the board moved to 3, an agent copied the example

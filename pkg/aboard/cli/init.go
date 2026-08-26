@@ -37,13 +37,22 @@ over a conversation that was never theirs.`,
 		Args:    cobra.NoArgs,
 		Example: "  aboard init\n  aboard init --example --gitignore\n  aboard init --name review",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Before the side effect, not after it: this command CREATES things,
+			// and a usage error discovered on the way out has already made them.
+			if err := checkOutputFormat(outputFormatOf(cmd)); err != nil {
+				return err
+			}
 			dir, err := startDir(cmd)
+			if err != nil {
+				return err
+			}
+			name, err := boardName(cmd)
 			if err != nil {
 				return err
 			}
 			res, err := aboard.Init(aboard.InitConfig{
 				Dir:       dir,
-				Name:      boardName(cmd),
+				Name:      name,
 				Example:   example,
 				Gitignore: gitignore,
 			})

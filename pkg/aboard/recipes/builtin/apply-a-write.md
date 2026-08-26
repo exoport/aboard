@@ -25,7 +25,15 @@ fs.writeFileSync('/tmp/next-aboard.json', JSON.stringify(b, null, 2));
 aboard apply --by "agent-1" < /tmp/next-aboard.json
 ```
 
-If it refuses, re-read and redo. Do not reach for `Edit`.
+The document you read carries `rev`, and that is the compare-and-set base — which
+is why the shape is read-modify-apply and not compose-from-scratch. A document
+with no `rev` is refused (exit 2) rather than written over everything since the
+last read; `--force` writes unconditionally and says so, and is almost never what
+you want.
+
+If it refuses with a `409`, another writer landed while you were thinking:
+re-read, redo the edit on the fresh copy, apply again. Do not reach for `Edit`,
+and do not reach for `--force`.
 
 ## Helpers worth pasting
 

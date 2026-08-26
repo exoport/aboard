@@ -65,7 +65,7 @@ with the reason, and a recipe needing a newer board schema says so.`,
 			if err != nil {
 				return err
 			}
-			return renderOutput(stdout(opts), outputFormat, found,
+			return renderOutput(stdout(opts), outputFormat, aboard.RecipeOutputs(found),
 				func() string { return aboard.RecipeListHuman(found) })
 		},
 	}

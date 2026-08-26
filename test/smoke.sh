@@ -165,6 +165,29 @@ printf '%s' "$SMOKE_LOG" | node -e "
     if(!ok) process.exitCode=1;
   })" || FAILED=1
 
+# The conflict machinery, driven inside the real shell (see the probe block in
+# pkg/aboard/web/test/smoke.html). Asserted on the harness LOG, not the dumped
+# DOM: the shell's own source contains these words.
+printf '%s' "$SMOKE_LOG" | node -e "
+  let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+    let lines=[]; try { lines=JSON.parse(d.replace(/<\/div>.*/s,''))||[]; } catch {}
+    const order=(lines.find((l)=>l.startsWith('a key reordering is not an edit:'))||'');
+    const merge=(lines.find((l)=>l.startsWith('merge on reload:'))||'');
+    const land=(lines.find((l)=>l.startsWith('rearmed save lands:'))||'');
+    const stash=(lines.find((l)=>l.startsWith('a collision stashes'))||'');
+    const want='merge on reload: kept=true onScreen=true foreign=true baselineMoved=true baselineIsServer=true rearmed=true';
+    const wantLand='rearmed save lands: mine=true theirs=true viewNotified=true';
+    const wantStash='a collision stashes the human copy and keeps it: first=true second=true';
+    const wantOrder='a key reordering is not an edit: true';
+    const ok0=order===wantOrder;
+    const ok=merge===want, ok2=land===wantLand, ok3=stash===wantStash;
+    console.log((ok0?'  ok   ':'  FAIL ')+'a re-keyed tab does not read as a human edit ('+(order||'no probe line')+')');
+    console.log((ok?'  ok   ':'  FAIL ')+'an SSE reload merges instead of replacing ('+(merge||'no probe line')+')');
+    console.log((ok2?'  ok   ':'  FAIL ')+'the interrupted save is re-armed and lands ('+(land||'no probe line')+')');
+    console.log((ok3?'  ok   ':'  FAIL ')+'a collision never overwrites the human\'s stashed copy ('+(stash||'no probe line')+')');
+    if(!ok0||!ok||!ok2||!ok3) process.exitCode=1;
+  })" || FAILED=1
+
 echo "== each tab activates in the real shell =="
 # Tabs are data, and ids are bare numbers that also appear on nested objects, so
 # parse the tabs array rather than grepping for an id-shaped string.

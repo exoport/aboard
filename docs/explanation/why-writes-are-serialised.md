@@ -12,11 +12,11 @@ writers they had succeeded.
 ## The failure this fixes
 
 `POST /aboard.json` reads the current document, compares the caller's `__base` against
-the live `updatedAt`, reconciles the tab list against the four guarantees, and renames a
+the live revision, reconciles the tab list against the four guarantees, and renames a
 new file into place. Four steps, and until this change no lock spanned them.
 
 So two overlapping posts each read the same document, each compared against the same
-`updatedAt`, each passed, and each wrote. The last rename won. The loser got `200 OK`
+base, each passed, and each wrote. The last rename won. The loser got `200 OK`
 and an `updatedAt` of its own, and the journal — the record a session reads to answer
 "what changed while I was thinking?" — carried an entry for a write that is not in the
 file. Under a barrier-synchronised reproduction it happened in 40 trials out of 40.
@@ -27,6 +27,16 @@ guards have to be indivisible, or the check is advice.
 
 The fix is a `sync.Mutex` held across all four steps. It is not clever and it is not
 supposed to be.
+
+The comparison itself was the second half of the same problem. The base was `updatedAt`,
+a millisecond timestamp — so even under a perfect lock, two writes inside one millisecond
+shared a token and a provably stale base passed the check. Measured at 4 collisions in 60
+sequential writes. The token is a **revision counter** now (`rev`), stamped beside
+`updatedAt` on every accepted write: it cannot collide, it cannot run backwards when the
+clock does, and it is comparable, so a refusal can say *your base is rev 41 and the board
+is at rev 43* rather than handing back two hashes that differ. A content hash — the
+`stateSignature` the SSE path already computes — would have been just as correct as an
+equality token and says nothing a reader can act on, which is why it is not the one.
 
 ## What the lock covers, and what it deliberately does not
 
@@ -121,7 +131,7 @@ reads.
 ## What a caller sees now
 
 Exactly what the API always promised. Of N simultaneous writes off one base, one gets
-`200` and the rest get `409` with the live `updatedAt`. A `409` is not an error to route
+`200` and the rest get `409` with the live `rev`. A `409` is not an error to route
 around: it means a real change landed while you were thinking. Re-read, redo the edit on
 the fresh copy, apply again.
 
@@ -129,3 +139,12 @@ The browser does not simply retry, because the human is the one actor whose work
 be reconstructed: it fetches fresh, re-applies the tabs the human touched where the
 server has not touched them, retries once, and stashes a genuine same-tab collision
 behind a "Restore mine" notice rather than discarding what was just typed.
+
+"The server has not touched this tab" is decided by VALUE, not by the bytes. Key order is
+not part of a tab's meaning and no writer is asked to agree on one: `aboard init` writes
+the example board as authored JSON and a `GET` serves those bytes unchanged, while the
+server re-marshals through its own structs on the first accepted write — so a tab's
+`note` is its third key before and its last key after, identical throughout. Comparing
+the JSON text made that reordering look like an edit on both sides at once, which is the
+definition of a collision, so on a freshly initialised board the first concurrent write
+sent the human's edit to the stash instead of merging it.

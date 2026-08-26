@@ -18,7 +18,8 @@ import (
 // agent that forgets them would destroy the user's work:
 //
 //  1. An agent cannot delete a tab. A write that drops one has the tab restored
-//     and turned into a removal REQUEST that the human answers.
+//     and turned into a removal REQUEST that the human answers — and an agent
+//     write cannot clear that request either, whoever raised it.
 //  2. An agent cannot clear a tab's `touched` marker. That marker is what raises
 //     the dot on the tab and the banner inside it, and only the human dismissing
 //     it takes it down — otherwise a later agent write could hide the fact that
@@ -149,6 +150,18 @@ func reconcileTabs(currentRaw, incomingRaw []byte, by string) ([]tab, error) {
 		// if this write tried to drop it.
 		if t.Touched == nil && prev.Touched != nil {
 			t.Touched = prev.Touched
+		}
+
+		// Guarantee 1, the other half: only the human answers a removal request.
+		// The restore branch below covers a tab an agent DROPPED; this covers the
+		// far commoner case of an agent carrying the whole document through a
+		// read-modify-write with the field simply absent, because nothing it did
+		// was about that tab. `pendingRemoval` was taken verbatim, so a routine
+		// write by agent-2 cancelled agent-1's request and the human's banner
+		// vanished with no record that it had ever been raised — the same shape as
+		// `touched`, and it is carried forward for the same reason.
+		if t.PendingRemoval == nil && prev.PendingRemoval != nil {
+			t.PendingRemoval = prev.PendingRemoval
 		}
 
 		// Guarantee 4: an agent may move its OWN read stamp and nobody else's.

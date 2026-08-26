@@ -108,9 +108,13 @@ aboard apply --by "agent-1" < next.json
 ```
 
 `Edit` bypasses compare-and-set, so a concurrent change from the browser or another
-session is destroyed with no error. Measured, not theoretical. `apply` uses the
-`updatedAt` inside the document you submit as its base, so read-edit-apply is safe by
-construction; a refusal means someone got there first — re-read, redo, apply again. Use
+session is destroyed with no error. Measured, not theoretical. `apply` uses the **`rev`**
+inside the document you submit as its base — a counter the server stamps on every
+accepted write, not `updatedAt`, which was a millisecond clock two writes could share —
+so read-edit-apply is safe by construction; a `409` means someone got there first —
+re-read, redo, apply again. A document with no `rev` has no base at all and is refused
+(exit 2) rather than clobbering everything since the last read; `--force` writes it
+anyway, says so on stderr, and is not the way past a `409`. Use
 `agent-1` / `agent-2` / `agent-<role>` for `--by`, never `claude`: it is shown to the
 human on every tab the write touched. `--by human` is refused from the CLI.
 
@@ -129,7 +133,8 @@ session is watching is not yours to restart.
 - **`html` tabs are sandboxed with `connect-src 'none'`**, and `frame-ancestors` deliberately admits VS Code's webview origins — [why](docs/explanation/why-html-tabs-are-sandboxed.md).
 - **Two identities, one `.aboard/`**: `aboard` and `ape-aboard` are hosts; the manifest's app name is neither — [why](docs/explanation/why-two-identities.md).
 - **The capability surface is declared and checked, never scraped**; controls are a list because their order is the toolbar's — [why](docs/explanation/why-the-manifest-is-declared.md).
-- **Writes are serialised, and a `409` is the guarantee that nothing of yours landed.** One lock across read → compare-and-set → reconcile → write; the losers of a simultaneous write are refused, not queued on top — [why](docs/explanation/why-writes-are-serialised.md).
+- **Writes are serialised, and a `409` is the guarantee that nothing of yours landed.** One lock across read → compare-and-set → reconcile → write, and the token compared is a **revision counter** (`rev`), never a timestamp; the losers of a simultaneous write are refused, not queued on top — [why](docs/explanation/why-writes-are-serialised.md).
+- **The board answers loopback only, and refuses a cross-site write.** A `Host` outside `localhost`/`127.0.0.1`/`[::1]` is `403` (the DNS-rebinding guard), and so is any mutating request whose `Origin` is not the board's own — [the rules](docs/reference/http-api.md#who-is-allowed-to-ask). Neither is authentication; the server has none. They stop a browser from being the thing that reaches it for somebody else.
 - **Nothing in the browser executes anything.** Action buttons, `gate` verdicts and `ui` buttons RECORD an intent; the agent that asked acts on it. That is what makes a stray click harmless on a server with no auth.
 - **Ids are board-wide monotonic, tagged `bb`, with no type prefix** — [reference](docs/reference/state-file.md#ids). Form *field* ids stay semantic.
 - **An id is enough coming FROM the human and not enough going TO them.** They say an id and you can look it up; you say one and they may have nothing. Name the thing and put the id beside it — "the Migration review tab (`<id>`)", never "the button in `<id>`".

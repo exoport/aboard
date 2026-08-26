@@ -125,6 +125,65 @@ type Recipe struct {
 	Err string `json:"error,omitempty" yaml:"-"`
 }
 
+// RecipeOut is a recipe as `recipes list --output-format` prints it, and the
+// reason it is a SECOND struct rather than more tags on the first.
+//
+// Recipe is the frontmatter PARSE target: its yaml tags name the keys an author
+// writes in a file (`when_to_use`, `min_schema`), and the fields that are not
+// frontmatter at all — the tier it was found in, the file it came from, what it
+// shadowed, why it did not parse — are `yaml:"-"` because they must never be
+// read out of a document. Marshalling that struct for output honoured every one
+// of those decisions in the wrong direction: `--output-format yaml` printed a
+// different, lossier document than `--output-format json`, missing `scope`,
+// `path`, `shadowedBy` and `error` — the four things the command exists to
+// report — and renaming `whenToUse` on the way out.
+//
+// One struct cannot serve both: the input keys are the author's and the output
+// keys are the API's, and they genuinely differ. So the parse struct keeps its
+// frontmatter tags and this one carries json and yaml tags that are identical to
+// each other.
+type RecipeOut struct {
+	Name        string            `json:"name"                 yaml:"name"`
+	Description string            `json:"description"          yaml:"description"`
+	WhenToUse   string            `json:"whenToUse"            yaml:"whenToUse"`
+	Tags        []string          `json:"tags,omitempty"       yaml:"tags,omitempty"`
+	Requires    RecipeRequiresOut `json:"requires,omitzero"    yaml:"requires,omitempty"`
+	Scope       string            `json:"scope"                yaml:"scope"`
+	Path        string            `json:"path"                 yaml:"path"`
+	HasTemplate bool              `json:"hasTemplate"          yaml:"hasTemplate"`
+	ShadowedBy  []string          `json:"shadowedBy,omitempty" yaml:"shadowedBy,omitempty"`
+	Err         string            `json:"error,omitempty"      yaml:"error,omitempty"`
+}
+
+// RecipeRequiresOut is `requires` on the way out: the same value, under the key
+// the JSON form uses rather than the frontmatter one.
+type RecipeRequiresOut struct {
+	MinSchema int `json:"minSchema,omitempty" yaml:"minSchema,omitempty"`
+}
+
+// RecipeOutputs converts a discovered list into the output view. Called by the
+// command rather than by DiscoverRecipes, so everything inside this package goes
+// on working with the parsed shape.
+func RecipeOutputs(found []Recipe) []RecipeOut {
+	out := make([]RecipeOut, 0, len(found))
+	for i := range found {
+		r := &found[i]
+		out = append(out, RecipeOut{
+			Name:        r.Name,
+			Description: r.Description,
+			WhenToUse:   r.WhenToUse,
+			Tags:        r.Tags,
+			Requires:    RecipeRequiresOut{MinSchema: r.Requires.MinSchema},
+			Scope:       r.Scope,
+			Path:        r.Path,
+			HasTemplate: r.HasTemplate,
+			ShadowedBy:  r.ShadowedBy,
+			Err:         r.Err,
+		})
+	}
+	return out
+}
+
 // NeedsSchema reports a recipe written against a newer board than this binary.
 func (r Recipe) NeedsSchema() bool { return r.Requires.MinSchema > SchemaVersion }
 

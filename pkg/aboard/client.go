@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -24,14 +25,26 @@ import (
 // has gone wrong, and reading it all would be the second thing to go wrong.
 const replyReadLimit = 4 << 10
 
+// ErrNoBase is what Apply returns for a document carrying no compare-and-set
+// base at all. A sentinel because the cli layer has to map it to exit 2: it is a
+// usage refusal, detected before the board is contacted, and it is the one
+// refusal in here that a caller can fix by re-reading rather than by retrying.
+var ErrNoBase = errors.New("no compare-and-set base")
+
 // Apply posts a board document to the running board instead of writing the file
 // directly. Direct writes have no compare-and-set, so two agents — or an agent
 // and the browser — can silently drop each other's changes; going through the
 // server means a stale write is refused with 409 instead of winning.
 //
-// The base for the comparison is the `updatedAt` already inside the submitted
-// document: whatever was read before editing is exactly the right base.
-func Apply(ctx context.Context, root Root, name, by string, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
+// The base for the comparison is the `rev` already inside the submitted
+// document: whatever was read before editing is exactly the right base. A
+// document with no `rev` and no `updatedAt` has NO base, and that used to be an
+// unconditional write — `__base` was set only when a timestamp was present and
+// the server skipped the check when it was empty, so a document built from the
+// minimal shape in the docs overwrote everything written since it was read, exit
+// 0, nothing on stderr. It is refused now, and --force is the way to say you
+// meant it.
+func Apply(ctx context.Context, root Root, name, by string, force bool, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
 	if by == actorHuman {
 		// The human acts in the browser, and the guarantees in tabs.go key off
 		// this exact string: a write stamped `human` may delete tabs, clear
@@ -46,7 +59,34 @@ func Apply(ctx context.Context, root Root, name, by string, assets fs.FS, in io.
 		return fmt.Errorf("reading stdin: %w", err)
 	}
 
-	// Warnings first, and the version one before the rest: it is the only failure
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return fmt.Errorf("stdin is not valid json: %w", err)
+	}
+	if _, ok := doc["tabs"].([]any); !ok {
+		return errors.New("stdin json has no tabs array")
+	}
+
+	// The base, before anything else is printed. A document with none is refused
+	// rather than warned about, so there is nothing to read past — and the caller
+	// will see the write warnings on the retry that carries a base.
+	base := applyBase(doc)
+	switch {
+	case force:
+		// Deliberate and announced. An unconditional write is occasionally the
+		// right thing — repairing a document the browser cannot render, seeding a
+		// board from a fixture — and the honest shape for it is a flag that says
+		// so on stderr, not a silent consequence of the field being absent. First
+		// line, because it is the one that says another writer may be about to
+		// lose their work.
+		fmt.Fprintf(errOut, "warning: --force: writing without compare-and-set — anything written since you read this document is overwritten\n")
+	case base == "":
+		return fmt.Errorf("%w: this document has no `rev` (and no `updatedAt`), so the write would overwrite anything since you read it — re-read .aboard/aboard.json (or GET /aboard.json), edit THAT document so it keeps its `rev`, or pass --force to write unconditionally", ErrNoBase)
+	default:
+		doc["__base"] = base
+	}
+
+	// Then the warnings, the version one before the rest: it is the only failure
 	// here that blanks the WHOLE board rather than one field, so it is the one
 	// worth reading first if a caller reads only the first line.
 	//
@@ -68,21 +108,9 @@ func Apply(ctx context.Context, root Root, name, by string, assets fs.FS, in io.
 		fmt.Fprintf(errOut, "warning: %s\n", warning)
 	}
 
-	var doc map[string]any
-	if err := json.Unmarshal(body, &doc); err != nil {
-		return fmt.Errorf("stdin is not valid json: %w", err)
-	}
-	if _, ok := doc["tabs"].([]any); !ok {
-		return errors.New("stdin json has no tabs array")
-	}
-
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		return err
-	}
-
-	if base, ok := doc["updatedAt"].(string); ok {
-		doc["__base"] = base
 	}
 	doc["__origin"] = "apply"
 	doc["__by"] = by
@@ -109,9 +137,32 @@ func Apply(ctx context.Context, root Root, name, by string, assets fs.FS, in io.
 		return nil
 	case http.StatusConflict:
 		return fmt.Errorf("refused: the board changed since you read it (%s) — re-read the board document, redo the edit, apply again", strings.TrimSpace(string(got)))
+	case http.StatusForbidden:
+		return fmt.Errorf("refused by the board (%s) — this is the origin/host guard; a client on loopback with no Origin header is what it expects", strings.TrimSpace(string(got)))
 	default:
 		return fmt.Errorf("board returned %d: %s", resp.StatusCode, strings.TrimSpace(string(got)))
 	}
+}
+
+// applyBase reads the compare-and-set base out of the document being submitted.
+//
+// `rev` is the token. `updatedAt` is accepted as a fallback for exactly one
+// case — a board whose last write predates the revision counter, whose document
+// therefore has no `rev` to send — and the server refuses a timestamp base the
+// moment the live document has a `rev` of its own.
+func applyBase(doc map[string]any) string {
+	switch rev := doc["rev"].(type) {
+	case float64:
+		return strconv.Itoa(int(rev))
+	case string:
+		if _, err := strconv.Atoi(strings.TrimSpace(rev)); err == nil {
+			return strings.TrimSpace(rev)
+		}
+	}
+	if stamp, ok := doc["updatedAt"].(string); ok {
+		return stamp
+	}
+	return ""
 }
 
 /* ---------- status ---------- */
@@ -127,30 +178,30 @@ const (
 // because --output-format json has to say the same things the human form does,
 // and the only way to guarantee that is for both to render the same value.
 type StatusReport struct {
-	Project string `json:"project"`
-	Name    string `json:"name,omitempty"`
+	Project string `json:"project"        yaml:"project"`
+	Name    string `json:"name,omitempty" yaml:"name,omitempty"`
 	// Running is true only when something on the recorded port answered /health.
-	Running bool `json:"running"`
+	Running bool `json:"running" yaml:"running"`
 	// Recorded is true when an instance file exists, whether or not it is live.
 	// Recorded && !Running is the stale-record case, which needs its own message.
-	Recorded     bool   `json:"recorded"`
-	App          string `json:"app,omitempty"`
-	URL          string `json:"url,omitempty"`
-	Port         int    `json:"port,omitempty"`
-	PID          int    `json:"pid,omitempty"`
-	State        string `json:"state,omitempty"`
-	Started      string `json:"started,omitempty"`
-	Version      string `json:"version,omitempty"`
-	InstanceFile string `json:"instanceFile"`
+	Recorded     bool   `json:"recorded"          yaml:"recorded"`
+	App          string `json:"app,omitempty"     yaml:"app,omitempty"`
+	URL          string `json:"url,omitempty"     yaml:"url,omitempty"`
+	Port         int    `json:"port,omitempty"    yaml:"port,omitempty"`
+	PID          int    `json:"pid,omitempty"     yaml:"pid,omitempty"`
+	State        string `json:"state,omitempty"   yaml:"state,omitempty"`
+	Started      string `json:"started,omitempty" yaml:"started,omitempty"`
+	Version      string `json:"version,omitempty" yaml:"version,omitempty"`
+	InstanceFile string `json:"instanceFile"      yaml:"instanceFile"`
 	// WouldUsePort is the derived port, reported when nothing is running so the
 	// reader knows where to look once it is.
-	WouldUsePort int `json:"wouldUsePort,omitempty"`
+	WouldUsePort int `json:"wouldUsePort,omitempty" yaml:"wouldUsePort,omitempty"`
 
-	CapsHash string `json:"capsHash"`
+	CapsHash string `json:"capsHash" yaml:"capsHash"`
 	// Skill is SkillCurrent, SkillStale or SkillAbsent. Absent is not drift: a
 	// project that never copied the skill has nothing to be out of date.
-	Skill         string `json:"skill"`
-	SkillCapsHash string `json:"skillCapsHash,omitempty"`
+	Skill         string `json:"skill"                   yaml:"skill"`
+	SkillCapsHash string `json:"skillCapsHash,omitempty" yaml:"skillCapsHash,omitempty"`
 }
 
 // Status collects everything `aboard status` reports.

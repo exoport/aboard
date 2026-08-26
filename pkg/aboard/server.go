@@ -37,6 +37,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"mime"
 	"net"
 	"net/http"
@@ -44,6 +45,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -280,9 +282,20 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 // means "derive one from the project root", then walk forward if that exact port
 // is already busy — but if the occupant turns out to be this project's own
 // board, say so and stop instead of starting a duplicate.
+//
+// Duplicate detection runs FIRST, whichever way the port was chosen. It used to
+// live only in the derive-and-walk loop, so `--port` (and `PORT`) skipped it
+// entirely: a second server started happily on the same state file, rewrote
+// `instance.json` to point at itself, and killing it left every client command
+// aimed at a dead port while a perfectly healthy board went on serving. The
+// duplicate is the thing being prevented, and the duplicate does not care how
+// its port was picked — the check belongs to the project, not to the branch.
 func (s *server) listen(ctx context.Context, want int, root Root, name string) (net.Listener, int, error) {
 	var lc net.ListenConfig
 	if want != 0 {
+		if err := s.refuseDuplicate(ctx, root, name, want); err != nil {
+			return nil, 0, err
+		}
 		ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", want))
 		if err != nil {
 			return nil, 0, fmt.Errorf("port %d is busy: %w", want, err)
@@ -297,12 +310,23 @@ func (s *server) listen(ctx context.Context, want int, root Root, name string) (
 		if err == nil {
 			return ln, p, nil
 		}
-		if other := probeOccupant(ctx, root, name, p); other != nil && other.Project == root.String() && other.Name == name {
-			return nil, 0, fmt.Errorf("this project's board is already running at %s (pid %d)", other.URL, other.PID)
+		if err := s.refuseDuplicate(ctx, root, name, p); err != nil {
+			return nil, 0, err
 		}
 		s.opts.Log().Printf("port %d busy, trying %d", p, portBase+((first-portBase+i+1)%portSpan))
 	}
 	return nil, 0, fmt.Errorf("no free port found in %d-%d after %d tries", portBase, portBase+portSpan-1, portTries)
+}
+
+// refuseDuplicate reports an error when THIS project's board already holds the
+// port, and nothing otherwise — a stranger on the port is somebody else's
+// business, and on the derived path the loop walks past it.
+func (s *server) refuseDuplicate(ctx context.Context, root Root, name string, port int) error {
+	other := probeOccupant(ctx, root, name, port)
+	if other == nil || other.Project != root.String() || other.Name != name {
+		return nil
+	}
+	return fmt.Errorf("this project's board is already running at %s (pid %d)", other.URL, other.PID)
 }
 
 // What a probe will spend on an occupant that may not be a board at all: a
@@ -424,7 +448,103 @@ func RunningInstance(root Root, name string) (Instance, error) {
 
 /* ---------- routing ---------- */
 
+// The board has no authentication: anything that can reach the port can read and
+// rewrite the whole board. Loopback-only binding is the containment, and these
+// two checks are what stop a BROWSER from being the thing that reaches it on an
+// attacker's behalf.
+//
+// hostAllowed is the DNS-rebinding guard. The bind is 127.0.0.1, but a name that
+// resolves to 127.0.0.1 reaches it just as well, and a page served from that name
+// is then SAME-ORIGIN with the board: it can read `/aboard.json`, `/journal` and
+// `/health`, which discloses the absolute project path and the pid. The Host
+// header is the only thing that distinguishes the two, so it is checked before
+// anything else looks at the request.
+//
+// The allow-list is the three spellings of loopback, with or without a port. A
+// name is NOT accepted just because it resolves to loopback — that is exactly the
+// attack — and there is deliberately no flag to widen it: a board reached under
+// another name is a board that has left the machine it was designed for.
+func hostAllowed(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	host := raw
+	if h, _, err := net.SplitHostPort(raw); err == nil {
+		host = h
+	}
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
+
+// mutating reports that this request would change something, so it has to prove
+// it did not come from another site.
+func mutating(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return true
+}
+
+// crossSite decides whether a mutating request came from somewhere else, and
+// says which signal refused it.
+//
+// Two signals, because neither alone is enough. `Sec-Fetch-Site: cross-site` is
+// the browser's own account of where the request came from and it cannot be set
+// by page script; `Origin` catches the browsers and the versions that do not send
+// the fetch-metadata headers. Both are absent from curl and from `apply`, and
+// that is the case that must keep working: this is not authentication — the
+// server has none and cannot have any — it is a same-origin rule for the one
+// client that lies about who it is acting for.
+//
+// What passes: `same-origin`, `same-site`, `none` (a user typing the URL), no
+// header at all, and an `Origin` that is this server's own. What is refused: a
+// page on another origin POSTing to the board, which was reproduced in headless
+// Chromium wiping the board from a different local port.
+func crossSite(r *http.Request) string {
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return "Sec-Fetch-Site: cross-site"
+	}
+	origin := r.Header.Get("Origin")
+	switch origin {
+	case "":
+		// curl, `apply`, any non-browser client. Nothing to check and nothing to
+		// gain by demanding one: a program that wanted to lie could send any
+		// value at all. The signal is only worth anything from a browser, which
+		// sets it itself.
+		return ""
+	case "http://" + r.Host, "https://" + r.Host:
+		return ""
+	}
+	// `null` lands here too, and deliberately: an opaque origin is a sandboxed
+	// frame or a data: URL, and neither is this board's own page. The html tab
+	// frames are exactly that shape, and they reach the board through
+	// postMessage to the parent, never with a request of their own.
+	return "Origin: " + origin
+}
+
 func (s *server) route(w http.ResponseWriter, r *http.Request) {
+	if !hostAllowed(r.Host) {
+		// 403 rather than 421. 421 says "I am not the right server for this
+		// authority", which invites a client to retry on a fresh connection —
+		// and a browser following that advice would hammer the board. This is a
+		// deliberate refusal, not a misdirection, so it says so.
+		http.Error(w, "refused: this board answers only on localhost, 127.0.0.1 or [::1] — "+
+			"a hostname that merely resolves to loopback is how a page on another site reads a local board", http.StatusForbidden)
+		return
+	}
+	if mutating(r.Method) {
+		if why := crossSite(r); why != "" {
+			http.Error(w, "refused: this write did not come from the board's own page ("+why+") — "+
+				"the board has no authentication, so a cross-site write is refused rather than trusted", http.StatusForbidden)
+			return
+		}
+	}
+
 	// Strip the base path before anything looks at the path, so every case below
 	// is written against the server root and there is one place that knows a
 	// prefix exists at all.
@@ -549,7 +669,18 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	if origin == "" {
 		origin = "browser"
 	}
-	base, _ := incoming["__base"].(string)
+	base, baseOK := baseToken(incoming["__base"])
+	if !baseOK {
+		// A `__base` that is present but not a token is refused rather than
+		// ignored. Ignoring it is the whole defect this token exists to close:
+		// the caller believes it asked for compare-and-set, the server silently
+		// did not, and the 200 says the write was fine.
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error":  "invalid __base",
+			"reason": "__base must be the `rev` of the document you read, as a number or its decimal string",
+		})
+		return
+	}
 	// An ABSENT __by is "unknown", NOT "human".
 	//
 	// It used to default to "human", and "human" is not a label here — it is the
@@ -593,7 +724,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updatedAt": res.stamp})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp})
 }
 
 // commitResult is what an accepted write hands back to the unlocked half of
@@ -603,6 +734,7 @@ type commitResult struct {
 	doc   []byte
 	entry JournalEntry
 	stamp string
+	rev   int
 }
 
 // apiError is a refusal the caller still has to write. The locked half returns
@@ -634,14 +766,18 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 
 	currentRaw, _ := os.ReadFile(s.stateFile)
 
-	// Compare-and-set: refuse the write if the file moved on since the browser
-	// loaded it, so an agent edit is never silently clobbered.
+	// Compare-and-set against the REVISION, not the clock. See revisionOf.
+	live := revisionOf(currentRaw)
 	if base != "" && len(currentRaw) > 0 {
-		var cur map[string]any
-		if json.Unmarshal(currentRaw, &cur) == nil {
-			if live, ok := cur["updatedAt"].(string); ok && live != base {
-				return commitResult{}, &apiError{http.StatusConflict, map[string]string{"error": "conflict", "live": live}}
-			}
+		if bad := live.refuse(base); bad != nil {
+			return commitResult{}, bad
+		}
+		// Only for a base that really is a timestamp: a legacy document can also
+		// be written against a numeric base of 0, and calling that a timestamp
+		// would be a wrong sentence in the log of the one case nobody can re-run.
+		if _, notANumber := strconv.Atoi(strings.TrimSpace(base)); live.legacy() && notANumber != nil {
+			s.opts.Log().Printf("accepted a timestamp __base on a document with no rev — "+
+				"this board has not been written since the revision token landed; %q gets rev %d", by, live.rev+1)
 		}
 	}
 
@@ -673,6 +809,13 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 	// fixed by whoever is still holding the context for it.
 	incoming["version"] = SchemaVersion
 
+	// The compare-and-set token. Server-managed exactly like `version` and for a
+	// sharper reason: `updatedAt` was the token, and it is a millisecond clock —
+	// 4 collisions in 60 sequential writes, and every collision is a provably
+	// stale base that passes. A counter cannot collide, and the loser of a race
+	// is told a number it can compare rather than a timestamp it has to trust.
+	incoming["rev"] = live.rev + 1
+
 	stamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	incoming["updatedAt"] = stamp
 	incoming["lastEditedBy"] = by
@@ -703,7 +846,115 @@ func (s *server) commitState(incoming map[string]any, raw []byte, base, by, orig
 		s.journal.append(entry)
 	}
 
-	return commitResult{doc: out, entry: entry, stamp: stamp}, nil
+	return commitResult{doc: out, entry: entry, stamp: stamp, rev: live.rev + 1}, nil
+}
+
+// revision is the board's compare-and-set token as it stands on disk: a counter
+// the server increments on every accepted write.
+//
+// `updatedAt` used to be the token, and a millisecond timestamp is not one. Two
+// writes inside the same millisecond produce the same string, so a base built
+// from the first one still matches after the second landed — measured at 4
+// collisions in 60 sequential writes, after which a provably stale base passes
+// the check and the human's edit is gone with a 200 to say it went well. The
+// clock also runs backwards (NTP, a suspend, a container clock), which the
+// comparison has no way to notice.
+//
+// A counter has neither problem, and it is comparable and cheap to print, which
+// the hash alternative (stateSignature, already computed for the SSE frames) is
+// not: sha256 would have been equally correct as an equality token, but "your
+// base is rev 12, the board is at rev 14" tells a reader they are two writes
+// behind, and "9f3a… != c17b…" tells them nothing.
+//
+// `updatedAt` stays, unchanged, because it answers a different question — WHEN,
+// for a human reading the file — and nothing keys off it any more.
+type revision struct {
+	rev int
+	// had reports whether the document on disk carried a `rev` at all. A board
+	// written before this landed has none, and its stored `updatedAt` is the only
+	// base its readers could have. See refuse.
+	had       bool
+	updatedAt string
+}
+
+// baseToken reads `__base` off the incoming document, and reports whether the
+// value is one a comparison can be made from.
+//
+// It takes a NUMBER as readily as a string, and that is the point rather than a
+// convenience. `rev` is a JSON number in the document, so the obvious thing for a
+// caller assembling a write by hand is `"__base": doc.rev` — and until this
+// existed the string type assertion failed, the base came out empty, and the
+// server skipped compare-and-set altogether and answered 200. That is precisely
+// the silent-clobber the revision token was introduced to end, one JSON type
+// away, and it was reachable only AFTER the token stopped being a string.
+//
+// Absent or null is "no base", which is still an unconditional write and still
+// legitimate (`apply --force`, a seeding script). Anything else — a bool, an
+// object, a fractional number — is a caller that meant to set a base and got it
+// wrong, and it is refused rather than quietly downgraded.
+func baseToken(v any) (string, bool) {
+	switch got := v.(type) {
+	case nil:
+		return "", true
+	case string:
+		return got, true
+	case float64:
+		if got != math.Trunc(got) {
+			return "", false
+		}
+		return strconv.FormatInt(int64(got), 10), true
+	default:
+		return "", false
+	}
+}
+
+func revisionOf(raw []byte) revision {
+	var cur map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &cur) != nil {
+		return revision{}
+	}
+	got := revision{}
+	got.updatedAt, _ = cur["updatedAt"].(string)
+	if n, ok := cur["rev"].(float64); ok {
+		got.rev, got.had = int(n), true
+	}
+	return got
+}
+
+// legacy reports that the live document predates the revision token.
+func (v revision) legacy() bool { return !v.had }
+
+// refuse decides whether a submitted __base may write over this document, and
+// returns the refusal when it may not.
+//
+// Two shapes of base arrive. A number is a revision and is compared as one. A
+// non-numeric string is a timestamp from before this change, and it is accepted
+// ONLY while the live document has no `rev` of its own — that is a board whose
+// last write predates the upgrade, whose readers cannot have a revision to send,
+// and which gets one on this very write. Once a `rev` is on disk a timestamp base
+// is refused outright, because accepting it would reopen the same-millisecond
+// hole for every writer that kept sending the old field.
+func (v revision) refuse(base string) *apiError {
+	if n, err := strconv.Atoi(strings.TrimSpace(base)); err == nil {
+		if n == v.rev {
+			return nil
+		}
+		return &apiError{http.StatusConflict, map[string]string{
+			"error":  "conflict",
+			"live":   strconv.Itoa(v.rev),
+			"base":   base,
+			"reason": fmt.Sprintf("your base is rev %d and the board is at rev %d — re-read the document, redo the edit, apply again", n, v.rev),
+		}}
+	}
+	if v.legacy() && base == v.updatedAt {
+		return nil
+	}
+	return &apiError{http.StatusConflict, map[string]string{
+		"error":  "conflict",
+		"live":   strconv.Itoa(v.rev),
+		"base":   base,
+		"reason": "__base must be the `rev` of the document you read; a timestamp is the old token and is no longer compared",
+	}}
 }
 
 // Write via a temp file in the same directory, then rename. A reader (Claude

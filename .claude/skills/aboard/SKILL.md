@@ -116,11 +116,19 @@ session is silently destroyed. Instead:
 aboard apply --by "agent-1" < /tmp/next-aboard.json
 ```
 
-Read the file, build the whole new document, apply it. `apply` uses the
-`updatedAt` inside the submitted document as its base, so read-edit-apply is safe
-with no extra bookkeeping. A refusal means someone got there first — re-read,
-redo the edit, apply again. Do not fall back to `Edit`. Direct editing is fine
-only when `aboard status` reports nothing running.
+Read the file, build the whole new document, apply it. **The document you READ is
+the base**: `apply` sends its `rev` as the compare-and-set token, so read-edit-apply
+is safe with no extra bookkeeping — as long as you edit the document you read
+rather than assembling a fresh one from the schema. A `409` means someone got
+there first: re-read, redo the edit, apply again. Do not fall back to `Edit`.
+Direct editing is fine only when `aboard status` reports nothing running.
+
+A document with **no `rev`** has no base, so it would overwrite everything written
+since you last looked. `apply` refuses it (exit 2) and names `--force`.
+**`--force` writes with no compare-and-set at all** and says so on stderr: right
+for repairing a document the browser cannot render, or seeding a board from a
+fixture, and wrong every other time — most of all as a way past a `409`, which is
+another writer's work, not an obstacle.
 
 `--by` is not decoration: it names you in `lastEditedBy` and on every tab you
 touched, which is how the user and any other session tell who did what. Use

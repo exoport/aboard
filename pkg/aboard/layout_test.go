@@ -190,3 +190,46 @@ func mustAbs(t *testing.T, dir string) string {
 	// macOS); FindRoot does not resolve symlinks, so neither does this.
 	return abs
 }
+
+// One project, one root, one port. FindRoot never resolved symlinks, so a
+// checkout reached through a link derived a DIFFERENT port from the same
+// project: two servers on one state file, each with its own instance record, and
+// the second one's exit deleting the record the first was found through. Board
+// content survives that; discovery does not.
+func TestFindRootResolvesSymlinks(t *testing.T) {
+	actual := filepath.Join(t.TempDir(), "project")
+	mustMkdir(t, actual)
+	mustMkdir(t, filepath.Join(actual, DirName))
+
+	link := filepath.Join(t.TempDir(), "linked")
+	if err := os.Symlink(actual, link); err != nil {
+		t.Skipf("symlinks are not available here: %v", err)
+	}
+
+	viaLink, err := FindRoot(link)
+	if err != nil {
+		t.Fatalf("FindRoot(%s): %v", link, err)
+	}
+	direct, err := FindRoot(actual)
+	if err != nil {
+		t.Fatalf("FindRoot(%s): %v", actual, err)
+	}
+	// Resolved, so both spellings answer with the same string...
+	if viaLink != direct {
+		t.Fatalf("the same project resolved to two roots: %q via the link, %q direct", viaLink, direct)
+	}
+	// ...which is what makes them one board on one port.
+	if DerivePort(viaLink, "") != DerivePort(direct, "") {
+		t.Errorf("two ports for one project: %d and %d", DerivePort(viaLink, ""), DerivePort(direct, ""))
+	}
+	// And a subdirectory reached through the link resolves there too.
+	sub := filepath.Join(actual, "pkg")
+	mustMkdir(t, sub)
+	viaSub, err := FindRoot(filepath.Join(link, "pkg"))
+	if err != nil {
+		t.Fatalf("FindRoot(%s): %v", filepath.Join(link, "pkg"), err)
+	}
+	if viaSub != direct {
+		t.Errorf("a subdirectory under the link resolved to %q, want %q", viaSub, direct)
+	}
+}

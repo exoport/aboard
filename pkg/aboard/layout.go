@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 // DirName is the marker directory an aboard project is recognised by, and the
@@ -68,6 +69,16 @@ func FindRoot(start string) (Root, error) {
 	}
 	for dir := abs; ; {
 		if info, statErr := os.Stat(filepath.Join(dir, DirName)); statErr == nil && info.IsDir() {
+			// Resolved, so ONE project is ONE root. The port is derived from this
+			// string, so a symlinked path and its target hashed to two different
+			// ports: two servers on one state file, each with its own instance
+			// record, and the second one's exit deleting the record the first was
+			// found through. EvalSymlinks failing is not fatal — the directory was
+			// just stat'ed, so a failure here is a race or a permission wall, and
+			// the unresolved root is still the right answer.
+			if resolved, evalErr := filepath.EvalSymlinks(dir); evalErr == nil {
+				return Root(resolved), nil
+			}
 			return Root(dir), nil
 		}
 		parent := filepath.Dir(dir)
@@ -98,6 +109,30 @@ func (r Root) Dir() string { return filepath.Join(string(r), DirName) }
 
 // RunDir holds everything true only for this machine and this moment.
 func (r Root) RunDir() string { return filepath.Join(r.Dir(), runDirName) }
+
+// boardNameRe is what a board name may be. It becomes a FILENAME — the state
+// file, the instance record — so it is validated for exactly that, the same way
+// logTabRe validates a tab id before it becomes `<tab>.log`.
+//
+// The rule is a leading alphanumeric and then alphanumerics, dot, dash and
+// underscore, up to 64 characters. The leading class is what keeps `.hidden` and
+// `-flag` out; the body class is what keeps a separator out. It was unvalidated,
+// and `--name '../../../../evil'` wrote a state file and an instance record
+// outside the project tree and reported success — uncovered by `.gitignore`,
+// invisible to `status`, and impossible to find later.
+var boardNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// ValidateBoardName refuses a name that cannot safely become a filename. The
+// empty name is the DEFAULT board and is always valid: it means "no suffix".
+//
+// Called before any path is joined, which is the whole point — a name that has
+// already been interpolated into a path has already escaped.
+func ValidateBoardName(name string) error {
+	if name == "" || boardNameRe.MatchString(name) {
+		return nil
+	}
+	return fmt.Errorf("invalid board name %q: a name becomes a filename, so it must match %s", name, boardNameRe)
+}
 
 // StateFile is the board document. A named board gets its own file so two
 // boards in one project never share state.

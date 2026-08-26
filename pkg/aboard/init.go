@@ -75,23 +75,23 @@ type InitConfig struct {
 // InitResult is what it did, reported rather than printed so the human form and
 // --output-format render the same values.
 type InitResult struct {
-	Root      string `json:"root"`
-	Name      string `json:"name,omitempty"`
-	StateFile string `json:"stateFile"`
+	Root      string `json:"root"           yaml:"root"`
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	StateFile string `json:"stateFile"      yaml:"stateFile"`
 	// Created lists every directory and file this run brought into existence, in
 	// the order it made them. A run that found everything already there reports
 	// an empty list rather than claiming work it did not do.
-	Created []string `json:"created"`
+	Created []string `json:"created" yaml:"created"`
 	// Tabs is how many tabs the seeded document holds: 0 for an empty board.
-	Tabs int `json:"tabs"`
+	Tabs int `json:"tabs" yaml:"tabs"`
 	// Seeded is true when --example was used.
-	Seeded bool `json:"seeded"`
+	Seeded bool `json:"seeded" yaml:"seeded"`
 	// GitignoreLine is the line a project needs, always reported.
-	GitignoreLine string `json:"gitignoreLine"`
+	GitignoreLine string `json:"gitignoreLine" yaml:"gitignoreLine"`
 	// GitignoreState is "added", "present" or "not-asked".
-	GitignoreState string `json:"gitignoreState"`
+	GitignoreState string `json:"gitignoreState" yaml:"gitignoreState"`
 	// GitignoreFile is the file that was (or would be) appended to.
-	GitignoreFile string `json:"gitignoreFile,omitempty"`
+	GitignoreFile string `json:"gitignoreFile,omitempty" yaml:"gitignoreFile,omitempty"`
 }
 
 // Gitignore states, reported by InitResult.
@@ -200,8 +200,11 @@ func Init(cfg InitConfig) (InitResult, error) {
 // The minimal shape is not invented here — aboard.html refuses to render a
 // document whose `version` it does not know (it draws a "reload" notice
 // instead), reads `tabs` as an array and `nextId` as the board-wide id counter.
-// Those three are load-bearing; `updatedAt` and `lastEditedBy` are stamped so
-// the first write has a compare-and-set base and the journal has an author.
+// Those three are load-bearing; `rev`, `updatedAt` and `lastEditedBy` are
+// stamped so the first write has a compare-and-set base and the journal has an
+// author. `rev` is the base — a fresh board starts at 0 and the first accepted
+// write makes it 1 — and it is written here so that no board ever has to take
+// the timestamp-base compatibility path in commitState.
 func initialDocument(example bool) (document []byte, tabs int, err error) {
 	stamp := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 
@@ -210,6 +213,7 @@ func initialDocument(example bool) (document []byte, tabs int, err error) {
 			"version":      SchemaVersion,
 			"nextId":       1,
 			"tabs":         []any{},
+			"rev":          0,
 			"updatedAt":    stamp,
 			"lastEditedBy": initActor,
 		}
@@ -231,6 +235,7 @@ func initialDocument(example bool) (document []byte, tabs int, err error) {
 
 	seeded, _ := doc["tabs"].([]any)
 	doc["version"] = SchemaVersion
+	doc["rev"] = 0
 	doc["updatedAt"] = stamp
 	doc["lastEditedBy"] = initActor
 	// Recomputed rather than copied. The counter is the ONLY correct id

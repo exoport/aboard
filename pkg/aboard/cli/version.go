@@ -15,12 +15,12 @@ import (
 // other two unverifiable — which is how `-X` against a misnamed symbol goes
 // unnoticed for a release cycle.
 type versionReport struct {
-	App       string `json:"app"`
-	Host      string `json:"host"`
-	Version   string `json:"version"`
-	BuildDate string `json:"buildDate,omitempty"`
-	GitCommit string `json:"gitCommit,omitempty"`
-	Schema    int    `json:"schema"`
+	App       string `json:"app"                 yaml:"app"`
+	Host      string `json:"host"                yaml:"host"`
+	Version   string `json:"version"             yaml:"version"`
+	BuildDate string `json:"buildDate,omitempty" yaml:"buildDate,omitempty"`
+	GitCommit string `json:"gitCommit,omitempty" yaml:"gitCommit,omitempty"`
+	Schema    int    `json:"schema"              yaml:"schema"`
 }
 
 func newVersionCmd(opts Options) *cobra.Command {

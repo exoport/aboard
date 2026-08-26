@@ -271,7 +271,30 @@ function stampMeta(note) {
 let baseline = null;
 
 const snapshot = (d) => JSON.parse(JSON.stringify(d));
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// "Is this the same tab" must mean the same VALUES, not the same key order, and
+// plain JSON.stringify means the second. It is not a hypothetical difference:
+// `aboard init` writes the example board as its authored JSON and GET
+// /aboard.json serves those bytes, but the server re-marshals through its own
+// structs on the first accepted write — so `note` moves from third key to last,
+// every byte of meaning unchanged. On a freshly initialised board the first
+// foreign write therefore made every tab the human had touched compare unequal
+// to its own baseline, and the merge classified it as a COLLISION: the server's
+// copy won, the human's edit went to the stash behind a notice, and their
+// pending save posted the copy that had just replaced it. Any other producer can
+// reorder keys too — an agent building a document by hand, a different encoder,
+// a future field — so the comparison is canonicalised rather than the writers
+// being asked to agree on an order they have no reason to share.
+function canon(v) {
+  if (Array.isArray(v)) return v.map(canon);
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = canon(v[k]);
+    return out;
+  }
+  return v;
+}
+const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
 // Tabs the human has changed locally since the baseline, and tabs they created.
 function localEdits() {
@@ -302,6 +325,12 @@ function localEdits() {
 // dropped without being offered first.
 const stashedTabs = new Map();   // tab id -> the human's version of that tab
 
+// Returns { merged, server, collided }, or null when the fresh copy could not be
+// read. `server` is the document EXACTLY as the server has it, before any of our
+// tabs were laid back over it — it is the new baseline, and it is a separate
+// value for a reason: `merged` contains edits the server has never seen, and
+// making those the baseline would classify them as "already saved" and drop them
+// at the next merge, silently and with nothing stashed.
 async function mergeOntoFresh() {
   let fresh;
   try {
@@ -313,8 +342,9 @@ async function mergeOntoFresh() {
   }
   if (!Array.isArray(fresh.tabs)) return null;
 
+  const server = snapshot(fresh);
   const { changed, added } = localEdits();
-  if (!changed.length && !added.length) return fresh;   // nothing of ours to keep
+  if (!changed.length && !added.length) return { merged: fresh, server, collided: [] };
 
   const beforeById = new Map((baseline ? baseline.tabs : []).map((t) => [t.id, t]));
   const freshById = new Map(fresh.tabs.map((t) => [t.id, t]));
@@ -329,7 +359,11 @@ async function mergeOntoFresh() {
       // only change to it, so it survives.
       fresh.tabs = fresh.tabs.map((t) => (t.id === mine.id ? mine : t));
     } else {
-      stashedTabs.set(mine.id, snapshot(mine));
+      // Never overwrite a stash entry. The FIRST thing stashed for a tab is the
+      // human's own text; anything a later pass finds there is a copy the merge
+      // itself adopted, and writing that over the original handed back the
+      // agent's words under "Your version was kept."
+      if (!stashedTabs.has(mine.id)) stashedTabs.set(mine.id, snapshot(mine));
       collided.push(mine.id);
     }
   }
@@ -338,13 +372,33 @@ async function mergeOntoFresh() {
   }
   // The counter must never regress, whichever side allocated further.
   fresh.nextId = Math.max(Number(fresh.nextId) || 1, Number(doc.nextId) || 1);
-  fresh.__collided = collided;
-  return fresh;
+  return { merged: fresh, server, collided };
+}
+
+// adopt installs a merge result: the merged document on screen, and the SERVER's
+// copy as the baseline any future conflict is measured against.
+//
+// The baseline used to be left where it was, which made every tab the merge had
+// adopted from the server look like a fresh human edit on the next conflict —
+// so a second 409 stashed the agent's text as "yours" and the notice offered it
+// back under the human's name.
+function adopt({ merged, server }) {
+  doc = merged;
+  baseline = snapshot(server);
+  repaint();
 }
 
 async function pushDoc({ retries = 1 } = {}) {
   clearTimeout(saveTimer);
-  const payload = { ...doc, __origin: CLIENT_ID, __base: doc.updatedAt, __by: 'human' };
+  saveTimer = null;
+  // The compare-and-set base is the REVISION, not the timestamp. `updatedAt` is
+  // a millisecond clock, so two writes in one millisecond produced the same base
+  // and a stale one passed; `rev` is a counter the server increments per accepted
+  // write. The `updatedAt` fallback is for a board whose last write predates the
+  // counter — its document has no `rev` to send, and the server accepts the old
+  // token only while that is true of the copy on disk.
+  const base = doc.rev !== undefined && doc.rev !== null ? String(doc.rev) : (doc.updatedAt || '');
+  const payload = { ...doc, __origin: CLIENT_ID, __base: base, __by: 'human' };
   let res;
   try {
     res = await fetch(api('/aboard.json'), {
@@ -357,12 +411,10 @@ async function pushDoc({ retries = 1 } = {}) {
     return false;
   }
   if (res.status === 409) {
-    const merged = await mergeOntoFresh();
-    if (!merged) { stampMeta('could not merge — press Retry'); return false; }
-    const collided = merged.__collided || [];
-    delete merged.__collided;
-    doc = merged;
-    repaint();
+    const result = await mergeOntoFresh();
+    if (!result) { stampMeta('could not merge — press Retry'); return false; }
+    const { collided } = result;
+    adopt(result);
     if (collided.length) {
       stampMeta(`kept your edits · ${collided.length} tab${collided.length === 1 ? '' : 's'} collided`);
     }
@@ -376,6 +428,7 @@ async function pushDoc({ retries = 1 } = {}) {
   }
   const body = await res.json().catch(() => ({}));
   if (body.updatedAt) doc.updatedAt = body.updatedAt;
+  if (body.rev !== undefined) doc.rev = body.rev;   // the base for the next write
   doc.lastEditedBy = 'human';
   // Accepted: this is now the state both sides agree on, so it becomes the
   // baseline any future conflict is measured against.
@@ -384,11 +437,35 @@ async function pushDoc({ retries = 1 } = {}) {
   return true;
 }
 
+// Everything waiting on a debounce that has not fired yet. A view calls
+// `ctx.save()` and acts on the answer — table.js flashes the cell, vote.js
+// re-renders, html.js reports "saved" into the widget — so the promise has to
+// settle even when the debounce it was armed on is replaced.
+//
+// It used to be one resolver captured inside the timeout, which meant a second
+// save() cleared the first timer and STRANDED its promise for good. Rare before;
+// routine after the SSE reload started re-arming the debounce, since that is the
+// same 250 ms window a view's own save is sitting in — so a vote clicked just
+// before an agent write never re-rendered, and nothing said why.
+let saveWaiters = [];
+
+function settleSave(result) {
+  const waiting = saveWaiters;
+  saveWaiters = [];
+  const done = Promise.resolve(result);
+  done.then((ok) => waiting.forEach((r) => r(ok)), () => waiting.forEach((r) => r(false)));
+  return done;
+}
+
 function save({ immediate = false } = {}) {
   clearTimeout(saveTimer);
-  if (immediate) return pushDoc();
+  saveTimer = null;
+  // An immediate save carries the debounced edits with it — they are in the same
+  // document — so it answers their callers too.
+  if (immediate) return settleSave(pushDoc());
   return new Promise((resolve) => {
-    saveTimer = setTimeout(() => resolve(pushDoc()), 250);
+    saveWaiters.push(resolve);
+    saveTimer = setTimeout(() => { saveTimer = null; settleSave(pushDoc()); }, 250);
   });
 }
 
@@ -1258,7 +1335,35 @@ function schemaNotice(found) {
   stampMeta('');
 }
 
-async function load({ announce = false } = {}) {
+// load is the FIRST read, and the reload an SSE ping asks for. The two differ,
+// and conflating them cost the human whatever they had just typed: the ping path
+// used to replace `doc` and reset `baseline` unconditionally, so a foreign write
+// arriving inside the 250 ms save debounce swapped the document out from behind
+// the textarea — and the pending save then posted the server's own copy back,
+// got a 200 and flashed "Saved" over the edit it had just discarded.
+//
+// So a reload with a document already on screen goes through the same merge a
+// 409 does, and re-arms the debounce if a save was still pending. A merge that
+// cannot read the fresh copy falls back to the plain replace: being stale is
+// worse than being surprised.
+async function load({ announce = false, merge = false } = {}) {
+  if (merge && doc) {
+    const pending = saveTimer !== null;
+    const result = await mergeOntoFresh();
+    if (result) {
+      adopt(result);
+      if (result.collided.length) {
+        stampMeta(`kept your edits · ${result.collided.length} tab${result.collided.length === 1 ? '' : 's'} collided`);
+      } else if (announce) {
+        stampMeta('board reloaded');
+      }
+      // The debounce was cleared by nothing here, but the save it was going to
+      // make was built on the document we have just replaced. Re-arm it so the
+      // edit still reaches the server, now on top of what the other writer did.
+      if (pending) save();
+      return undefined;
+    }
+  }
   const res = await fetch(api('/aboard.json'), { cache: 'no-store' });
   doc = await res.json();
   baseline = snapshot(doc);
@@ -1325,7 +1430,7 @@ if (!new URLSearchParams(location.search).has('nosse')) {
     if ('ui' in payload) { onUiSignature(payload.ui); return; }
     if ('waiters' in payload) { refreshWaiters(); return; }
     if (payload.origin === CLIENT_ID) return;   // our own write echoing back
-    load({ announce: true });
+    load({ announce: true, merge: true });
   });
 }
 
@@ -1374,6 +1479,31 @@ goToTarget(readTarget());
 // Following a link to a node on the tab you are already on must still move the
 // view, so listen for hash changes rather than only reading it at load.
 addEventListener('hashchange', () => goToTarget(readTarget(), { announce: true }));
+
+// A TEST SEAM, and only when asked for. `?probe=1` hangs the document plumbing
+// on window so the browser suite can drive the real merge path — load(),
+// mergeOntoFresh(), the save debounce and the baseline — against a real server.
+//
+// The alternative was moving that plumbing into a module the harness could
+// import, and it was rejected: the bug being covered here is one of TIMING
+// between a fetch, a debounce and an SSE frame, and a copy of the functions
+// mounted somewhere else would exercise none of that. This is the shell, running
+// as the shell, with a handle on it.
+//
+// Nothing is exposed without the flag, and nothing here is a capability the page
+// does not already have — the board has no authentication and the human's own
+// console can reach all of it. It is off by default because an accidental
+// dependency on a debug handle is how a seam becomes an API.
+if (new URLSearchParams(location.search).get('probe') === '1') {
+  window.__aboardProbe = {
+    get doc() { return doc; },
+    get baseline() { return baseline; },
+    get saveArmed() { return saveTimer !== null; },
+    get stashed() { return stashedTabs; },
+    snapshot, localEdits, load, save, pushDoc, mergeOntoFresh, repaint,
+  };
+  document.documentElement.dataset.probe = 'ready';
+}
 </script>
 </body>
 </html>

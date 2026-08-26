@@ -42,13 +42,13 @@ const (
 // JournalEntry is one accepted write. `Before` holds the previous state of each
 // tab that changed, keyed by tab id — absent for a tab that was created.
 type JournalEntry struct {
-	At     string                     `json:"at"`
-	By     string                     `json:"by"`
-	Origin string                     `json:"origin,omitempty"`
-	Tabs   []string                   `json:"tabs"`
-	Names  map[string]string          `json:"names,omitempty"`
-	NextID int                        `json:"nextId,omitempty"`
-	Before map[string]json.RawMessage `json:"before,omitempty"`
+	At     string                     `json:"at"               yaml:"at"`
+	By     string                     `json:"by"               yaml:"by"`
+	Origin string                     `json:"origin,omitempty" yaml:"origin,omitempty"`
+	Tabs   []string                   `json:"tabs"             yaml:"tabs"`
+	Names  map[string]string          `json:"names,omitempty"  yaml:"names,omitempty"`
+	NextID int                        `json:"nextId,omitempty" yaml:"nextId,omitempty"`
+	Before map[string]json.RawMessage `json:"before,omitempty" yaml:"before,omitempty"`
 }
 
 type journal struct {
@@ -288,9 +288,16 @@ func (s *server) notifyWatchers(entry JournalEntry) {
 /* ---------- CLI ---------- */
 
 // Where a journal listing came from, reported so the human form can say.
+//
+// Two disk cases, not one, because they are different sentences to a reader.
+// JournalFromDisk is "nothing is running here", which is ordinary.
+// JournalFromDiskStale is "there is a record of a board and it does not answer" —
+// a crashed server, a stale instance file — and that is worth saying out loud,
+// because the next command the reader runs will hit the same dead port.
 const (
-	JournalFromServer = "server"
-	JournalFromDisk   = "disk"
+	JournalFromServer    = "server"
+	JournalFromDisk      = "disk"
+	JournalFromDiskStale = "disk-stale"
 )
 
 // JournalEntries reads recent writes, from the running board if there is one and
@@ -303,17 +310,20 @@ const (
 // project whose board happened to be stopped. The journal is an append-only FILE;
 // nothing about reading it needs a server, exactly as `export` needs none.
 //
+// The fallback covers the DEAD BOARD as well as the absent one. It used to fire
+// only when the instance FILE was unreadable, so the commonest real case — a
+// server that crashed or was killed, leaving its record behind — dialled a port
+// nobody was listening on and exited 1 with a connection error, while
+// journal.jsonl sat readable beside it. That is the third command of the resume
+// protocol failing in exactly the situation a session resumes into.
+//
 // The source is returned rather than printed here so the caller decides where it
 // says so: on stderr in human mode, and nowhere at all in json mode, where a
 // prose line would be something for jq to choke on.
 func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]JournalEntry, string, error) {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
-		entries, derr := journalFromDisk(root, limit)
-		if derr != nil {
-			return nil, JournalFromDisk, derr
-		}
-		return entries, JournalFromDisk, nil
+		return journalDiskAnswer(root, limit, JournalFromDisk)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("%s/journal?limit=%d", inst.URL, limit), http.NoBody)
@@ -322,7 +332,16 @@ func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]J
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, JournalFromServer, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
+		// A cancelled context is not a dead board — it is the caller leaving —
+		// and answering it from disk would report success for a command the user
+		// interrupted. Everything else is the transport failing: the record
+		// points somewhere nothing answers, so read the file instead and say
+		// which it was, because hiding it leaves the reader believing a dead
+		// board is alive.
+		if ctx.Err() != nil {
+			return nil, JournalFromServer, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
+		}
+		return journalDiskAnswer(root, limit, JournalFromDiskStale)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -333,6 +352,16 @@ func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]J
 		return nil, JournalFromServer, fmt.Errorf("unreadable journal: %w", err)
 	}
 	return payload.Entries, JournalFromServer, nil
+}
+
+// journalDiskAnswer is the disk read plus its label, so both fallbacks return
+// the same shape and neither can forget to say where the answer came from.
+func journalDiskAnswer(root Root, limit int, source string) ([]JournalEntry, string, error) {
+	entries, err := journalFromDisk(root, limit)
+	if err != nil {
+		return nil, source, err
+	}
+	return entries, source, nil
 }
 
 // maxJournalLine caps one journal line. An entry is a summary — ids and a

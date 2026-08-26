@@ -37,15 +37,24 @@ cannot be bypassed by an agent that forgot to record something.`,
 			if err != nil {
 				return err
 			}
-			entries, source, err := aboard.JournalEntries(cmd.Context(), root, boardName(cmd), limit)
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
+			entries, source, err := aboard.JournalEntries(cmd.Context(), root, name, limit)
 			if err != nil {
 				return err
 			}
 			// Said on stderr and only in human mode: structured output goes to a
 			// consumer that would have to filter prose back out of it, and the
 			// provenance of the answer is a diagnostic, not data.
-			if source == aboard.JournalFromDisk && outputFormat == formatHuman {
-				fmt.Fprintf(stderr(opts), "(from disk — no board running)\n")
+			if outputFormat == formatHuman {
+				switch source {
+				case aboard.JournalFromDisk:
+					fmt.Fprintf(stderr(opts), "(from disk: %s — no board running)\n", root.JournalFile())
+				case aboard.JournalFromDiskStale:
+					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile())
+				}
 			}
 			return renderOutput(stdout(opts), outputFormat, entries,
 				func() string { return aboard.JournalHuman(entries) })
@@ -71,7 +80,11 @@ tabs; re-read the board for the contents.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Watch(cmd.Context(), root, boardName(cmd), stdout(opts))
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
+			return aboard.Watch(cmd.Context(), root, name, stdout(opts))
 		},
 	}
 }

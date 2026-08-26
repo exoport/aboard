@@ -41,7 +41,11 @@ Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 			if err != nil {
 				return err
 			}
-			code, err := aboard.Wait(cmd.Context(), root, boardName(cmd), by, forWhat, note, timeout, stdout(opts))
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
+			code, err := aboard.Wait(cmd.Context(), root, name, by, forWhat, note, timeout, stdout(opts))
 			if err != nil {
 				if code == aboard.ExitUsage {
 					return usageErr(err)
@@ -77,7 +81,11 @@ command says so rather than pretending otherwise.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Poke(cmd.Context(), root, boardName(cmd), by, note, stdout(opts))
+			name, err := boardName(cmd)
+			if err != nil {
+				return err
+			}
+			return aboard.Poke(cmd.Context(), root, name, by, note, stdout(opts))
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", "agent-1", "who is releasing them")
