@@ -376,6 +376,14 @@ const agentActor = "agent-e2e"
 // that wanted to lie could send any value at all.
 func apply(t *testing.T, d doc) {
 	t.Helper()
+	applyLabelled(t, d, "")
+}
+
+// applyLabelled is apply with `aboard apply --label`'s field on the envelope:
+// why this write is happening, recorded on the journal entry and stripped before
+// the document is stored.
+func applyLabelled(t *testing.T, d doc, label string) {
+	t.Helper()
 
 	payload := doc{}
 	maps.Copy(payload, d)
@@ -392,6 +400,9 @@ func apply(t *testing.T, d doc) {
 	payload["__base"] = revisionToken(t, d["rev"])
 	payload["__by"] = agentActor
 	payload["__origin"] = "e2e-" + agentActor
+	if label != "" {
+		payload["__label"] = label
+	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {

@@ -26,6 +26,9 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
+
+	"github.com/exoport/aboard/pkg/aboard/web"
 )
 
 // Export prints one tab as text for pasting into the project's own documents.
@@ -184,8 +187,18 @@ func typeMarkdown(typ string, st map[string]any) string {
 		return markupMarkdown(st)
 	case "diagram":
 		return diagramMarkdown(st)
+	case tabTypeUI:
+		return uiMarkdown(st)
 	case tabTypeStack:
 		return stackMarkdown(st)
+	// The explicit non-cases. `log` lives in a sidecar file and not in the
+	// document at all; `html` is a page, and a promoted screenshot of it is a
+	// picture, not text; `trace` is the journal, which `aboard journal` prints.
+	// Listed rather than left to the default so that "nobody has written this
+	// one yet" and "this one has no text form" are different sentences in the
+	// source, the way they are on screen.
+	case "log", tabTypeHTML, "trace":
+		return ""
 	default:
 		return ""
 	}
@@ -331,7 +344,11 @@ func tableMarkdown(st map[string]any) string {
 	for _, c := range cols {
 		head = append(head, firstNonEmpty(str(c, "label"), str(c, "id")))
 	}
-	fmt.Fprintf(&b, "| %s |\n|%s|\n", strings.Join(head, " | "), strings.Repeat("---|", len(head)))
+	// "|---|---|", not "|---|---||". The delimiter row used to be built as
+	// "|" + repeat("---|") + "|", which declares one column more than the header
+	// has — and a delimiter row that does not match the header is not a table at
+	// all to a strict renderer, so every exported table arrived as literal pipes.
+	fmt.Fprintf(&b, "| %s |\n|%s\n", strings.Join(head, " | "), strings.Repeat("---|", len(head)))
 	for _, r := range rows {
 		cells := make([]string, 0, len(cols))
 		for _, c := range cols {
@@ -578,4 +595,274 @@ func tabCSV(st map[string]any) (string, error) {
 	// grammar and it does not exist here; a message that hands the reader a flag
 	// the binary rejects costs them a round trip to find out the tool was wrong.
 	return "", errors.New("this tab has no rows or nodes to put in a csv — try `--format md`")
+}
+
+/* ---------- ui ---------- */
+
+// uiSpec is views/ui.spec.json, read once from the EMBEDDED tree.
+//
+// Embedded rather than through the server's fs.FS, because export deliberately
+// runs with no server: it reads the document off disk so a conclusion can be
+// promoted from a cold checkout. `--dev` swaps the assets a SERVER serves and has
+// nothing to do with a CLI read.
+var uiSpec = sync.OnceValues(func() (typeSpec, bool) {
+	specs, err := loadSpecs(web.FS)
+	if err != nil {
+		return typeSpec{}, false
+	}
+	for _, spec := range specs {
+		if spec.Type == tabTypeUI {
+			return spec, len(spec.Components) > 0
+		}
+	}
+	return typeSpec{}, false
+})
+
+// uiMarkdown prints a `ui` tab as an indented outline.
+//
+// `ui` is the type CLAUDE.md tells agents to PREFER, and it was the one type
+// export could not read — so the board's most-recommended shape was the one that
+// could not be promoted into a project's own documents without a browser.
+//
+// An outline and not a rendering, and the difference is the honest part: this
+// cannot see a layout that is legal and unreadable, any more than a clean write
+// can. It is the material, not a screenshot and not a substitute for looking.
+//
+// Which prop is a node's text comes from views/ui.spec.json's `text`
+// declaration, not from a table in here. A table would be a second copy of the
+// catalog, kept in a language the manifest cannot see — the exact drift the
+// declared-surface rule exists to prevent, and `capabilities ui` now answers
+// "what does this component say" as well as "what does it read".
+func uiMarkdown(st map[string]any) string {
+	spec, ok := uiSpec()
+	if !ok {
+		return ""
+	}
+	data, _ := st["data"].(map[string]any)
+	var b strings.Builder
+	writeUINode(&b, spec, st["root"], data, 0)
+	return b.String()
+}
+
+// writeUINode prints one node and, under it, whatever it contains.
+func writeUINode(b *strings.Builder, spec typeSpec, node any, data map[string]any, depth int) {
+	pad := strings.Repeat("  ", depth)
+
+	// A bare string is a valid node: the renderer draws it as a paragraph.
+	if text, isText := node.(string); isText {
+		fmt.Fprintf(b, "%s- %s\n", pad, text)
+		return
+	}
+	obj, ok := node.(map[string]any)
+	if !ok {
+		return
+	}
+
+	typeName, _ := obj["type"].(string)
+	component, known := spec.Components[typeName]
+	if !known {
+		// The same thing the renderer shows: a marker naming what could not be
+		// drawn. Silently omitting it would let an export look complete when the
+		// board it came from has a dashed red box in the middle of it.
+		fmt.Fprintf(b, "%s- _unknown component `%s`_\n", pad, typeName)
+		return
+	}
+
+	// A layout node draws nothing of its own, so it gets no line and costs no
+	// indent — six nested rows and columns would otherwise push the one sentence
+	// that matters twelve spaces to the right.
+	if component.Layout {
+		writeUIChildren(b, spec, obj, data, depth)
+		return
+	}
+
+	if text := uiNodeText(component, obj, data); text != "" {
+		fmt.Fprintf(b, "%s- %s: %s\n", pad, typeName, text)
+	} else {
+		fmt.Fprintf(b, "%s- %s\n", pad, typeName)
+	}
+	writeUIItems(b, spec, typeName, obj, data, depth+1)
+	writeUIChildren(b, spec, obj, data, depth+1)
+}
+
+func writeUIChildren(b *strings.Builder, spec typeSpec, obj, data map[string]any, depth int) {
+	kids, _ := obj["children"].([]any)
+	for _, kid := range kids {
+		writeUINode(b, spec, kid, data, depth)
+	}
+}
+
+// writeUIItems prints the components whose content is a LIST rather than a
+// subtree. This is the genuinely per-component half, and it is per-component
+// because the shapes differ in kind: a checklist item has a tick, a kv pair has
+// two halves, a panel has children. The declaration says which props hold items;
+// what an item READS AS is the judgement here.
+func writeUIItems(b *strings.Builder, spec typeSpec, typeName string, obj, data map[string]any, depth int) {
+	pad := strings.Repeat("  ", depth)
+	switch typeName {
+	case "list":
+		for _, item := range resolvedList(obj["items"], data) {
+			fmt.Fprintf(b, "%s- %s\n", pad, uiText(resolveUI(item, data)))
+		}
+	case "kv":
+		for _, pair := range resolvedMaps(obj["pairs"], data) {
+			// TrimRight, because a pair whose value is empty would otherwise end
+			// in a space — invisible in review and real in a golden file.
+			line := fmt.Sprintf("%s- %s: %s", pad,
+				uiText(resolveUI(pair["key"], data)), uiText(resolveUI(pair["value"], data)))
+			fmt.Fprintf(b, "%s\n", strings.TrimRight(line, " "))
+		}
+	case "checklist":
+		for _, item := range resolvedMaps(obj["items"], data) {
+			// The tick is real state: an item's `bind` says where its boolean
+			// lives, so a checklist an agent rendered is one it can read back —
+			// and an export that printed `done` instead would report what the
+			// agent asked for rather than what the human answered.
+			done, _ := item["done"].(bool)
+			if dotted, ok := item["bind"].(string); ok {
+				if value, found := lookupBind(dotted, data); found {
+					done, _ = value.(bool)
+				}
+			}
+			box := " "
+			if done {
+				box = "x"
+			}
+			fmt.Fprintf(b, "%s- [%s] %s\n", pad, box, uiText(resolveUI(item["label"], data)))
+		}
+	case "table":
+		writeUITable(b, obj, data, pad)
+	case "tabs":
+		for _, panel := range resolvedMaps(obj["panels"], data) {
+			fmt.Fprintf(b, "%s- panel: %s\n", pad, uiText(resolveUI(panel["label"], data)))
+			for _, kid := range asList(panel["children"]) {
+				writeUINode(b, spec, kid, data, depth+1)
+			}
+		}
+	}
+}
+
+// writeUITable prints a read-only ui table's rows. Rows are arrays or objects
+// keyed by column id, exactly as the renderer accepts them.
+//
+// Rows, not a pipe table, and that is a deliberate loss. A markdown table nested
+// under two levels of bullets is not a table to most renderers — it is five lines
+// of literal pipes — so the outline would have looked right here and broken in
+// the document it was pasted into. The `table` TAB type still exports as a real
+// table, because there it is the whole tab and sits at the left margin.
+func writeUITable(b *strings.Builder, obj, data map[string]any, pad string) {
+	cols := resolvedMaps(obj["columns"], data)
+	head := make([]string, 0, len(cols))
+	for _, col := range cols {
+		head = append(head, firstNonEmpty(uiText(resolveUI(col["label"], data)), uiText(resolveUI(col["id"], data))))
+	}
+	if len(head) == 0 {
+		return
+	}
+	bold := make([]string, 0, len(head))
+	for _, cell := range head {
+		bold = append(bold, "**"+cell+"**")
+	}
+	fmt.Fprintf(b, "%s- %s\n", pad, strings.Join(bold, " · "))
+	for _, row := range asList(resolveUI(obj["rows"], data)) {
+		cells := make([]string, 0, len(cols))
+		switch r := row.(type) {
+		case []any:
+			for i := range cols {
+				if i < len(r) {
+					cells = append(cells, cellText(resolveUI(r[i], data)))
+					continue
+				}
+				cells = append(cells, "")
+			}
+		case map[string]any:
+			for _, col := range cols {
+				id, _ := col["id"].(string)
+				cells = append(cells, cellText(resolveUI(r[id], data)))
+			}
+		default:
+			continue
+		}
+		fmt.Fprintf(b, "%s- %s\n", pad, strings.Join(cells, " · "))
+	}
+}
+
+// uiNodeText reads a node's display text out of the props views/ui.spec.json
+// says carry it. Parts are joined with a middot: a `stat` is a number and its
+// caption, a `notice` is a lead-in and a line, a `quote` is the words and who
+// said them — two halves of one statement in each case, and dropping the second
+// loses the half that says what the first one means.
+func uiNodeText(component componentSpec, obj, data map[string]any) string {
+	parts := make([]string, 0, len(component.Text))
+	for _, entry := range component.Text {
+		if part := uiTextPart(entry, obj, data); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// uiTextPart resolves one entry of a `text` declaration.
+//
+//	"a|b"  the first of these props that is set — the renderer's own `value ?? text`
+//	"=p"   the value in state.data at the path the prop `p` names — a `field`'s answer
+func uiTextPart(entry string, obj, data map[string]any) string {
+	if prop, isPath := strings.CutPrefix(entry, "="); isPath {
+		name, _ := obj[prop].(string)
+		if name == "" {
+			return ""
+		}
+		value, found := lookupBind(name, data)
+		if !found {
+			return ""
+		}
+		return uiText(value)
+	}
+	for prop := range strings.SplitSeq(entry, "|") {
+		if value, ok := obj[prop]; ok {
+			if text := uiText(resolveUI(value, data)); text != "" {
+				return text
+			}
+		}
+	}
+	return ""
+}
+
+// resolveUI turns a `{bind:"path"}` into the value it points at, reusing the
+// resolution the write-time checker performs. A path that leads nowhere resolves
+// to nothing, which is what the renderer draws too.
+func resolveUI(value any, data map[string]any) any {
+	dotted, ok := bindPath(value)
+	if !ok {
+		return value
+	}
+	resolved, _ := lookupBind(dotted, data)
+	return resolved
+}
+
+// uiText is views/ui.js's asText: a string as itself, anything else as its JSON,
+// and null or absent as nothing at all.
+func uiText(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	default:
+		return jsonText(v)
+	}
+}
+
+func asList(v any) []any {
+	list, _ := v.([]any)
+	return list
+}
+
+// resolvedList resolves a prop that may itself be a `{bind}` to an array.
+func resolvedList(v any, data map[string]any) []any {
+	return asList(resolveUI(v, data))
+}
+
+func resolvedMaps(v any, data map[string]any) []map[string]any {
+	return mapsOf(resolveUI(v, data))
 }

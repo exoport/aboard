@@ -14,7 +14,7 @@ prints the same table; the browser suite asserts that every declared path answer
 | ------ | ------------------- | -------------------------------------------------------------------------- |
 | GET    | `/`, `/aboard.html` | The board shell.                                                          |
 | GET    | `/aboard.json`      | Current state.                                                            |
-| POST   | `/aboard.json`      | Write, compare-and-set (`__base`, `__origin`, `__by`).                     |
+| POST   | `/aboard.json`      | Write, compare-and-set (`__base`, `__origin`, `__by`, `__label`).          |
 | GET    | `/events`           | SSE: state changes, waiter count, and the UI signature.                   |
 | GET    | `/health`           | Who owns this port, and which binary is serving.                          |
 | GET    | `/capabilities`     | The capability manifest.                                                  |
@@ -23,7 +23,9 @@ prints the same table; the browser suite asserts that every declared path answer
 | POST   | `/poke`             | Release every waiting session.                                            |
 | GET    | `/waiters`          | Who is waiting right now.                                                 |
 | GET    | `/journal`          | Recent accepted writes, with the previous state of each changed tab.      |
+| GET    | `/history`          | One tab's recorded prior states, newest first.                            |
 | GET    | `/watch`            | Those writes as JSON lines, as they happen.                               |
+| POST   | `/rendered`         | A mount receipt from the browser: what it drew, and what was pressed.     |
 | POST   | `/log`              | Append output to a tab's sidecar log.                                     |
 | GET    | `/log`              | The tail of one.                                                          |
 | POST   | `/upload`           | An image pasted or dropped by the human.                                  |
@@ -175,15 +177,42 @@ document — ETag and all — until something else happened to move the file.
 
 ## `POST /aboard.json`
 
-The whole document, with three control fields alongside the board's own:
+The whole document, with four control fields alongside the board's own:
 
 | field       | meaning                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------ |
 | `__base`    | The `rev` of the document this write was built from — a number, or its decimal string. Omit (or send `null`) only for an unconditional write; a `__base` that is present and is neither is `400`, because ignoring it would skip the check the caller asked for. |
 | `__by`      | The actor. `"human"` from the browser; an agent name from the CLI. Absent means `"unknown"`, which gets agent-level powers only. |
 | `__origin`  | An opaque client id, echoed on the SSE frame so a browser can ignore the notification for its own write. Defaults to `"browser"`. |
+| `__label`   | Why this write is happening, in the caller's own words (`aboard apply --label`). Recorded on the [journal](#get-journal) entry and nowhere in the board; whitespace-collapsed and clamped to 200 characters. |
 
-All three are stripped before the document is written.
+All four are stripped before the document is written.
+
+**The reply.** `{"ok": true, "rev": N, "updatedAt": "…"}`, plus `checked` when the
+write changed anything and `warnings` when it set something no renderer reads:
+
+```json
+{
+  "ok": true,
+  "rev": 44,
+  "updatedAt": "2026-08-26T09:12:44.310Z",
+  "checked": ["bb133"],
+  "warnings": {
+    "bb133": ["bb133 (ui): root is a stat, which does not read \"caption\" …"]
+  }
+}
+```
+
+`warnings` is keyed by tab id, and covers only the tabs **this write touched** —
+never the whole board, or every pre-existing mistake would be re-reported as
+though this write had made it. `checked` is every tab the checks ran over, warned
+or not, and it is the half that lets a warning be taken back down: a clean tab is
+simply absent from `warnings`, which is the same shape as a tab this write never
+looked at, so without `checked` a banner could be raised and never lowered. The
+same two fields ride the next SSE change frame, which is how a warning reaches a
+browser that did not make the write. Neither is ever written into a tab's own
+`state`. A warning does not refuse a write: a spec can legitimately lag its
+renderer, and `aboard apply --strict` is the opt-in that does refuse.
 
 **Compare-and-set.** The token is `rev`, a counter the server increments on every accepted
 write (see [the state file](state-file.md#the-document)). If `__base` is present and does
@@ -285,6 +314,7 @@ Server-sent events. Each frame is a JSON object in `data:`, distinguished by its
 | ---------------------- | ------------------------------------------------------------------------------- |
 | `{"ui": {…}}`          | The signature of the UI this server is serving. Sent **first, on connect**, so a page whose code no longer matches reloads itself. |
 | `{"origin": "…"}`      | The state file changed; the value is the writer's client id (`null` if unknown), so a browser can ignore its own write. |
+| `{"checked": […], "warnings": {…}}` | Carried on that same change frame: the tabs the write-time checks ran over, and what they said, keyed by tab. This is how a warning from an `apply` on somebody else's terminal reaches the human's screen — and how a banner comes down when the next write to that tab is clean. Both are omitted when there is nothing to say. |
 | `{"waiters": N}`       | How many sessions are blocked on `/wait` right now — this is what enables the notify button. |
 
 The stream never closes. That matters for tooling: a headless browser will never reach
@@ -333,7 +363,7 @@ A long poll that blocks.
 
 | query      | default | meaning                                                                                    |
 | ---------- | ------- | -------------------------------------------------------------------------------------------- |
-| `for`      | `poke`  | `poke` · `change` · `tab <id>` · `answer <id>` (that tab changed AND a human did it) · `node <id>=<status>`. |
+| `for`      | `poke`  | `poke` · `change` · `tab <id>` · `answer <id>` (that tab changed AND a human did it) · `node <id>=<status>` · `rendered <id>` (a browser mounted that tab and posted a receipt — released by `POST /rendered`, not by a write). |
 | `timeout`  | server default | Whole seconds, capped by the server maximum.                                        |
 | `by`       | `agent` | Who is waiting; shown on the human's notify button.                                        |
 | `note`     | —       | Why, in up to 140 characters; shown beside the name.                                       |
@@ -355,14 +385,84 @@ from this.
 
 ## `GET /journal`
 
-Recent accepted writes, newest first; `?limit=N` bounds the count. Each entry carries the
-timestamp, the actor, the origin, and the tabs the write changed with their previous
-state — which is what lets the `trace` renderer show a diff without keeping history in
-the board document.
+Recent accepted writes, oldest first; `?limit=N` bounds the count, keeping the most
+recent N. Each entry carries the timestamp, the actor, the origin, and the tabs the
+write changed with their previous state — which is what lets the `trace` renderer show a
+diff without keeping history in the board document.
+
+```json
+{
+  "at": "2026-08-26T09:12:44.310Z",
+  "by": "agent-1",
+  "origin": "apply",
+  "rev": 41,
+  "label": "rebuilding the gallery",
+  "tabs": ["bb133"],
+  "names": { "bb133": "UI gallery" },
+  "warnings": { "bb133": ["bb133 (ui): root is a stat, which does not read …"] },
+  "before": { "bb133": { "root": "…" } }
+}
+```
+
+`rev` is the revision this write PRODUCED — the compare-and-set token the board
+carried once it landed. It is what lets a reader ask "which tabs moved since the
+revision I read", which `apply`'s 409 merge does and which `at`, a millisecond
+clock, cannot answer. Absent (zero) on entries written before it landed, and a
+reader must treat 0 as "unknown" rather than as revision zero.
+
+`label` is the caller's `__label`; `warnings` is what the write-time checks said,
+keyed by tab. Both describe the WRITE, which is why they live here and not in the
+board document — a note about a write is not content, and one stored on a tab
+would be copied forward by the next write as though it were still true. `before`
+is dropped from the `/watch` stream (a watcher wants to know THAT something
+changed, then re-read the board); `label` and `warnings` are not.
+
+## `GET /history`
+
+`?tab=<id>` is **required** — history is per tab, and a whole-board history is what
+`/journal` already is. `?limit=N` bounds the list (default 20).
+
+Answers `{"tab", "versions": [...], "scanned", "oldest", "truncated", "limited", "ends"}`.
+Each version is `{"n", "at", "by", "origin", "rev", "name", "bytes", "state"}` — the state
+the tab held **before** the write, newest first, numbered from 1 so `1` is the undo.
+`at`/`by` describe the write that *replaced* that state, not the one that produced it.
+
+`ends` is a sentence saying where the record stops, and it is a field rather than a
+derivation because the terminal prints the same one: the journal keeps one rotated
+generation, so a tab's past is bounded and an empty list would otherwise be
+indistinguishable from "everything about it rotated away".
+
+The change banner in the shell reads this; `aboard history` reads it too, falling back to
+`.aboard/run/journal.jsonl` when no board is running.
 
 ## `GET /watch`
 
 The same entries as JSON lines, streamed as they happen, until the client disconnects.
+
+## `POST /rendered`
+
+A **mount receipt**: what the browser drew for one tab, posted after every mount and,
+debounced, after a control is pressed.
+
+```json
+{ "tab": "bb133", "type": "ui", "mount": true,
+  "controls": ["fit"], "undeclared": [], "unknown": ["sparkline"], "fired": {"fit": 1} }
+```
+
+`controls` are the declared control ids on screen; `undeclared` are ones the renderer
+built that no `views/<type>.spec.json` declares (`controlsFor` draws those as `?id`);
+`unknown` are the markers a renderer put up because it did not recognise a component or a
+prop. `fired` is a **delta** since the last post — the server accumulates it — and `mount`
+distinguishes a mount from a press report, so "mounted 9×" does not come to mean
+"somebody clicked eight times".
+
+`tab` must be a plain id; anything else is `400`, because it becomes a key in a file a
+terminal prints. Everything lands in `.aboard/run/rendered.json` — a **sidecar**, never
+the state document, for the same reason selection and zoom are not in it — and
+`aboard rendered` prints it. A receipt also releases a session waiting on
+`aboard wait --for "rendered <id>"`.
+
+It **reports**; it does not act, and it never writes a tab.
 
 ## `POST /log` · `GET /log`
 
@@ -394,7 +494,9 @@ Uploads land in `.aboard/uploads/` and are served from disk in both embedded and
 modes — the embedded `assets/` directory is compiled in, so a file written there at
 runtime would be invisible until the next build.
 
-`GET /uploads` lists them; `GET /uploads/<file>` serves one.
+`GET /uploads` lists them (`{"files": [{"url", "bytes", "at"}]}`); `GET /uploads/<file>`
+serves one. `aboard uploads` is the accounting view of the same directory: it adds the
+tabs that mention each file and can prune the ones nothing does.
 
 ## See also
 

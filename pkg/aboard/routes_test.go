@@ -26,6 +26,7 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 		"POST /poke":        `{"by":"agent-test"}`,
 		"POST /upload":      "",
 		"POST /log":         "a line\n",
+		"POST /rendered":    `{"tab":"bb1","type":"html","controls":["tick"]}`,
 	}
 	// What a route may answer with when it is reached and the request is
 	// deliberately minimal. The assertion is "this path is routed", not "this
@@ -58,8 +59,9 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 		// the same literal already appears twice in server.go's switch, and a
 		// third occurrence here is what goconst counts.
 		url := "http://localhost" + path + map[string]string{
-			"GET /wait": "?for=change&timeout=1",
-			"GET /log":  "?tab=bb1",
+			"GET /wait":    "?for=change&timeout=1",
+			"GET /log":     "?tab=bb1",
+			"GET /history": "?tab=bb1",
 		}[key]
 
 		// /events and /watch are streams that never close, which is the whole

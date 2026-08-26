@@ -45,26 +45,32 @@
       "doc": "children stacked vertically",
       "props": [
         "gap"
-      ]
+      ],
+      "layout": true
     },
     "row": {
       "doc": "children side by side, wrapping",
       "props": [
         "gap"
-      ]
+      ],
+      "layout": true
     },
     "grid": {
       "doc": "children in equal columns, one column under 700px",
       "props": [
         "columns",
         "gap"
-      ]
+      ],
+      "layout": true
     },
     "card": {
       "doc": "a bordered panel; `accent` adds a left rule",
       "props": [
         "title",
         "accent"
+      ],
+      "text": [
+        "title"
       ]
     },
     "tabs": {
@@ -85,6 +91,9 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "heading": {
@@ -93,6 +102,9 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "text": {
@@ -101,6 +113,9 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "caption": {
@@ -109,6 +124,9 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "badge": {
@@ -117,6 +135,9 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "notice": {
@@ -126,6 +147,10 @@
         "value",
         "text",
         "tone"
+      ],
+      "text": [
+        "label",
+        "value|text"
       ]
     },
     "quote": {
@@ -135,6 +160,10 @@
         "text",
         "by",
         "tone"
+      ],
+      "text": [
+        "value|text",
+        "by"
       ]
     },
     "code": {
@@ -142,17 +171,22 @@
       "props": [
         "value",
         "text"
+      ],
+      "text": [
+        "value|text"
       ]
     },
     "divider": {
       "doc": "a horizontal rule",
-      "props": []
+      "props": [],
+      "layout": true
     },
     "spacer": {
       "doc": "vertical space; `size` is any CSS length",
       "props": [
         "size"
-      ]
+      ],
+      "layout": true
     },
     "list": {
       "doc": "a bulleted list of plain values",
@@ -204,6 +238,10 @@
         "value",
         "label",
         "tone"
+      ],
+      "text": [
+        "value",
+        "label"
       ]
     },
     "meter": {
@@ -212,6 +250,10 @@
         "value",
         "max",
         "tone"
+      ],
+      "text": [
+        "value",
+        "max"
       ]
     },
     "image": {
@@ -220,6 +262,10 @@
         "src",
         "alt",
         "caption"
+      ],
+      "text": [
+        "caption|alt",
+        "src"
       ]
     },
     "link": {
@@ -227,11 +273,19 @@
       "props": [
         "href",
         "label"
+      ],
+      "text": [
+        "label",
+        "href"
       ]
     },
     "button": {
       "doc": "records an intent into state.intents and nothing else — it never acts",
       "props": [
+        "label",
+        "intent"
+      ],
+      "text": [
         "label",
         "intent"
       ]
@@ -243,6 +297,10 @@
         "bind",
         "field",
         "options"
+      ],
+      "text": [
+        "label",
+        "=bind"
       ]
     }
   },
@@ -258,6 +316,8 @@
     "`image.src` must be under assets/ or uploads/; `link.href` must be #, / or http(s).",
     "Any prop may be `{\"bind\":\"path.in.data\"}` instead of a literal — EXCEPT `field.bind` and `checklist[].bind`, which are the paths themselves.",
     "An unknown component type renders a visible marker. An unknown PROP renders nothing at all, which is why `aboard apply` warns about one.",
-    "PREFER THIS OVER `html` whenever it can express the shape."
+    "PREFER THIS OVER `html` whenever it can express the shape.",
+    "`text` on a component names the props that carry its DISPLAY text, in reading order — `a|b` means “the first of these that is set” and `=p` means “the value in `state.data` at the path prop `p` names”. `aboard export` reads it; the renderer does not, so it describes the renderer rather than driving it.",
+    "`layout: true` marks a component that draws no content of its own. It gets no line in `aboard export`'s outline — its children simply sit at the level it was on."
   ]
 }

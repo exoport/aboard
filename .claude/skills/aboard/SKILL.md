@@ -132,9 +132,26 @@ aboard apply --by "agent-1" < /tmp/next-aboard.json
 Read the file, build the whole new document, apply it. **The document you READ is
 the base**: `apply` sends its `rev` as the compare-and-set token, so read-edit-apply
 is safe with no extra bookkeeping — as long as you edit the document you read
-rather than assembling a fresh one from the schema. A `409` means someone got
-there first: re-read, redo the edit, apply again. Do not fall back to `Edit`.
+rather than assembling a fresh one from the schema. Do not fall back to `Edit`.
 Direct editing is fine only when `aboard status` reports nothing running.
+
+**A `409` is usually not the end of the write.** `apply` re-reads the board, asks
+the journal which tabs moved since the base it started from, re-applies your tabs
+where the server did not touch them, and retries **once** — so somebody dismissing
+a notice in the browser no longer discards the document you built. It prints
+`applied … (merged)` and names on stderr whose version it kept. Two cases still
+stop, both deliberately:
+
+- **a collision it will not pick a winner for** — usually you and somebody else
+  changed the same tab, and it refuses exactly as the browser refuses to merge one
+  silently. It also stops when it cannot TELL: the journal records a tab's state
+  before a write but not its name, note or type, so a tab somebody else RENAMED
+  while you were writing to a different one lands here too. The message says which
+  of the two it is. Either way: re-read, redo the edit, apply again — the second
+  attempt has the rename in its base and goes straight through.
+- **a conflict it cannot reason about** — a `updatedAt` base rather than a `rev`,
+  or a journal that has rotated past your base. It says why on stderr and hands
+  back the plain refusal.
 
 A document with **no `rev`** has no base, so it would overwrite everything written
 since you last looked. `apply` refuses it (exit 2) and names `--force`.
@@ -149,6 +166,25 @@ touched, which is how the user and any other session tell who did what. Use
 participant when there may be several. It is what the change banner shows.
 `--by human` is refused from the CLI: the human's writes come from the browser,
 and an agent claiming to be them would hide its own tracks.
+
+**Check before you write, and read the warnings after.** `aboard apply --check`
+runs every write-time check and posts nothing — no board need be running, and the
+document needs no `rev`, because it asks about CONTENT and not about concurrency.
+`--strict` turns any warning into a refusal (exit 1, nothing written), which is
+what a loop that must stop rather than ship a wrong tab wants. Neither changes the
+default: a warning warns, because a spec can lag its renderer.
+
+The warnings no longer stop at your terminal. The server records them on the
+journal entry and shows them to the human on the tab they are about, so a write
+that draws an empty box is something you both find out about. That is a reason to
+read your own stderr, not a reason to stop: you are the one still holding the
+context to fix it, and you are the only one who can stop the write.
+
+**`--label "…"` says WHY.** It rides the write, is stripped before the document is
+stored, and lands on the journal entry, where `aboard journal`, `aboard watch` and
+the trace tab print it. Use it for anything a later reader would have to
+reconstruct. It is navigation inside a local, rotating file — never a record to
+cite in a commit message or a document.
 
 **A duplicate key is refused, not resolved.** If any object in the document sets
 the same name twice — the shape a generated or hand-spliced document falls into —
@@ -291,8 +327,11 @@ Two things make a late promotion cheap enough to actually happen.
 
 **The text is one command away.** `aboard export <tab-id-or-key>` prints the tab
 as markdown for pasting into whatever document the project uses — decisions with
-their reasons, answers beside their questions, a node tree, a chat transcript.
-`--format csv` for rows. It reads the state file from disk, so it needs no running
+their reasons, answers beside their questions, a node tree, a chat transcript, a
+`ui` tree as an indented outline with its `{bind}`s resolved. `--format csv` for
+rows. A `log`, an `html` tab or a `trace` says it has no text form instead of
+emitting an empty section — the log is a sidecar file, the widget is a page, and
+the trace is what `aboard journal` prints. It reads the state file from disk, so it needs no running
 server. Adapt what it gives you; do not paste it whole into a spec, because a
 board tab and a document have different jobs.
 
@@ -404,6 +443,10 @@ direction:
   hosting, and this server deliberately has neither.
 - **The journal is local too.** `.aboard/run/journal.jsonl` tells you who changed
   what on THIS machine. It is not a project audit trail; do not cite it as one.
+  It is also the board's only undo: `aboard history <tab>` lists what a tab said
+  before, newest first, and `aboard history <tab> --at 1` prints a whole document
+  `apply` accepts. Rotation keeps one generation, so the listing says where the
+  record ends — read that line before promising the human a restore.
 
 ## Choosing a type
 
@@ -588,11 +631,12 @@ working directory, or from `--cwd`. One line in `.gitignore` covers all of it.
 |---|---|
 | `.aboard/aboard.json` | the board itself: the document you read and apply |
 | `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) |
-| `.aboard/uploads/` | images the human pasted or dropped — content, not runtime |
+| `.aboard/uploads/` | images the human pasted or dropped — content, not runtime (`aboard uploads` says which tabs mention each one, and prunes the rest behind `--yes`) |
 | `.aboard/recipes/` | this project's own recipes, shadowing the built-ins by name |
 | `.aboard/run/instance.json` | port, pid, URL of the running board — the discovery authority |
 | `.aboard/run/instance.<name>.json` | the same, per named board |
-| `.aboard/run/journal.jsonl` | every accepted write; what `trace` and `aboard journal` read |
+| `.aboard/run/journal.jsonl` | every accepted write; what `trace`, `aboard journal` and `aboard history` read |
+| `.aboard/run/rendered.json` | mount receipts: what a browser reported it drew, per tab (`aboard rendered`) |
 | `.aboard/run/logs/<tab>.log` | one sidecar log per `log` tab |
 | `.aboard/run/shots/` | screenshots from the local browser suite |
 
@@ -644,3 +688,10 @@ binary. Shadowing is allowed and always reported by `aboard recipes list`.
   blocks, so a mistyped prop or a `{bind}` pointing nowhere is named at the write),
   then shoot the tab and read the picture. Neither step is optional, because the
   warnings cannot see a layout that is legal and still unreadable.
+- **`aboard rendered <tab>` says what the browser actually drew** — the control
+  ids on screen, the ones somebody pressed, and any unknown-component marker.
+  Two things it is deliberately not: **no receipt means nobody had the tab open**,
+  not that it failed; and a control listed there was **reached**, never proved
+  correct. It is a third source, after the write warnings and the picture, not a
+  replacement for either. `aboard wait --for "rendered <tab>"` blocks until a
+  browser mounts it — which is waiting for a HUMAN, so say why in `--note`.

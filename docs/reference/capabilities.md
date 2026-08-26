@@ -40,7 +40,7 @@ do before deciding to use it.
 | `state`                     | Every state field the renderer reads, each with a type and a doc line.                    |
 | `controls`                  | Every button the renderer draws, **in toolbar order** — a list, not a map.                |
 | `gestures`                  | What is left once controls carry themselves: drag, drop, wheel, double-click, right-click, type-and-it-saves. |
-| `components`, `commonProps` | For a renderer whose state is a tree of nodes (`ui`): the catalog and the props every node takes. |
+| `components`, `commonProps` | For a renderer whose state is a tree of nodes (`ui`): the catalog and the props every node takes. A component also declares which of its props carry its **display text** (`text`, in reading order — `a\|b` is "the first of these that is set", `=p` is "the value in `state.data` at the path prop `p` names") and whether it draws content at all (`layout`). `aboard export` reads both to print a `ui` tab as an outline, so the catalog is not copied into Go. |
 | `tones`, `colors`           | The palettes this renderer accepts **by name**.                                           |
 | `keys`, `notes`             | Key bindings, and anything else worth stating.                                            |
 

@@ -33,13 +33,16 @@ Subcommands:
 - `apply` — Write a board document from stdin, through the running board
 - `capabilities` — Print what this board can do: types, state fields, controls, endpoints, commands
 - `export` — Print one tab as text, for pasting into the project's own documents
+- `history` — List what a tab said before, from the journal
 - `init` — Create .aboard/ in this directory and write an empty board
 - `journal` — Print recent accepted writes: when, who, which tabs
 - `log` — Read stdin and append it to a tab's sidecar log, line by line
 - `poke` — Release every session waiting on this board
 - `recipes` — List the recipes available here, or print one
+- `rendered` — Print what the browser reported it drew
 - `serve` — Run the board server for this project
 - `status` — Report this project's running board, if any, and the caps beacon
+- `uploads` — List the files under .aboard/uploads/ and the tabs that mention them
 - `version` — Print the build identity of this binary
 - `wait` — Block until the board is poked, or until a predicate matches
 - `watch` — Follow every change as JSON lines until interrupted
@@ -71,7 +74,18 @@ Warnings print on stderr before the write: a schema version the board does not
 write, state no renderer reads, an unknown ui component or prop, a {bind} that
 resolves nowhere, a colour name this board no longer has. They warn rather than
 refuse, because a spec can lag its renderer — but read them, because "applied"
-is not evidence that anything rendered.
+is not evidence that anything rendered. The same warnings are recorded on the
+journal entry and shown to the human on the tab, so a write that warns is no
+longer something only the terminal knows about.
+
+--check runs those checks and stops: nothing is posted, no board need be
+running, and the document needs no `rev`. --strict turns any warning into a
+refusal (exit 1, nothing written) — the guard for a loop that must stop rather
+than ship a wrong tab. Together they are "tell me and exit non-zero".
+
+--label records WHY this write is happening on the journal entry, where the
+journal, watch and trace commands show it. It is navigation inside a local,
+rotating file — never a record to cite anywhere permanent.
 
 The compare-and-set base is the `rev` inside the document you submit — the one
 you read. A document with no `rev` is refused (exit 2) rather than written
@@ -88,7 +102,10 @@ Flags:
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--by` | string | `agent-1` | actor recorded in lastEditedBy and on every tab this write touched |
+| `--check` | bool | `false` | run the write warnings and stop: nothing is posted, and no board need be running |
 | `--force` | bool | `false` | write without compare-and-set, overwriting anything since you read the document |
+| `--label` | string | `—` | why this write is happening; recorded on the journal entry, not in the board |
+| `--strict` | bool | `false` | refuse the write if anything warns (exit 1, nothing written) |
 
 Global flags:
 
@@ -164,6 +181,56 @@ Flags:
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--format` | string | `md` | md or csv |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
+## aboard history
+
+List what a tab said before, from the journal
+
+```
+aboard history <tab> [flags]
+```
+
+Per-tab history, read out of the journal the board already keeps.
+
+Every accepted write records the state each changed tab held BEFORE it, which is
+the unit somebody undoing a bad write actually wants. This lists those versions
+newest first, naming who replaced each one — and says plainly where the record
+ends, because rotation keeps one older generation and a listing that just stopped
+would read as "this tab has only ever been written twice".
+
+  aboard history bb133                          what it said, and when
+  aboard history bb133 --at 1 | aboard apply --by agent-1     put version 1 back
+
+--at prints a WHOLE document with that one tab's state replaced, not the tab on
+its own: a single-tab document is a document that deletes every other tab, and
+the server would answer it with a removal request on each one. It carries the
+board's current `rev`, so a restore built while somebody else was writing is
+refused rather than clobbering.
+
+Reads from the running board when there is one and from
+.aboard/run/journal.jsonl when there is not.
+
+Examples:
+
+```
+  aboard history bb133
+  aboard history bb133 --at 1 | aboard apply --by agent-1
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--at` | int | `0` | print the document that restores version N instead of listing (1 is the most recent) |
+| `--limit` | int | `20` | how many versions to list |
+| `--output-format` | string | `human` | human, json or yaml |
 
 Global flags:
 
@@ -427,6 +494,52 @@ Global flags:
 | `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
 | `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
 
+## aboard rendered
+
+Print what the browser reported it drew
+
+```
+aboard rendered [tab] [flags]
+```
+
+What a real browser actually put on screen for a tab, as it reported it.
+
+`aboard apply` printing "applied" is evidence a write was accepted, not that
+anything renders — an unknown `ui` component draws a marker and an unknown PROP
+draws nothing at all. After every mount the shell posts the control ids it drew,
+the ones somebody pressed, and any unknown-component markers, and this prints
+them.
+
+This is NOT a DOM sweep. Every id here is already declared in
+views/<type>.spec.json; nothing is scraped and nothing is matched against prose.
+
+Two things it is deliberately not evidence of, printed with the output so they
+travel with it: no receipt means nobody had the tab OPEN, and a control listed
+here was REACHED — never that it behaved correctly.
+
+Reads .aboard/run/rendered.json, so it needs no server. With no argument it
+prints every tab that has a receipt.
+
+Examples:
+
+```
+  aboard rendered bb133
+  aboard rendered
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--output-format` | string | `human` | human, json or yaml |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
 ## aboard serve
 
 Run the board server for this project
@@ -502,6 +615,52 @@ Global flags:
 | `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
 | `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
 
+## aboard uploads
+
+List the files under .aboard/uploads/ and the tabs that mention them
+
+```
+aboard uploads [flags]
+```
+
+Every image the human pasted or dropped, with its size and the tabs that name it.
+
+The reference scan reads each tab's RAW state text, plus its name and note — not
+its declared fields. An html widget's markup can name a file no spec knows
+about, and a scan over declared fields would call that file an orphan and offer
+to delete an image somebody is looking at.
+
+  aboard uploads                    list them, unreferenced ones marked *
+  aboard uploads --prune            show exactly what deleting them would remove
+  aboard uploads --prune --yes      delete them
+
+--prune on its own prints and REFUSES: deletion is irreversible and .aboard/ is
+gitignored, so there is no copy anywhere to go back to.
+
+Reads the state file directly, so it needs no server.
+
+Examples:
+
+```
+  aboard uploads
+  aboard uploads --prune --yes
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--output-format` | string | `human` | human, json or yaml |
+| `--prune` | bool | `false` | show which unreferenced files would be deleted |
+| `--yes` | bool | `false` | with --prune, actually delete them |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
 ## aboard version
 
 Print the build identity of this binary
@@ -551,6 +710,11 @@ front rather than accepted and never fired:
   tab bb71             that tab changed
   answer bb15          that tab changed AND a human made the change
   node bb58=done       that node reached that status
+  rendered bb133       a browser MOUNTED that tab and posted a receipt
+
+The rendered form is the one that is not about a write: a mount changes nothing
+on the board, so it is released by the browser reporting one. Waiting on it is
+waiting for a HUMAN to have the tab open, and nothing here can cause that.
 
 While you are waiting the human's button says who is waiting, why, and for how
 long — so fill in --note. A waiter is an open connection, so the count cannot go
@@ -569,7 +733,7 @@ Flags:
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--by` | string | `agent-1` | who is waiting; shown on the human's notify button |
-| `--for` | string | `poke` | what to wait for: poke \| change \| "tab <id>" \| "answer <id>" \| "node <id>=<status>" |
+| `--for` | string | `poke` | what to wait for: poke \| change \| "tab <id>" \| "answer <id>" \| "node <id>=<status>" \| "rendered <id>" |
 | `--note` | string | `—` | why you are waiting; shown on the button beside your name |
 | `--timeout` | duration | `10m0s` | how long to block before giving up |
 

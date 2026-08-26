@@ -88,6 +88,10 @@ function injectStyle() {
 export function closeContextMenu() {
   if (!openMenuEl) return;
   const returnTo = openMenuEl.__returnFocus;
+  // The arming frame may not have run yet; cancelling it is what stops a menu
+  // that was opened and closed inside one frame from arming a listener for a
+  // menu that is already gone.
+  if (openMenuEl.__armed) cancelAnimationFrame(openMenuEl.__armed);
   openMenuEl.remove();
   openMenuEl = null;
   document.removeEventListener('pointerdown', onOutside, true);
@@ -206,9 +210,25 @@ export function openContextMenu(ev, items) {
   openMenuEl = menu;
   document.addEventListener('pointerdown', onOutside, true);
   document.addEventListener('keydown', onKey, true);
-  window.addEventListener('scroll', closeContextMenu, true);
   window.addEventListener('blur', closeContextMenu);
-  menu.querySelector('.ctx-item')?.focus();
+  menu.querySelector('.ctx-item')?.focus({ preventScroll: true });
+
+  // Close-on-scroll is armed a FRAME LATE, on purpose, and preventScroll above is
+  // the other half of the same point: this menu must only be closed by a scroll
+  // that happens AFTER it opened.
+  //
+  // A scroll event is dispatched at the next rendering opportunity, not when the
+  // scrolling happened — so a scroll already in flight when the right-click landed
+  // (the browser bringing a partly-visible row into view, which is also exactly
+  // what a driver does before it clicks) arrives just after the handler has
+  // synchronously opened the menu, and the menu closes itself with nothing of ours
+  // in the stack to blame. It reads as "the menu flickers", and it only shows on a
+  // page tall enough to scroll at all — a wrapped tab strip is enough, which is why
+  // it looked like a flaky test rather than a real one.
+  const armed = requestAnimationFrame(() => {
+    if (openMenuEl === menu) window.addEventListener('scroll', closeContextMenu, true);
+  });
+  menu.__armed = armed;
 }
 
 /** The board-wide address of one object: what "copy link" puts on the clipboard. */

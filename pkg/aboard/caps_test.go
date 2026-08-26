@@ -307,3 +307,39 @@ func TestOneTypeCanBeAskedForOnItsOwn(t *testing.T) {
 		t.Errorf("an unknown type exits %d, want %d", code, ExitUsage)
 	}
 }
+
+// Every prop a component's `text` declaration names is a prop that component
+// actually reads.
+//
+// The declaration exists so export.go has no second copy of the catalog; a `text`
+// entry naming a prop that was renamed or removed would put that copy back,
+// silently — the node would simply print with no text, which is what an empty
+// node looks like anyway.
+func TestEveryDeclaredTextPropIsARealProp(t *testing.T) {
+	specs, err := loadSpecs(web.FS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range specs {
+		for name, component := range spec.Components {
+			reads := map[string]bool{}
+			for _, prop := range append(append([]string{}, spec.CommonProps...), component.Props...) {
+				reads[prop] = true
+			}
+			for _, entry := range component.Text {
+				for prop := range strings.SplitSeq(strings.TrimPrefix(entry, "="), "|") {
+					if !reads[prop] {
+						t.Errorf("%s: %s declares text %q, but %s does not read %q — it reads: %s",
+							spec.Type, name, entry, name, prop, strings.Join(component.Props, ", "))
+					}
+				}
+			}
+			// A component that draws nothing of its own cannot also have display
+			// text. Both are read by the outline and they contradict each other:
+			// the layout flag says "no line", the text says "here is the line".
+			if component.Layout && len(component.Text) > 0 {
+				t.Errorf("%s: %s is declared layout AND declares text %v", spec.Type, name, component.Text)
+			}
+		}
+	}
+}

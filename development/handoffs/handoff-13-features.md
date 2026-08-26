@@ -56,25 +56,41 @@ means it needs a human's own hand on the keyboard, in the browser, not a flag.
 
 ## The list
 
-| # | id | feature | size |
-|---|---|---|---|
-| 1 | `bb361` | Warnings travel with the write | M |
-| 2 | `bb362` | `apply --check` and `--strict` | S |
-| 3 | `bb363` | Per-tab history and restore | M |
-| 4 | `bb364` | html tabs read the real palette | S |
-| 5 | `bb365` | Mermaid fences in markdown | S |
-| 6 | `bb366` | `apply` merges instead of failing | M |
-| 7 | `bb367` | `export` renders a `ui` tree | M |
-| 8 | `bb368` | Mount receipts from the browser | M |
-| 9 | `bb369` | Uploads accounting and prune | S |
-| 10 | `bb371` | Write labels in the journal | S |
-| 11 | `bb372` | `boards` — every board on this machine | S |
+| # | id | feature | size | status |
+|---|---|---|---|---|
+| 1 | `bb361` | Warnings travel with the write | M | **DONE** (plan-2 item 6a) |
+| 2 | `bb362` | `apply --check` and `--strict` | S | **DONE** (plan-2 item 6a) |
+| 3 | `bb363` | Per-tab history and restore | M | **DONE** (plan-2 item 6c) |
+| 4 | `bb364` | html tabs read the real palette | S | **DONE** (plan-2 item 6b) |
+| 5 | `bb365` | Mermaid fences in markdown | S | **DONE** (plan-2 item 6b) |
+| 6 | `bb366` | `apply` merges instead of failing | M | **DONE** (plan-2 item 6c) |
+| 7 | `bb367` | `export` renders a `ui` tree | M | **DONE** (plan-2 item 6b) |
+| 8 | `bb368` | Mount receipts from the browser | M | **DONE** (plan-2 item 6c) |
+| 9 | `bb369` | Uploads accounting and prune | S | **DONE** (plan-2 item 6c) |
+| 10 | `bb371` | Write labels in the journal | S | **DONE** (plan-2 item 6a) |
+| 11 | `bb372` | `boards` — every board on this machine | S | **PARKED** — gated on the human, plan-2 §10 |
 
 ---
 
-## 1. Warnings travel with the write
+## 1. Warnings travel with the write — **DONE**
 
-`bb361` · size **M — a day or two**
+`bb361` · size **M — a day or two** · shipped in plan-2 item 6a
+
+**What shipped.** `commitState` (`pkg/aboard/server.go`) runs the checks over the
+tabs the write CHANGED — `changedTabWarnings` in `caps.go`, reading each changed
+tab's already-parsed state, so a write still decodes the incoming body once and
+the board not at all. The strings land on the journal entry (`JournalEntry.Warnings`,
+keyed by tab id), in the POST reply, on the SSE change frame, in the shell's notice
+banner (`.banner--warning`, dismissible, per-viewer) and on the trace tab (a ringed
+dot, and the lines in the detail panel). `aboard journal` prints them under the
+entry.
+
+Two things came out different from the sketch. The banner reads the SSE frame
+rather than re-fetching `/journal`: the page already re-reads the document on that
+ping, and `/journal` reads both generations of the file — up to 32 MB — to surface
+a sentence. And the scoping got a counter (`warningScans`) so "never the whole
+document" is a test rather than a promise; it fails at N-per-write on the
+unscoped version.
 
 **What it does.** `postState` (`pkg/aboard/server.go`) runs `writeWarnings`
 (`pkg/aboard/caps.go`) over the tabs actually touched by the write, before it
@@ -102,9 +118,22 @@ the write, not the whole document, or one warning becomes background noise.
 
 ---
 
-## 2. `apply --check` and `--strict`
+## 2. `apply --check` and `--strict` — **DONE**
 
-`bb362` · size **S — an afternoon**
+`bb362` · size **S — an afternoon** · shipped in plan-2 item 6a
+
+**What shipped.** Both flags on `apply`, declared in `commands.go` and implemented
+in `Apply` (`client.go`, now taking an `ApplyOptions` rather than a fifth
+positional bool). `--check` runs the checks and returns before the board is
+contacted; `--strict` refuses on any warning with a typed error (`ErrWarnings`)
+and exit 1 — not 2, because nothing about the INVOCATION was wrong.
+
+One judgement not in the sketch: `--check` skips the no-base refusal entirely. A
+base is a question about concurrency, and a check that posts nothing cannot lose
+anybody's work — refusing to check a document because it has no `rev` would make
+the cheap habit unavailable in the case it is cheapest, a document being built up
+before it is ever applied. `test/smoke.sh` no longer exists (plan-2 item 4); the
+coverage is Go tests plus the browser suite.
 
 **What it does.** New flags on the existing `apply` command (`pkg/aboard/commands.go`
 declares them; `pkg/aboard/server.go`'s `applyStdin` implements them). `--check` runs
@@ -130,9 +159,22 @@ session that habitually drops `--strict` and gets no benefit from it existing.
 
 ---
 
-## 3. Per-tab history and restore
+## 3. Per-tab history and restore — **DONE**
 
 `bb363` · size **M — a day or two**
+
+**DONE** (plan-2 item 6c). `pkg/aboard/history.go` is the whole read path:
+`historyFrom` filters the journal tail, `GET /history?tab=&limit=` serves it,
+`aboard history <tab>` lists it and `--at N` prints a restore. The restore is a
+WHOLE document with one tab's state replaced, exactly as the Risk line demanded —
+a single-tab document would have been answered with a removal request on every
+other tab. Numbered newest-first from 1, so `--at 1` is the undo. `JournalEntry`
+gained `rev`, which `bb366` needed too. The listing states where the record ends
+in both the human and JSON forms (`ends`), and the change banner in `aboard.html`
+links to what the tab said before — read-only, with the restore command printed
+rather than a button, because a restore made without seeing the document is the
+kind of write history exists to recover from. A tab that is GONE is refused
+rather than rebuilt: the journal records a name and a state and never a `type`.
 
 **What it does.** `journal.go` already writes every changed tab's prior state to
 `.aboard/run/journal.jsonl` on every accepted write. This adds a read path over it: a
@@ -161,9 +203,11 @@ one generation, per the spike's own journal.
 
 ---
 
-## 4. html tabs read the real palette
+## 4. html tabs read the real palette — **DONE**
 
 `bb364` · size **S — an afternoon**
+
+**DONE** — `htmltab.go` parses `app.css`'s `:root` out of the served `fs.FS` (embedded, or on disk under `--dev`) and injects the whole set, failing closed to the old literal. Asserted as set EQUALITY in both directions, plus the six ways a stylesheet can fail to parse.
 
 **What it does.** `htmltab.go` parses `pkg/aboard/web/app.css`'s `:root` block out of
 the embedded (or, under `--dev`, on-disk) `fs.FS` and injects the full current token
@@ -186,9 +230,11 @@ all — silence there is worse than a stale-but-present palette.
 
 ---
 
-## 5. Mermaid fences in markdown
+## 5. Mermaid fences in markdown — **DONE**
 
 `bb365` · size **S — an afternoon**
+
+**DONE** — `markdown.js` keeps the fence info string; a ```` ```mermaid ```` fence renders through `diagram.js`'s exported loader and hoisted theme — one function, not a copy — and keeps its source verbatim on a failure. Demonstrated in the example board's stack notes block; two `e2e` tests.
 
 **What it does.** `pkg/aboard/web/views/markdown.js` keeps the fence info string
 instead of discarding it; a ` ```mermaid ` fence renders through `diagram.js`'s
@@ -210,9 +256,21 @@ verbatim, the way `diagram.js` already does, never an empty box.
 
 ---
 
-## 6. `apply` merges instead of failing
+## 6. `apply` merges instead of failing — **DONE**
 
 `bb366` · size **M — a day or two**
+
+**DONE** (plan-2 item 6c). `pkg/aboard/merge.go`, called from `client.go`'s 409
+branch. It mirrors `mergeOntoFresh` rather than calling it, and it has a better
+source than the browser does: the journal records what each moved tab held AT our
+base, which is the only record of the third document — so "did I change this or
+did they" is answered rather than guessed. One retry. A same-tab collision is
+NAMED and stops. A conflict the merge cannot reason about (a timestamp base, a
+journal rotated past the base) falls back to the plain refusal with the reason on
+stderr. One defect found on the way, in code this change refactored rather than in
+the feature: `--force` sends no base while its document still carries a `rev`, so
+a post path that re-derived the base from the document would have turned every
+forced write back into a compare-and-set one.
 
 **What it does.** On a `409` from `POST /aboard.json`, `applyStdin` re-reads the live
 document, consults `/journal` for entries since the base it started from to see which
@@ -236,9 +294,11 @@ so a busy board cannot spin `apply` forever.
 
 ---
 
-## 7. `export` renders a `ui` tree
+## 7. `export` renders a `ui` tree — **DONE**
 
 `bb367` · size **M — a day or two**
+
+**DONE** — `export.go` walks a `ui` tree into an indented outline, resolving every `{bind}` through the same `lookupBind` the write checker uses. Which prop is a node's text is DECLARED in `views/ui.spec.json` (`text`, `layout`), not tabled in Go. Golden test. `log`/`html`/`trace` are explicit non-cases now.
 
 **What it does.** `pkg/aboard/export.go`'s type switch gains a `ui` case: walk
 `state.root`, resolve every `{bind}` against `state.data` (reusing the resolution
@@ -265,9 +325,23 @@ table.
 
 ---
 
-## 8. Mount receipts from the browser
+## 8. Mount receipts from the browser — **DONE**
 
 `bb368` · size **M — a day or two**
+
+**DONE** (plan-2 item 6c). `pkg/aboard/receipts.go` + `POST /rendered` →
+`.aboard/run/rendered.json`, `aboard rendered [tab]`, and the `rendered <id>` wait
+predicate (released from the receipt endpoint, not from the write path — a mount
+is not a write). `views/ui.js`'s markers carry `data-unknown`; `controls.js`
+already carried `data-gesture` and `data-undeclared`. Both honest limits are
+printed by the command itself.
+
+One thing the handoff did not anticipate: a mount-only sweep is not enough.
+`ui`'s `tabs` component builds only the OPEN panel, so the gallery's deliberate
+`sparkline` marker — sitting in the fifth panel — is genuinely not drawn until the
+human reveals it, and a mount-only sweep would have reported the board clean
+forever. The receipt is therefore swept on ACTIVATION, which reports what is on
+screen now.
 
 **What it does.** `aboard.html` posts unknown-component markers and fired control ids
 to a new sidecar endpoint after every mount; `aboard rendered <tab>` — **a new
@@ -296,9 +370,16 @@ correctly.
 
 ---
 
-## 9. Uploads accounting and prune
+## 9. Uploads accounting and prune — **DONE**
 
 `bb369` · size **S — an afternoon**
+
+**DONE** (plan-2 item 6c). `Uploads`/`PruneUploads` in `pkg/aboard/upload.go`,
+`aboard uploads [--prune] [--yes]`, and `GET /uploads` added to `declaredRoutes`.
+The scan reads each tab's raw state text plus its name and note, as the Risk line
+required. `--prune` prints and refuses without `--yes`, and the listing says on
+what evidence it called a file unreferenced — the reader's next action is deleting
+things.
 
 **What it does.** `aboard uploads` (new subcommand — flag it as an addition to the
 grammar) lists every file under `.aboard/uploads/` with its size and the tabs that
@@ -321,9 +402,21 @@ would remove before removing anything, and refuse without an explicit `--yes`.
 
 ---
 
-## 10. Write labels in the journal
+## 10. Write labels in the journal — **DONE**
 
-`bb371` · size **S — an afternoon**
+`bb371` · size **S — an afternoon** · shipped in plan-2 item 6a
+
+**What shipped.** `apply --label "…"` → `__label` on the envelope, stripped in
+`postState` beside `__by`/`__base`, stored as `JournalEntry.Label`. Printed by
+`aboard journal` (indented under the entry, so the tab column a reader scans is
+not pushed off the terminal), carried on `aboard watch`, and shown by the trace
+tab in the dot's tooltip and in the detail panel.
+
+The risk the entry named — an unused optional field going stale — is answered by
+both consumers existing, and the entry's own warning about promotion is now in the
+skill's multi-session etiquette. Added beyond the sketch: the label is
+whitespace-collapsed and clamped to 200 runes, because it arrives from a caller
+and the journal is a rotating file this server appends to on every write.
 
 **What it does.** `apply --label "…"` stores the caller's line on that journal entry;
 `aboard journal`, `aboard watch` and `views/trace.js` print it.
@@ -348,9 +441,16 @@ the id beside it, and an id from a rotated journal is nothing to a future reader
 
 ---
 
-## 11. `boards` — every board on this machine
+## 11. `boards` — every board on this machine — **PARKED**
 
 `bb372` · size **S — an afternoon**
+
+**PARKED — gated on the human. Do not build it; do not create a registry file.**
+See `development/planning/plan-2_finish-line.md` §10: the
+`~/.aboard/known-roots.json` registry below is a PROPOSAL, not a decision, and the
+alternatives on the table are a scan of a configured list of project roots, or
+dropping the feature. Everything else in this handoff has shipped; this is the one
+item left, and it is waiting on an answer rather than on work.
 
 **What it does — re-specified, not just renamed.** The spike's design scanned
 `/proc` for `comm == "board"`, read each match's `cwd`, and read that project's
@@ -412,9 +512,12 @@ must never be considered for git.
 - `make caps` if any `views/*.spec.json` changed — it builds twice, and both builds
   count (`pkg/aboard/web` is embedded, so the first build only writes
   `controls.generated.js`; the second embeds what it wrote).
-- `make smoke` once per shell call, against a server started detached — `test/` lives
-  under `pkg/aboard/web/` and is embedded, so a stale binary tests a stale copy of
-  itself silently.
+- `make e2e` once per tool call — **not `make smoke`**, which no longer exists:
+  `test/smoke.sh` went with plan-2 item 4 and the browser suite replaced it. Every
+  `Touches` line below that names it is the ORIGINAL sketch, preserved as written;
+  read the `DONE` note above each one for what actually shipped. `pkg/aboard/web`
+  is embedded, so a stale binary tests a stale copy of itself silently — `make e2e`
+  depends on `build`, a hand-started server does not.
 - `aboard status` must not warn about a stale skill reference once
   `.claude/skills/aboard/references/reference.generated.md` exists.
 - `make shot` and **look at the pictures** — `apply` printing `applied` and exiting 0

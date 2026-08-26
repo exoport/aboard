@@ -324,8 +324,22 @@ func openChrome(t *testing.T, query string) *session {
 	t.Helper()
 	ready := "#add-tab"
 	if strings.Contains(query, "chrome=none") {
-		// `none` hides the head the `+` lives in, so the view is the signal.
-		ready = "#views [data-view]"
+		// `none` hides the head the `+` lives in, so the view is the signal — the
+		// ACTIVE view, specifically.
+		//
+		// It was `#views [data-view]`, and that is a race the shell loses by
+		// design: load() paints the remembered-or-first tab before goToTarget
+		// applies `?tab=`, so a deep link leaves two sections behind — the boot
+		// tab, hidden, first in document order, and the addressed one after it.
+		// `.First()` resolves to the hidden one, which never becomes visible: the
+		// wait timed out at eight seconds and the failure read as "the board never
+		// came up" rather than "this selector means the wrong thing". Confirmed
+		// pre-existing on a clean checkout, where it fails alone at HEAD; the
+		// extra request the mount-receipt sweep makes on activation is only what
+		// tipped it. Every other reach in the suite goes through s.view(), which
+		// already scopes on data-active; this one had its own spelling and its own
+		// answer.
+		ready = `#views [data-view][data-active="yes"]`
 	}
 	s := openReady(t, boardURL, query, ready)
 	s.stripBuilt()

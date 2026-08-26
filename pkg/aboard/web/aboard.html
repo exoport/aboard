@@ -116,7 +116,7 @@ import { mountUi } from './views/ui.js';
 import { openContextMenu, copyText, referenceFor } from './views/menu.js';
 import { tabToMarkdown, nodesToCSV, diagramSVG, download, exportName } from './views/export.js';
 import { inlineEditor, flashSaved } from './views/inline.js';
-import { button } from './views/controls.js';
+import { button, GESTURE_ATTR } from './views/controls.js';
 import { api } from './views/api.js';
 
 const CLIENT_ID = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
@@ -391,6 +391,84 @@ const stashedTabs = new Map();   // tab id -> the human's version of that tab
 // answer — it was never committed.
 const removedTabs = new Set();
 
+// Write warnings, per tab, from the most recent write that produced any.
+//
+// PER-VIEWER and never in the document: a warning is a fact about a WRITE, not
+// content of the board, and putting it in a tab's state would mean the next write
+// copies it forward as though it were still true. The record is the journal
+// (`aboard journal`, and the trace tab reads it); this is the copy that reaches
+// the person looking at the tab.
+//
+// Two ways in, because there are two audiences for the same strings. Our own
+// write answers with them in its POST reply — the shell has no stderr, so this is
+// the only channel it has. A FOREIGN write brings them on the SSE change frame,
+// and that is the case the feature exists for: an `aboard apply` warns on a
+// terminal the human is not sitting at, and until now nothing else ever said so.
+const writeNotes = new Map();   // tab id -> string[]
+
+// `checked` is the tabs the write's checks RAN over. Both halves are needed and
+// only one of them is obvious: `warnings` raises a banner, and `checked` is the
+// only thing that can lower one. The banner says "the last write to this tab",
+// so a later write that fixed the tree has to take it down — otherwise the
+// sentence outlives the mistake and the human is looking at a warning about
+// something the agent has already repaired, which is the same disagreement
+// between the two of them that this feature exists to end.
+function noteWarnings(warnings, checked) {
+  const map = warnings && typeof warnings === 'object' ? warnings : {};
+  let warned = false;
+  let changed = false;
+  for (const [id, list] of Object.entries(map)) {
+    if (!Array.isArray(list) || !list.length) continue;
+    writeNotes.set(id, list.map(String));
+    warned = true;
+    changed = true;
+  }
+  for (const id of Array.isArray(checked) ? checked : []) {
+    if (map[id] && map[id].length) continue;
+    if (writeNotes.delete(id)) changed = true;
+  }
+  return { warned, changed };
+}
+
+// The banner is informational, so it is dismissible and it is LAST — the notices
+// above it are a collision to resolve and a question to answer.
+function warningNotice(tab) {
+  const list = writeNotes.get(tab.id);
+  if (!list || !list.length) return null;
+
+  const banner = document.createElement('div');
+  banner.className = 'banner banner--warning';
+  banner.dataset.visible = 'yes';
+  banner.dataset.notice = 'warnings';
+
+  const body = document.createElement('div');
+  body.className = 'banner-body';
+  const strong = document.createElement('strong');
+  strong.textContent = 'The last write to this tab set something no renderer reads.';
+  body.append(strong);
+  const items = document.createElement('ul');
+  items.className = 'banner-list';
+  for (const line of list) {
+    const li = document.createElement('li');
+    li.textContent = line;
+    items.append(li);
+  }
+  body.append(items);
+  banner.append(body);
+
+  const spacer = document.createElement('span');
+  spacer.className = 'spacer';
+  banner.append(spacer);
+
+  const dismiss = button('Dismiss', 'Hide this warning here; the journal keeps it');
+  dismiss.addEventListener('click', () => {
+    writeNotes.delete(tab.id);
+    renderNotices(tab);
+  });
+  banner.append(dismiss);
+  return banner;
+}
+
 // withoutRemoved drops those tabs from a document just read off the server.
 function withoutRemoved(fresh) {
   if (!removedTabs.size || !Array.isArray(fresh.tabs)) return fresh;
@@ -506,6 +584,10 @@ async function pushDoc({ retries = 1 } = {}) {
     return false;
   }
   const body = await res.json().catch(() => ({}));
+  // Our own write's warnings. Rendered below, once the document has been marked
+  // saved — the human pressed something and it worked, and the warning is about
+  // what it did, not about whether it happened.
+  const { warned, changed: notesMoved } = noteWarnings(body.warnings, body.checked);
   if (body.updatedAt) doc.updatedAt = body.updatedAt;
   if (body.rev !== undefined) doc.rev = body.rev;   // the base for the next write
   doc.lastEditedBy = 'human';
@@ -514,7 +596,8 @@ async function pushDoc({ retries = 1 } = {}) {
   // Accepted: this is now the state both sides agree on, so it becomes the
   // baseline any future conflict is measured against.
   baseline = snapshotTabs(doc);
-  stampMeta('saved');
+  stampMeta(warned ? 'saved — with warnings' : 'saved');
+  if (notesMoved) for (const [id] of mounted) renderNotices(tabById(id));
   return true;
 }
 
@@ -1128,6 +1211,35 @@ function buildNotices(tab) {
     spacer.className = 'spacer';
     banner.append(spacer);
 
+    // "Somebody changed this" is only half an answer; the other half is what it
+    // said before, and the journal has held it all along with nothing in the UI
+    // able to reach it. READ-ONLY on purpose: this shows the previous state and
+    // prints the one command that puts it back. Restoring from a button would be
+    // a write the human made without seeing the document it produces, on a board
+    // where a bad write is the thing history exists to recover from.
+    const preview = document.createElement('pre');
+    preview.className = 'history-prev';
+    preview.hidden = true;
+
+    const before = button('What it said before', 'Show the state this tab held before that change, from the journal');
+    before.addEventListener('click', async () => {
+      if (!preview.hidden) { preview.hidden = true; return; }
+      preview.textContent = 'reading the journal…';
+      preview.hidden = false;
+      try {
+        const res = await fetch(api(`/history?tab=${encodeURIComponent(tab.id)}&limit=1`));
+        const got = await res.json();
+        const version = (got.versions || [])[0];
+        preview.textContent = version
+          ? `${version.at} · replaced by ${version.by}\n\n${JSON.stringify(version.state, null, 2)}`
+            + `\n\nput it back with:  aboard history ${tab.id} --at 1 | aboard apply --by agent-1`
+          : `nothing recorded for ${tab.id}.\n${got.ends || ''}`;
+      } catch (err) {
+        preview.textContent = `could not read the history: ${err && err.message ? err.message : err}`;
+      }
+    });
+    banner.append(before);
+
     const dismiss = button('Dismiss', 'Clear this notice and the dot on the tab');
     dismiss.addEventListener('click', async () => {
       delete tab.touched;
@@ -1141,7 +1253,7 @@ function buildNotices(tab) {
       renderNotices(tab);
     });
     banner.append(dismiss);
-    wrap.append(banner);
+    wrap.append(banner, preview);
   }
 
   if (tab.pendingRemoval) {
@@ -1179,6 +1291,9 @@ function buildNotices(tab) {
     wrap.append(banner);
   }
 
+  const warnings = warningNotice(tab);
+  if (warnings) wrap.append(warnings);
+
   return wrap;
 }
 
@@ -1190,6 +1305,10 @@ function renderActions(tab) {
 }
 
 function renderNotices(tab) {
+  // A tab that is gone: every caller reaches this through tabById(), and a view
+  // can still be mounted for a tab the document no longer has — a removal awaiting
+  // the save that confirms it is exactly that window.
+  if (!tab) return;
   const entry = mounted.get(tab.id);
   if (!entry) return;
   entry.notices.replaceChildren(buildNotices(tab));
@@ -1262,16 +1381,20 @@ function ctxFor(tabId) {
   };
 }
 
+// Reports whether it mounted a renderer FRESH, as opposed to refreshing one that
+// was already there. activate() needs the difference for the mount receipt: a
+// re-sweep on a tab switch is not a mount, and counting it as one would make
+// "mounted 9×" mean "the human looked nine times".
 function ensureMounted(id) {
   const tab = tabById(id);
-  if (!tab) return;
+  if (!tab) return false;
 
   const existing = mounted.get(id);
   // A type change means a different renderer, so tear the old one down.
   if (existing && existing.type === tab.type) {
     existing.handle?.refresh?.();
     renderNotices(tab);
-    return;
+    return false;
   }
   if (existing) {
     // A renderer may hold a timer (a log poll, a heartbeat tick). Tearing the
@@ -1304,7 +1427,7 @@ function ensureMounted(id) {
     p.className = 'hint';
     p.textContent = `No renderer for type "${tab.type}". Known types: ${Object.keys(TYPES).join(', ')}.`;
     body.append(p);
-    return;
+    return true;
   }
 
   try {
@@ -1317,7 +1440,106 @@ function ensureMounted(id) {
     body.append(p);
     console.error(`[aboard] ${tab.type} mount failed`, err);
   }
+  return true;
 }
+
+/* ---------- mount receipts ---------- */
+
+// What the browser actually drew, reported back so a session can ask.
+//
+// `aboard apply` printing "applied" is evidence a write was ACCEPTED, not that
+// anything renders — an unknown `ui` component draws a marker and an unknown
+// PROP draws nothing at all — so three sessions in a row ended with "it's ready"
+// followed by the human finding it wrong. This closes the loop for the half a
+// machine can see: after every mount the shell posts the DECLARED control ids it
+// drew, any control the renderer built that no spec declares, and the markers a
+// renderer put up because it did not recognise something.
+//
+// Deliberately not a DOM sweep of `button[title]` against free-text `gestures` —
+// that was measured on the spike at about four real gaps in twenty-three
+// candidates and abandoned. Every id here is already machine-declared in
+// views/<type>.spec.json.
+//
+// Fire-and-forget, and silent on failure: this is a REPORT about rendering, and
+// a report that could break the thing it reports on would be a bad trade. It
+// lands in a sidecar under .aboard/run/, never in the board document — the same
+// rule that keeps selection, zoom and drafts out of it.
+
+// Presses not yet reported, per tab. A DELTA, cleared when it is sent, because
+// the server accumulates: re-sending a running total on every post would count
+// every press again on every mount. Keyed by tab because a press belongs to the
+// tab it happened in — a single counter would attribute a dag's Relayout to
+// whichever tab was mounted next.
+const pendingPresses = new Map();
+
+function sweepReceipt(root, tab, mount) {
+  const controls = new Set();
+  const undeclared = new Set();
+  const unknown = new Set();
+  for (const el of root.querySelectorAll(`[${GESTURE_ATTR}]`)) {
+    const id = el.getAttribute(GESTURE_ATTR);
+    if (!id) continue;
+    (el.dataset.undeclared ? undeclared : controls).add(id);
+  }
+  for (const el of root.querySelectorAll('[data-unknown]')) {
+    if (el.dataset.unknown) unknown.add(el.dataset.unknown);
+  }
+  const fired = pendingPresses.get(tab.id) || new Map();
+  pendingPresses.delete(tab.id);
+  return {
+    tab: tab.id,
+    type: tab.type,
+    mount: !!mount,
+    controls: [...controls],
+    undeclared: [...undeclared],
+    unknown: [...unknown],
+    fired: Object.fromEntries(fired),
+  };
+}
+
+function postReceipt(root, tab, { mount = true } = {}) {
+  let body;
+  try { body = JSON.stringify(sweepReceipt(root, tab, mount)); } catch { return; }
+  fetch(api('/rendered'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    // The page may be closing when this goes out; a receipt is not worth an
+    // unhandled rejection in the console of a board that is otherwise fine.
+    keepalive: true,
+  }).catch(() => {});
+}
+
+// A press is recorded on the way through and reported shortly after, on a
+// debounce.
+//
+// Debounced rather than sent per click because most controls repaint the tab —
+// several in a row would be several requests for one gesture — and NOT left to
+// the next mount, which is what it did first: ensureMounted returns early for a
+// tab that is already mounted, so a press on the tab you are looking at would
+// have been reported only if you changed its type, i.e. never.
+//
+// Delegated on the views container and CAPTURING, so a handler that stops
+// propagation — several renderers do — cannot make the press invisible.
+let pressTimer = null;
+$views.addEventListener('click', (ev) => {
+  const el = ev.target && ev.target.closest && ev.target.closest(`[${GESTURE_ATTR}]`);
+  if (!el) return;
+  const id = el.getAttribute(GESTURE_ATTR);
+  const view = el.closest('[data-tab]');
+  if (!id || !view) return;
+  const tabId = view.dataset.tab;
+  if (!pendingPresses.has(tabId)) pendingPresses.set(tabId, new Map());
+  const counts = pendingPresses.get(tabId);
+  counts.set(id, (counts.get(id) || 0) + 1);
+
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    const tab = tabById(tabId);
+    const entry = mounted.get(tabId);
+    if (tab && entry) postReceipt(entry.root, tab, { mount: false });
+  }, 400);
+}, true);
 
 // Which tab you were last on is a NICETY, and storage is not always there to
 // hold it. Inside a webview the board runs as a third-party frame, where storage
@@ -1383,7 +1605,21 @@ function activate(id) {
   for (const [tid, entry] of mounted) {
     entry.root.dataset.active = tid === id ? 'yes' : 'no';
   }
-  ensureMounted(id);
+  const fresh = ensureMounted(id);
+
+  // The receipt is posted HERE and not inside ensureMounted, so a tab that is
+  // already mounted is swept again when the human comes back to it. That is not
+  // belt and braces: `ui`'s `tabs` component builds only the OPEN panel, so a
+  // component the human has not yet revealed is genuinely not drawn — the
+  // gallery's deliberate `sparkline` marker sits in the fifth panel and no mount
+  // sweep will ever see it. A re-sweep on activation reports what is on screen
+  // NOW, which is the only thing a receipt was ever claiming.
+  //
+  // After the catch inside ensureMounted, too: a tab whose renderer threw is
+  // exactly the one an agent most needs a receipt for.
+  const tab = tabById(id);
+  const entry = mounted.get(id);
+  if (tab && entry) postReceipt(entry.root, tab, { mount: fresh });
 }
 
 /* ---------- new tab ---------- */
@@ -1564,7 +1800,9 @@ if (!new URLSearchParams(location.search).has('nosse')) {
     // first is a document reload.
     if ('ui' in payload) { onUiSignature(payload.ui); return; }
     if ('waiters' in payload) { refreshWaiters(); return; }
-    if (payload.origin === CLIENT_ID) return;   // our own write echoing back
+    if (payload.origin === CLIENT_ID) return;   // our own write echoing back (its
+                                                // warnings came back in the reply)
+    noteWarnings(payload.warnings, payload.checked);
     load({ announce: true, merge: true });
   });
 }

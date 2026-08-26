@@ -490,8 +490,44 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .action-btn { border-color: var(--accent-dim); color: var(--text); }
 .action-btn:hover:not(:disabled) { background: var(--drop); border-color: var(--accent); }
 
+/* What a tab said before the change the banner is about (GET /history). A block
+   rather than a row inside the banner: the banner is a flex line and a JSON blob
+   in it would push the buttons off the strip. */
+.history-prev {
+  margin: -6px 0 12px;
+  padding: 10px 13px;
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--agent);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .banner--removal { border-left-color: var(--danger); }
 .banner--removal strong { color: var(--danger); }
+
+/* A write warning: --mark, not --danger. Nothing was lost and nothing is being
+   asked; something rendered as less than it was meant to. Sitting between the
+   agent periwinkle of "somebody changed this" and the red of "answer this". */
+.banner--warning { align-items: flex-start; border-left-color: var(--mark); }
+.banner--warning strong { color: var(--mark); }
+.banner-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.banner-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 
 .icon-btn--danger { color: var(--danger); border-color: var(--danger); }
 .icon-btn--danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }

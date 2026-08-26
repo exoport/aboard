@@ -9,6 +9,8 @@
 //	GET  /waiters      who is waiting right now (wait.go)
 //	GET  /capabilities what this board can do, from views/*.spec.json (caps.go)
 //	GET  /journal      recent accepted writes (journal.go)
+//	GET  /history      one tab's recorded prior states (history.go)
+//	POST /rendered     a mount receipt from the browser (receipts.go)
 //	GET  /watch        those writes as JSON lines, as they happen (journal.go)
 //	POST /log          append output to a tab's sidecar log (logs.go)
 //	GET  /log          the tail of one (logs.go)
@@ -155,6 +157,10 @@ type server struct {
 	// Append-only record of every accepted write (see journal.go).
 	journal *journal
 
+	// What the BROWSER reports it drew, per tab. A sidecar under run/, never the
+	// state document — per-viewer state (see receipts.go).
+	receipts *receiptStore
+
 	// The state file as this process holds it: the bytes, their ETag, and the
 	// parsed document. Replaced on every accepted write and whenever the file is
 	// found to have moved underneath us. Atomic because a reader takes it without
@@ -169,6 +175,52 @@ type server struct {
 	// Set by a POST so the browser that made the write can recognise the echo
 	// of its own change and skip reloading. Cleared on every broadcast.
 	pendingOrigin string
+
+	// The write warnings of that same POST, so an open page learns about a
+	// FOREIGN write that set state no renderer reads. The writer's own copy comes
+	// back in the POST reply; this is the other half, and it is the half the
+	// feature exists for — an agent's `apply` warns on a terminal the human is
+	// not looking at.
+	//
+	// Best-effort, exactly like pendingOrigin beside it, and for the same reason:
+	// the watcher coalesces, so two writes inside one 200 ms tick publish the
+	// second one's warnings and not the first's. The RECORD is the journal, which
+	// misses nothing; this is a notice.
+	pendingWarnings map[string][]string
+
+	// The tabs that write CHECKED — the ones it changed — whether or not any of
+	// them warned. Sent beside the warnings, and the banner needs it: it says
+	// "the last write to this tab", so a page holding a warning has to be told
+	// when a later write to the same tab came back clean. Without it the sentence
+	// outlives the mistake, and the human is left looking at a warning about a
+	// tree the agent has already fixed — the same disagreement between the two of
+	// them that the warnings exist to end, only pointing the other way.
+	pendingChecked []string
+
+	// The renderer declarations, read once from the assets this server serves.
+	// The write path asks for them on every accepted write, and re-reading and
+	// re-parsing fifteen spec files per write would be the same mistake
+	// document.go exists to undo. Read once and kept: under `--dev` the tree is
+	// on disk and a spec edit therefore needs a restart to reach these checks,
+	// which is the same restart `make caps` already needs to move the manifest.
+	specsOnce sync.Once
+	specTypes map[string]typeSpec
+}
+
+// specs is the type declarations the write-warning checker reads, memoised.
+func (s *server) specs() map[string]typeSpec {
+	s.specsOnce.Do(func() {
+		byType, err := specsByType(s.assets)
+		if err != nil {
+			// A board that cannot read its own declarations still has to accept
+			// writes. No specs means no warnings, which is what this checker has
+			// always done on an unreadable spec directory.
+			s.opts.Log().Printf("write warnings are off: cannot read the view declarations: %v", err)
+			byType = map[string]typeSpec{}
+		}
+		s.specTypes = byType
+	})
+	return s.specTypes
 }
 
 // NormalizeBasePath reduces a --base-path to the one form the router and the
@@ -296,6 +348,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		waits:     newWaitHub(),
 		ui:        newUIWatcher(cfg.Dev),
 		journal:   newJournal(cfg.Root),
+		receipts:  newReceiptStore(cfg.Root),
 	}
 
 	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name)
@@ -653,6 +706,12 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 // Split from routeUI because one switch carrying both measured 40 branches, and
 // the two halves have different rules: everything here answers a client and
 // names its method, everything there serves a file to a page.
+//
+// Split AGAIN, into the document-and-notify half here and the record half in
+// routeRecords, when /history and /rendered took the branch count past the
+// complexity gate. The line between the two is real rather than a way of pleasing
+// a linter: everything below answers about the board AS IT IS, everything in
+// routeRecords answers from a sidecar under run/ that is not the board at all.
 func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) bool {
 	switch {
 	case upath == "/aboard.json" && r.Method == http.MethodGet:
@@ -671,18 +730,35 @@ func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) 
 		s.handleWaiters(w, r)
 	case upath == "/capabilities" && r.Method == http.MethodGet:
 		s.handleCapabilities(w, r)
-	case upath == "/journal" && r.Method == http.MethodGet:
-		s.handleJournal(w, r)
-	case upath == "/watch" && r.Method == http.MethodGet:
-		s.handleWatch(w, r)
-	case upath == "/log" && r.Method == http.MethodPost:
-		s.handleLogPost(w, r)
-	case upath == "/log" && r.Method == http.MethodGet:
-		s.handleLogGet(w, r)
 	case upath == "/upload" && r.Method == http.MethodPost:
 		s.handleUpload(w, r)
 	case upath == "/uploads" && r.Method == http.MethodGet:
 		s.handleUploads(w, r)
+	default:
+		return s.routeRecords(w, r, upath)
+	}
+	return true
+}
+
+// routeRecords serves what is written BESIDE the board: the journal and the
+// per-tab history read out of it, the change stream, the sidecar logs, and the
+// mount receipts. None of it is in .aboard/aboard.json and none of it is the
+// board — which is the same distinction the layout draws between content and
+// run/, kept here so the two halves of the API do not have to be read as one.
+func (s *server) routeRecords(w http.ResponseWriter, r *http.Request, upath string) bool {
+	switch {
+	case upath == "/journal" && r.Method == http.MethodGet:
+		s.handleJournal(w, r)
+	case upath == "/history" && r.Method == http.MethodGet:
+		s.handleHistory(w, r)
+	case upath == "/watch" && r.Method == http.MethodGet:
+		s.handleWatch(w, r)
+	case upath == "/rendered" && r.Method == http.MethodPost:
+		s.handleRendered(w, r)
+	case upath == "/log" && r.Method == http.MethodPost:
+		s.handleLogPost(w, r)
+	case upath == "/log" && r.Method == http.MethodGet:
+		s.handleLogGet(w, r)
 	default:
 		return false
 	}
@@ -968,11 +1044,17 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	if by == "" {
 		by = actorUnknown
 	}
+	// Why this write is happening, in the caller's own words. Stripped here beside
+	// __by and __base because it is about the WRITE and not about the board: a
+	// label that reached the document would be a root key no renderer reads, and
+	// the next writer would copy it forward as if it were theirs.
+	label := clampLabel(rawString(incoming.fields["__label"]))
 	delete(incoming.fields, "__origin")
 	delete(incoming.fields, "__base")
 	delete(incoming.fields, "__by")
+	delete(incoming.fields, "__label")
 
-	res, bad := s.commitState(incoming, base, by, origin)
+	res, bad := s.commitState(incoming, base, by, origin, label)
 	if bad != nil {
 		s.writeJSON(w, bad.code, bad.body)
 		return
@@ -991,7 +1073,38 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp})
+	reply := map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp}
+	// The warnings go back to whoever made the write, which for a browser write is
+	// the only actor who can see them at all — the shell has no stderr. Omitted
+	// when there are none, so a clean write's reply is the shape it always was.
+	if len(res.entry.Warnings) > 0 {
+		reply["warnings"] = res.entry.Warnings
+	}
+	// Which tabs the checks RAN over. A clean tab is absent from `warnings`, and
+	// absent is not the same answer as "not checked": a page showing a warning
+	// has to know that this write looked at that tab and found nothing, or it
+	// keeps a banner about a mistake somebody has already fixed.
+	if len(res.entry.Tabs) > 0 {
+		reply["checked"] = res.entry.Tabs
+	}
+	s.writeJSON(w, http.StatusOK, reply)
+}
+
+// maxLabelRunes bounds a write label. It is navigation — one line in `aboard
+// journal` — and the journal is a rotating file this server appends to on every
+// write, so an unbounded string from a caller is a way to fill it with one POST.
+// Truncated rather than refused: the CONTENT of the write was fine, which is the
+// same trade `version` gets.
+const maxLabelRunes = 200
+
+func clampLabel(label string) string {
+	label = strings.TrimSpace(label)
+	// Newlines would break the one-line-per-entry shape `aboard journal` prints.
+	label = strings.Join(strings.Fields(label), " ")
+	if runes := []rune(label); len(runes) > maxLabelRunes {
+		return strings.TrimSpace(string(runes[:maxLabelRunes])) + "…"
+	}
+	return label
 }
 
 // commitResult is what an accepted write hands back to the unlocked half of
@@ -1027,7 +1140,7 @@ type apiError struct {
 // race, which is why `aboard serve` refuses a duplicate rather than trusting the
 // file, and why `apply` posts to the running board instead of writing the file
 // itself — every writer that matters arrives through this function.
-func (s *server) commitState(incoming *stateDoc, base, by, origin string) (commitResult, *apiError) {
+func (s *server) commitState(incoming *stateDoc, base, by, origin, label string) (commitResult, *apiError) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
@@ -1122,6 +1235,26 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin string) (commi
 	// and any session blocked on a predicate about this very change. The
 	// comparison itself was made by reconcileDoc; this only reads the answer.
 	entry := summarise(current, next.tabs, by, origin)
+	entry.Label = label
+
+	// The revision this write produces, on the record of it. `aboard history` and
+	// the 409 merge both ask "which tabs moved since rev N", and a timestamp
+	// cannot answer that — see JournalEntry.Rev.
+	entry.Rev = rev
+
+	// The write warnings, over the tabs this write actually TOUCHED and no others.
+	// Scoped, not whole-document: `apply` checks everything the caller submitted
+	// because the caller submitted everything, but here the write is one edit, and
+	// a whole-board scan would re-report every pre-existing mistake on the board
+	// as though this write had made it. The example board's deliberately invalid
+	// `sparkline` is the case that settles it — unscoped, it would ride along on
+	// every write anyone ever made, and a warning that always fires is one people
+	// learn to skip. It still warns on a write that touches ITS tab, which is
+	// correct and is not to be suppressed.
+	//
+	// Computed inside the lock so the journal entry is complete before it is
+	// appended: the record of a write and the warnings about it are one fact.
+	entry.Warnings = changedTabWarnings(s.specs(), next.tabs)
 
 	if err := s.writeAtomic(out); err != nil {
 		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "write failed"}}
@@ -1143,6 +1276,8 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin string) (commi
 
 	s.mu.Lock()
 	s.pendingOrigin = origin
+	s.pendingWarnings = entry.Warnings
+	s.pendingChecked = entry.Tabs
 	s.mu.Unlock()
 
 	// The journal append stays inside the lock with the write it records. Outside
@@ -1473,10 +1608,31 @@ func (s *server) stateSignature() string {
 func (s *server) broadcast() {
 	s.mu.Lock()
 	origin := s.pendingOrigin
+	warnings := s.pendingWarnings
+	checked := s.pendingChecked
 	s.pendingOrigin = ""
+	s.pendingWarnings = nil
+	s.pendingChecked = nil
 	payload := `{"origin":null}`
-	if origin != "" {
-		if b, err := json.Marshal(map[string]string{"origin": origin}); err == nil {
+	if origin != "" || len(warnings) > 0 || len(checked) > 0 {
+		frame := map[string]any{"origin": nil}
+		if origin != "" {
+			frame["origin"] = origin
+		}
+		// Carried on the change frame rather than fetched: the page already
+		// re-reads the document on this ping, and a second round trip to /journal
+		// would read the whole journal file — both generations — five times a
+		// second's worth of writes, to surface a sentence.
+		if len(warnings) > 0 {
+			frame["warnings"] = warnings
+		}
+		// And the tabs the checks ran over, so a page can take DOWN a warning the
+		// next write cleared. A frame carrying only warnings can raise a banner
+		// and never lower one.
+		if len(checked) > 0 {
+			frame["checked"] = checked
+		}
+		if b, err := json.Marshal(frame); err == nil {
 			payload = string(b)
 		}
 	}

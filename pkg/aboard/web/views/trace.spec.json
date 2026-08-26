@@ -30,12 +30,13 @@
     {
       "id": "event",
       "label": "",
-      "doc": "Select one write to see which tabs it changed."
+      "doc": "Select one write to see which tabs it changed, why (its --label), and anything the write-time checks said about it. A ringed dot warned."
     }
   ],
   "gestures": [],
   "keys": [],
   "notes": [
-    "Reads /journal, not aboard.json, so the history is not something an agent can quietly rewrite."
+    "Reads /journal, not aboard.json, so the history is not something an agent can quietly rewrite.",
+    "A journal entry carries `label` (why, from `aboard apply --label`) and `warnings` (what the write-time checks said, keyed by tab). Neither is ever written into a tab's own state."
   ]
 }

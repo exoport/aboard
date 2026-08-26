@@ -40,6 +40,8 @@
   ],
   "keys": [],
   "notes": [
-    "The markdown subset: headings, lists, code, quotes, rules, links, emphasis."
+    "The markdown subset: headings, lists, code, quotes, rules, links, emphasis.",
+    "A ```mermaid fence renders as a diagram, through the same loader and the same board-token theme the `diagram` tab uses \u2014 so a figure can sit inside a write-up instead of needing a tab of its own. A fence mermaid cannot parse shows its source verbatim.",
+    "Only when `markdown` is on: with it off the note is plain text and a fence is just three backticks."
   ]
 }

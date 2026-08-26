@@ -513,6 +513,10 @@ export function mountUi(root, ctx) {
           } else {
             const bad = document.createElement('div');
             bad.className = 'uic-unknown';
+            // The marker carries WHAT it is a marker for, so the mount receipt
+            // (aboard.html's sweep, POST /rendered) can name it to the agent that
+            // wrote the tree instead of only to the human looking at it.
+            bad.dataset.unknown = 'image.src';
             bad.textContent = 'image src must be under assets/ or uploads/ — got: ' + src;
             fig.append(bad);
           }
@@ -570,6 +574,7 @@ export function mountUi(root, ctx) {
         default: {
           const bad = document.createElement('div');
           bad.className = 'uic-unknown';
+          bad.dataset.unknown = String(node.type);
           bad.textContent = `unknown component "${String(node.type)}" — the catalog holds: ` +
             'col, row, grid, card, tabs, title, heading, text, caption, badge, notice, divider, ' +
             'spacer, list, checklist, kv, table, code, quote, image, link, stat, meter, button, field';

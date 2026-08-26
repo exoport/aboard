@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -196,4 +197,179 @@ func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 	s.writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+/* ---------- accounting and prune ---------- */
+
+// UploadRow is one file in `.aboard/uploads/`: what it costs, and who names it.
+type UploadRow struct {
+	Name  string   `json:"name"           yaml:"name"`
+	URL   string   `json:"url"            yaml:"url"`
+	Bytes int64    `json:"bytes"          yaml:"bytes"`
+	At    string   `json:"at"             yaml:"at"`
+	Tabs  []string `json:"tabs,omitempty" yaml:"tabs,omitempty"`
+}
+
+// Referenced reports whether any tab mentions this file.
+func (u UploadRow) Referenced() bool { return len(u.Tabs) > 0 }
+
+// UploadReport is the whole directory, with the totals a reader wants first.
+// `Orphaned` counts the files no tab mentions and `OrphanedBytes` is what pruning
+// them would reclaim.
+type UploadReport struct {
+	Dir           string      `json:"dir"           yaml:"dir"`
+	Files         []UploadRow `json:"files"         yaml:"files"`
+	Bytes         int64       `json:"bytes"         yaml:"bytes"`
+	Orphaned      int         `json:"orphaned"      yaml:"orphaned"`
+	OrphanedBytes int64       `json:"orphanedBytes" yaml:"orphanedBytes"`
+}
+
+// Uploads lists every file under `.aboard/uploads/` and the tabs that mention it.
+//
+// The reference scan reads each tab's RAW state text, not its declared fields,
+// and that is the whole correctness of it: an `html` widget's markup can name an
+// upload in a string no spec knows about, and a scan over declared fields would
+// report that file as an orphan and offer to delete an image the human is
+// looking at. So the question asked is the crude one — does this tab's JSON
+// contain this filename — and the failure mode is a file kept that could have
+// gone, which is the right way round for a delete path.
+//
+// Reads the state file directly: no server needed, exactly as `export` and
+// `journal` do not need one.
+func Uploads(root Root, name string) (UploadReport, error) {
+	rep := UploadReport{Dir: root.UploadsDir(), Files: []UploadRow{}}
+
+	raw, err := os.ReadFile(root.StateFile(name))
+	if err != nil {
+		return rep, fmt.Errorf("reading %s: %w", root.StateFile(name), err)
+	}
+	doc, err := decodeDocument(raw)
+	if err != nil {
+		return rep, fmt.Errorf("the board document does not parse: %w", err)
+	}
+
+	entries, err := os.ReadDir(root.UploadsDir())
+	if err != nil {
+		// A board that has never had an image pasted into it has no directory,
+		// and that is an empty list rather than a failure.
+		if os.IsNotExist(err) {
+			return rep, nil
+		}
+		return rep, fmt.Errorf("reading %s: %w", root.UploadsDir(), err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		row := UploadRow{
+			Name:  e.Name(),
+			URL:   uploadDir + "/" + e.Name(),
+			Bytes: info.Size(),
+			At:    info.ModTime().UTC().Format(time.RFC3339),
+			Tabs:  tabsMentioning(doc, e.Name()),
+		}
+		rep.Bytes += row.Bytes
+		if !row.Referenced() {
+			rep.Orphaned++
+			rep.OrphanedBytes += row.Bytes
+		}
+		rep.Files = append(rep.Files, row)
+	}
+	sort.Slice(rep.Files, func(i, j int) bool { return rep.Files[i].Name < rep.Files[j].Name })
+	return rep, nil
+}
+
+// tabsMentioning finds every tab whose raw text contains a filename.
+//
+// The tab's `name` and `note` are searched along with its state, because a tab
+// can perfectly well be the record of an image by naming it — and a scan that
+// missed that would call the file an orphan.
+func tabsMentioning(doc *stateDoc, file string) []string {
+	needle := []byte(file)
+	out := []string{}
+	for i := range doc.tabs {
+		t := &doc.tabs[i]
+		if bytes.Contains(t.State, needle) ||
+			strings.Contains(t.Name, file) ||
+			strings.Contains(t.Note, file) {
+			out = append(out, t.ID)
+		}
+	}
+	return out
+}
+
+// PruneUploads deletes the files no tab mentions. It NEVER decides on its own:
+// the caller has already printed the list and the human has already said yes.
+//
+// Returns what it removed and the first error, having tried them all — a
+// permission wall on one file is not a reason to leave the other nine.
+func PruneUploads(root Root, rows []UploadRow) ([]string, error) {
+	removed := []string{}
+	var firstErr error
+	for _, row := range rows {
+		if row.Referenced() {
+			continue
+		}
+		// Rebuilt from the base name, exactly as serveUpload does: nothing that
+		// arrived from anywhere is ever used as a path.
+		if err := os.Remove(root.UploadFile(filepath.Base(row.Name))); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		removed = append(removed, row.Name)
+	}
+	return removed, firstErr
+}
+
+// Human is the listing, with the orphans marked and the totals last.
+func (r UploadReport) Human(prune bool) string {
+	var b strings.Builder
+	if len(r.Files) == 0 {
+		fmt.Fprintf(&b, "no uploads in %s\n", r.Dir)
+		return b.String()
+	}
+	for _, f := range r.Files {
+		mark := " "
+		who := joinOr(f.Tabs, "")
+		if !f.Referenced() {
+			mark = "*"
+			who = "no tab mentions it"
+		}
+		fmt.Fprintf(&b, "%s %-44s %9s  %s\n", mark, f.Name, humanBytes(f.Bytes), who)
+	}
+	fmt.Fprintf(&b, "\n%d file%s, %s in %s\n", len(r.Files), plural(len(r.Files)), humanBytes(r.Bytes), r.Dir)
+	if r.Orphaned == 0 {
+		b.WriteString("every upload is mentioned by a tab — nothing to prune\n")
+		return b.String()
+	}
+	fmt.Fprintf(&b, "* %d unreferenced, %s\n", r.Orphaned, humanBytes(r.OrphanedBytes))
+	if !prune {
+		b.WriteString("run `aboard uploads --prune` to see what removing them would do\n")
+	}
+	// The scan is textual, and a reader about to delete files has to know on what
+	// evidence. Said here rather than only in the docs, for the same reason the
+	// mount receipts print their own limits.
+	b.WriteString("(\"mentioned\" is a text search of each tab's raw state, name and note — an html widget's\n" +
+		" markup counts, and a file named nowhere in the document is what unreferenced means)\n")
+	return b.String()
+}
+
+// humanBytes is a size a person reads at a glance. Deliberately crude — this is
+// a listing of screenshots, and the units stop at MB.
+func humanBytes(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f kB", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
 }

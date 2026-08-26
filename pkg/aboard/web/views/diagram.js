@@ -112,6 +112,96 @@ function loadMermaid() {
   return mermaidLoadPromise;
 }
 
+// Mermaid's theme, driven off the board's own CSS tokens rather than one of its
+// stock themes, so a diagram reads as part of this tool rather than as an embed.
+//
+// Hoisted out of mountDiagram when markdown fences started rendering through the
+// same loader. It has to be ONE function: two copies of a token map drift exactly
+// the way the html tab's hand-copied palette did, and that is the same mistake in
+// a second place rather than a new one.
+export function mermaidThemeConfig() {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
+
+  const surface = token('--surface', '#151515');
+  const sunken = token('--sunken', '#0a0a0a');
+  const text = token('--text', '#bac6db');
+  const muted = token('--muted', '#8a8a8a');
+  const line = token('--line', '#2a2a2a');
+  const accent = token('--accent', '#a4bd00');
+  const edge = token('--edge', '#4a4a4a');
+  const bg = token('--bg', '#000000');
+
+  return {
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
+    flowchart: { curve: 'basis', useMaxWidth: true, padding: 14 },
+    themeVariables: {
+      // The board is single-theme dark, so this is a constant, not a probe.
+      darkMode: true,
+      background: bg,
+      fontSize: '14px',
+
+      // nodes: flat surface, hairline border — matches a Kanban card
+      primaryColor: surface,
+      mainBkg: surface,
+      primaryTextColor: text,
+      primaryBorderColor: line,
+      nodeBorder: line,
+      nodeTextColor: text,
+
+      // the accent is spent on edges and emphasis, not on filling every box
+      lineColor: edge,
+      edgeLabelBackground: bg,
+      tertiaryColor: sunken,
+      tertiaryTextColor: text,
+      tertiaryBorderColor: line,
+      secondaryColor: sunken,
+      secondaryTextColor: muted,
+      secondaryBorderColor: line,
+
+      clusterBkg: sunken,
+      clusterBorder: line,
+      titleColor: text,
+      textColor: text,
+      noteBkgColor: sunken,
+      noteTextColor: text,
+      noteBorderColor: line,
+      accentColor: accent,
+    },
+  };
+}
+
+// renderSeq is module-level for the same reason the loader is: every mermaid
+// render on the page needs an id nothing else is using, and per-mount counters
+// collide the moment a notes tab and a diagram tab are both on screen.
+let renderSeq = 0;
+
+// renderMermaidInto renders `source` into `host`, replacing whatever was there.
+// Rejects on a syntax error, leaving `host` untouched — which is what lets a
+// caller keep the last good render, or the verbatim source, as its failure state.
+//
+// The svg is assigned as markup, and that is the one place on the board where
+// that happens outside an html tab. It is mermaid's own output, produced under
+// `securityLevel: 'strict'` (its sanitiser, html labels off), which is the
+// protection the diagram renderer has always relied on; the alternative is
+// re-parsing the same string ourselves, which is not a smaller trust decision.
+export async function renderMermaidInto(host, source) {
+  const mermaid = await loadMermaid();
+  const id = `mermaid-render-${renderSeq++}`;
+  try {
+    mermaid.initialize(mermaidThemeConfig());
+    const { svg } = await mermaid.render(id, source);
+    host.innerHTML = svg;
+    return svg;
+  } catch (err) {
+    document.getElementById(id)?.remove();   // mermaid leaves a stray node behind on failure
+    throw err;
+  }
+}
+
 export function mountDiagram(root, ctx) {
   ensureStyle();
 
@@ -146,7 +236,6 @@ export function mountDiagram(root, ctx) {
     .prepend($rerenderBtn, $copyBtn, $paletteBtn, $toggleBtn);
 
   let renderTimer = null;
-  let renderSeq = 0;
   let activeToken = 0;
   let lastRenderedSource = null;
 
@@ -191,60 +280,6 @@ export function mountDiagram(root, ctx) {
     }
   }
 
-  function themeConfig() {
-    const css = getComputedStyle(document.documentElement);
-    const token = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
-
-    const surface = token('--surface', '#151515');
-    const sunken = token('--sunken', '#0a0a0a');
-    const text = token('--text', '#bac6db');
-    const muted = token('--muted', '#8a8a8a');
-    const line = token('--line', '#2a2a2a');
-    const accent = token('--accent', '#a4bd00');
-    const edge = token('--edge', '#4a4a4a');
-    const bg = token('--bg', '#000000');
-
-    return {
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: 'base',
-      fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-      flowchart: { curve: 'basis', useMaxWidth: true, padding: 14 },
-      themeVariables: {
-        // The board is single-theme dark, so this is a constant, not a probe.
-        darkMode: true,
-        background: bg,
-        fontSize: '14px',
-
-        // nodes: flat surface, hairline border — matches a Kanban card
-        primaryColor: surface,
-        mainBkg: surface,
-        primaryTextColor: text,
-        primaryBorderColor: line,
-        nodeBorder: line,
-        nodeTextColor: text,
-
-        // the accent is spent on edges and emphasis, not on filling every box
-        lineColor: edge,
-        edgeLabelBackground: bg,
-        tertiaryColor: sunken,
-        tertiaryTextColor: text,
-        tertiaryBorderColor: line,
-        secondaryColor: sunken,
-        secondaryTextColor: muted,
-        secondaryBorderColor: line,
-
-        clusterBkg: sunken,
-        clusterBorder: line,
-        titleColor: text,
-        textColor: text,
-        noteBkgColor: sunken,
-        noteTextColor: text,
-        noteBorderColor: line,
-        accentColor: accent,
-      },
-    };
-  }
 
   function showFallback(source, err) {
     $render.innerHTML = '';
@@ -273,9 +308,12 @@ export function mountDiagram(root, ctx) {
       return;
     }
 
-    let mermaid;
+    // Loaded up front purely to tell the two failures apart: "the bundle never
+    // arrived" shows the source verbatim, "the source is wrong" keeps the last
+    // good render and names the syntax error. The promise is cached, so asking
+    // twice costs nothing.
     try {
-      mermaid = await loadMermaid();
+      await loadMermaid();
     } catch (err) {
       if (token !== activeToken) return;
       $status.textContent = 'mermaid unavailable';
@@ -283,19 +321,20 @@ export function mountDiagram(root, ctx) {
       return;
     }
 
-    const id = `diagram-render-${renderSeq++}`;
+    // Rendered into a DETACHED holder first, so a render that has been superseded
+    // never paints: the token check has to happen between "mermaid finished" and
+    // "the tab changes on screen", and there is no other point to put it.
+    const holder = document.createElement('div');
     try {
-      mermaid.initialize(themeConfig());
-      const { svg } = await mermaid.render(id, source);
+      await renderMermaidInto(holder, source);
       if (token !== activeToken) return;   // a newer render superseded this one
-      $render.innerHTML = svg;
+      $render.replaceChildren(...holder.childNodes);
       annotateNodes();
       $error.hidden = true;
       $error.textContent = '';
       $status.textContent = 'rendered';
       lastRenderedSource = source;
     } catch (err) {
-      document.getElementById(id)?.remove();   // mermaid can leave a stray node behind on failure
       if (token !== activeToken) return;
       // Keep whatever was rendered last (still in $render) and surface the error alongside it.
       $error.hidden = false;

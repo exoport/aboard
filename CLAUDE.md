@@ -136,14 +136,54 @@ session is watching is not yours to restart.
 - **Two identities, one `.aboard/`**: `aboard` and `ape-aboard` are hosts; the manifest's app name is neither — [why](docs/explanation/why-two-identities.md).
 - **The capability surface is declared and checked, never scraped**; controls are a list because their order is the toolbar's — [why](docs/explanation/why-the-manifest-is-declared.md).
 - **The write path costs the EDIT, not the board.** The server keeps the state document parsed in memory — bytes, tabs with opaque state, and per tab a normalised form and the largest id it uses — and a POST decodes the incoming body exactly ONCE and the document on disk not at all. Unchanged tabs are compared as bytes and carry their derived facts forward, so one small edit on a board of 5 000 tabs no longer canonicalises 5 000 states twice and walks the whole document for ids twice. The write path still RE-READS the file every time and compares it before trusting the cache: a stat can miss a foreign edit of the same length inside one mtime tick, and on the write path that would mean reconciling against a document that no longer exists. `GET /aboard.json` is served from that cache with an `ETag`, and a re-read stats the file on both sides of itself so a read that straddles a rename can never pin the old document under the new file's stat; the watcher is stat-gated, so a 10 MB board costs one syscall per tick at idle instead of a whole-file SHA-256 five times a second. Measured in `pkg/aboard/bench_test.go`, and every claim above has a counting test in `document_test.go`.
+- **A `409` is a merge, once, and a same-tab collision still stops.** `apply` used to
+  hand back one sentence and discard the agent's whole document — built from a board it
+  can no longer read — because compare-and-set is whole-document and ANY concurrent write
+  conflicts with any other. It now re-reads, asks the journal which tabs moved since the
+  base it started from (and what each held AT that base, which is the only record of the
+  third document), re-applies its own tabs where the server did not touch them, and
+  retries ONCE. Both refusals that remain are deliberate: a genuine same-tab collision is
+  NAMED and never merged silently, exactly as the browser refuses to; and a conflict the
+  merge cannot reason about — a timestamp base, a journal rotated past the base — falls
+  back to the plain refusal with the reason on stderr. `JournalEntry` gained `rev` for
+  this: `at` is a millisecond clock, which is the token this project stopped trusting.
 - **Writes are serialised, and a `409` is the guarantee that nothing of yours landed.** One lock across read → compare-and-set → reconcile → write, and the token compared is a **revision counter** (`rev`), never a timestamp; the losers of a simultaneous write are refused, not queued on top — [why](docs/explanation/why-writes-are-serialised.md).
 - **The board answers loopback only, and refuses a cross-site write.** A `Host` outside `localhost`/`127.0.0.1`/`[::1]` is `403` (the DNS-rebinding guard), and so is any mutating request whose `Origin` is not the board's own — [the rules](docs/reference/http-api.md#who-is-allowed-to-ask). Neither is authentication; the server has none. They stop a browser from being the thing that reaches it for somebody else.
+- **A write warning goes to the journal entry and to the screen, never into a tab.** `POST /aboard.json` runs the write-time checks over the tabs the write TOUCHED, and the strings ride the journal entry, the POST reply, the SSE frame, the tab's notice banner and the trace tab. Scoped on purpose: a whole-document scan would re-report every pre-existing mistake as though this write had made it — the example board's deliberately invalid `sparkline` would then ride along on every write ever made, and a warning that always fires is one people learn to skip. It still warns on a write that touches ITS tab, and there is no suppression mechanism for it. The reply and the frame also name the tabs the checks RAN over, which is the only thing that can take a banner back DOWN: a clean tab is absent from the warnings, which is the same shape as a tab the write never looked at, so a page that only ever received warnings could raise a banner and never lower one. `apply --check` runs the checks and posts nothing; `apply --strict` refuses on any warning. Warning-not-refusing stays the default, because a spec can legitimately lag its renderer.
 - **Nothing in the browser executes anything.** Action buttons, `gate` verdicts and `ui` buttons RECORD an intent; the agent that asked acts on it. That is what makes a stray click harmless on a server with no auth.
 - **Ids are board-wide monotonic, tagged `bb`, with no type prefix** — [reference](docs/reference/state-file.md#ids). Form *field* ids stay semantic.
 - **An id is enough coming FROM the human and not enough going TO them.** They say an id and you can look it up; you say one and they may have nothing. Name the thing and put the id beside it — "the Migration review tab (`<id>`)", never "the button in `<id>`".
 - **Prefer `ui` over `html`** whenever a component tree can express it: it cannot get the theme, contrast or type sizes wrong, and the next session can change one node instead of reading a page of someone else's JavaScript. `html` is for when the INTERACTION is the point.
-- **Colours only from `app.css` tokens.** Single dark theme, text pinned to WCAG AAA, no hex in any view. The periwinkle token is `--agent`; `claude` resolves to nothing, and a write naming an unknown colour warns.
-- **Per-viewer UI state never goes in the state file** — selection, zoom, collapsed blocks, marks-hidden, chat drafts, and the chrome a host asks for when it frames the board (`?chrome=full|notabs|none`). Two viewers can look at one board in the same second and must disagree about all of it while agreeing about content, so it lives in the URL — [the shell's URL surface](docs/reference/http-api.md).
+- **Colours only from `app.css` tokens.** Single dark theme, text pinned to WCAG AAA, no hex in any view. The periwinkle token is `--agent`; `claude` resolves to nothing, and a write naming an unknown colour warns. An `html` tab's frame **parses** `app.css`'s `:root` and inherits the whole set rather than carrying a copy — a copy had already lost five tokens once, and a widget naming one of those got no colour and no warning. It fails closed to a built-in literal, because a widget with no ground at all is worse than one on a stale palette.
+- **The journal is the board's undo, and `aboard history` is how you reach it.** Every
+  accepted write already records the state each changed tab held BEFORE it; `GET /history?tab=`
+  and `aboard history <tab>` read it out, and `--at N` prints a WHOLE document `apply`
+  accepts. Merged onto a freshly read document rather than printed alone, and that is the
+  whole risk of the feature: a single-tab document is a document that DELETES every other
+  tab, which the server would answer with a removal request on each one in front of the
+  human — the same shape of mistake an absent `__by` used to make. The listing says where
+  the record ends, because rotation keeps one generation and an empty list is otherwise
+  indistinguishable from "everything about this tab rotated away". The change banner in
+  the shell links to it, read-only: restoring from a button would be a write the human
+  made without seeing the document it produces.
+- **The browser reports what it drew, into a sidecar.** After every mount — and, debounced,
+  after a control is pressed — `aboard.html` posts the declared control ids on screen, any
+  the renderer built that no spec declares, and any unknown-component marker, to
+  `POST /rendered` → `.aboard/run/rendered.json`. `aboard rendered <tab>` prints it, and
+  `aboard wait --for "rendered <id>"` blocks until a browser mounts one. **Not the DOM
+  sweep** that was measured and abandoned on the spike: every id here is already declared
+  in `views/*.spec.json`, and nothing is matched against `gestures`. It prints its own two
+  limits, because they are what stop it being read as proof: no receipt means nobody had
+  the tab OPEN, and a recorded press means the control was REACHED, never that it behaved.
+  Swept on ACTIVATION and not only on mount, because `ui`'s `tabs` component builds only
+  the open panel — the gallery's deliberate `sparkline` marker sits in the fifth one and no
+  mount-only sweep would ever see it.
+- **`aboard uploads` is the accounting for `.aboard/uploads/`**, with `--prune --yes` the
+  only way to delete anything. The reference scan reads each tab's RAW state text plus its
+  name and note, never its declared fields: an `html` widget's markup can name a file no
+  spec knows about, and a declared-field scan would call that image an orphan and offer to
+  delete something the human is looking at. `--prune` alone prints and refuses.
+- **Per-viewer UI state never goes in the state file** — selection, zoom, collapsed blocks, marks-hidden, chat drafts, mount receipts, and the chrome a host asks for when it frames the board (`?chrome=full|notabs|none`). Two viewers can look at one board in the same second and must disagree about all of it while agreeing about content, so it lives in the URL — [the shell's URL surface](docs/reference/http-api.md).
 - **One resolved root.** Paths are joined in `layout.go` and nowhere else — enforced by `TestNothingOutsideLayoutJoinsAPath`, an AST walk, because the rule had four violations for as long as nothing checked it. The port is derived from the discovered root, so the URL is the same from any subdirectory.
 - **Dependencies are cobra + pflag + yaml.v3 + `go-json-experiment/json` and their closure.** The JSON one is the Go team's own published mirror of `encoding/json/v2`, which Go 1.27 makes the default `encoding/json`; it has zero dependencies of its own and aliases the stdlib implementation once the toolchain moves. It is here for the raw-value paths the board is made of — a tab's `state` is opaque bytes — where it is 3–7× the v1 encoder, and for `jsontext.Value.Canonicalize()`, which replaced an unmarshal-and-re-marshal round trip. `writeOptions` in `pkg/aboard/document.go` pins `Deterministic` and `EscapeForHTML` so the bytes it writes are byte-identical to what `encoding/json` wrote (asserted); do not drop the second without escaping at `htmltab.go`'s `<script>` splice first. No vendor directory; the mermaid bundle is committed at `pkg/aboard/web/lib/` because Go treats `vendor/` specially. **`playwright-go` is TEST-ONLY**: it is reached only from `test/e2e/`, every file of which is behind `//go:build e2e`, so it never enters the binary — `go list -deps ./cmd/aboard` does not mention it and neither does `go version -m ./aboard`. Its module path is `github.com/mxschmitt/playwright-go`, which is what the community fork publishes in its own `go.mod` at these tags.
 

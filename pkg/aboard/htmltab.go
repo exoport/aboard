@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io/fs"
 	"net/http"
 	"os"
 	"strings"
@@ -239,12 +240,7 @@ func (s *server) serveTabHTML(w http.ResponseWriter, _ *http.Request, tabID stri
 <title>` + html.EscapeString(name) + `</title>
 <style>
   :root {
-    color-scheme: dark;
-    --bg:#000; --sunken:#0a0a0a; --surface:#151515; --raised:#202020;
-    --text:#ccd4e0; --muted:#b4b4b4; --dim:#a4a4a4;
-    --line:#2a2a2a; --line-strong:#3d3d3d;
-    --accent:#a4bd00; --accent-ink:#151515;
-    --mark:#fb8c00; --agent:#a7adf4; --edge:#4a4a4a; --focus:#39bae6; --danger:#ff0066;
+` + rootDeclarations(s.assets) + `
   }
   html,body { margin:0; padding:0; }
   body {
@@ -267,4 +263,115 @@ func (s *server) serveTabHTML(w http.ResponseWriter, _ *http.Request, tabID stri
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = fmt.Fprint(w, page)
+}
+
+// ---------- the palette a widget inherits ----------
+
+// fallbackRootDeclarations is the palette an html tab gets when app.css cannot be
+// read or parsed. It is the hand-copied subset this file shipped with, kept for
+// exactly one purpose: a widget with NO ground and NO ink is unreadable, and a
+// stale-but-present palette is better than a blank one. It is not maintained —
+// rootDeclarations is what runs — so treat a difference between this and app.css
+// as expected rather than as drift to chase.
+const fallbackRootDeclarations = `    color-scheme: dark;
+    --bg:#000; --sunken:#0a0a0a; --surface:#151515; --raised:#202020;
+    --text:#ccd4e0; --muted:#b4b4b4; --dim:#a4a4a4;
+    --line:#2a2a2a; --line-strong:#3d3d3d;
+    --accent:#a4bd00; --accent-ink:#151515;
+    --mark:#fb8c00; --agent:#a7adf4; --edge:#4a4a4a; --focus:#39bae6; --danger:#ff0066;`
+
+// rootDeclarations returns the body of app.css's `:root` block, to be spliced
+// into the frame's own `:root`.
+//
+// Read from the same fs.FS the shell's stylesheet is served from, so `--dev`
+// picks up an edit on disk with no rebuild and the embedded tree answers
+// everywhere else.
+//
+// This exists because the frame used to carry a hand-copied duplicate of that
+// block, and a duplicate drifts: --accent-dim, --drop and the three --status-*
+// tokens were in app.css and simply absent here, so a widget naming one got no
+// colour, no fallback and no warning of any kind. The board's colour rule is
+// "tokens only, stated once"; this makes the html tab obey it rather than
+// re-state it.
+func rootDeclarations(assets fs.FS) string {
+	block, ok := parseRootBlock(assets)
+	if !ok {
+		return fallbackRootDeclarations
+	}
+	return block
+}
+
+// parseRootBlock finds `:root { … }` in app.css and returns what is between the
+// braces. It FAILS CLOSED — reports false and leaves the caller on the literal —
+// rather than returning a partial block, because the failure it is guarding
+// against is a widget rendering on no ground at all.
+//
+// Deliberately not a CSS parser. It wants one block out of one stylesheet this
+// repo owns, so it looks for `:root` followed by `{`, takes everything to the
+// next `}`, and refuses anything surprising: a nested brace (an at-rule crept
+// into the block), no custom properties at all, or a missing --bg/--text (the
+// ground and the ink — without those there is nothing to inherit and the
+// fallback is strictly better).
+func parseRootBlock(assets fs.FS) (string, bool) {
+	body, err := fs.ReadFile(assets, "app.css")
+	if err != nil {
+		return "", false
+	}
+	css := stripCSSComments(string(body))
+
+	rest := css
+	for {
+		at := strings.Index(rest, ":root")
+		if at < 0 {
+			return "", false
+		}
+		after := strings.TrimLeft(rest[at+len(":root"):], " \t\r\n")
+		if !strings.HasPrefix(after, "{") {
+			// `:root:not([data-theme])` and friends: not the block we want.
+			rest = rest[at+len(":root"):]
+			continue
+		}
+		inner, _, closed := strings.Cut(after[1:], "}")
+		if !closed || strings.Contains(inner, "{") {
+			return "", false
+		}
+		if !declaresToken(inner, "--bg") || !declaresToken(inner, "--text") {
+			return "", false
+		}
+		return strings.TrimRight(strings.TrimLeft(inner, "\r\n"), " \t\r\n"), true
+	}
+}
+
+// declaresToken reports whether the block assigns the named custom property.
+// Matched with its colon and a leading boundary, so `--text` matches neither
+// `--text-strong` nor a mention of the name inside another value.
+func declaresToken(block, name string) bool {
+	for _, field := range strings.FieldsFunc(block, func(r rune) bool {
+		return r == ';' || r == '\n' || r == '\r'
+	}) {
+		if strings.HasPrefix(strings.TrimSpace(field), name+":") {
+			return true
+		}
+	}
+	return false
+}
+
+// stripCSSComments removes /* … */ so a commented-out `:root {` in the file
+// header cannot be mistaken for the real one. app.css opens with a long comment
+// describing the palette, which is exactly that hazard.
+func stripCSSComments(css string) string {
+	var b strings.Builder
+	for {
+		start := strings.Index(css, "/*")
+		if start < 0 {
+			b.WriteString(css)
+			return b.String()
+		}
+		b.WriteString(css[:start])
+		end := strings.Index(css[start:], "*/")
+		if end < 0 {
+			return b.String()
+		}
+		css = css[start+end+2:]
+	}
 }

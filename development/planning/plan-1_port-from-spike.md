@@ -174,13 +174,20 @@ aboard [--cwd DIR] <command>
   wait         [--for PRED] [--timeout D] [--note S]                                 exit 0 released, 3 timed out
   poke         [--note S]
   journal      [--limit N] [--output-format]
+  history      <tab> [--at N] [--limit N] [--output-format]                          what a tab said before; --at prints a document `apply` accepts
   watch                                                                              JSON lines until interrupted
   log          <tab>                                                                 stdin → tab log
+  rendered     [tab] [--output-format]                                               what the browser reported it drew
+  uploads      [--prune] [--yes] [--output-format]                                   files under .aboard/uploads/ and the tabs that mention them
   export       <tab|key> [--format md|csv]
   capabilities [type] [--format json|md|js] [--check]
   recipes list [--output-format]      | recipes show <name> [--template]
   version      [--output-format]
 ```
+
+`history`, `rendered` and `uploads` were added by plan-2 item 6 (handoff-13-features
+`bb363`, `bb368`, `bb369`), which is why they are here and not in the original grammar.
+`boards` is NOT here: it is gated on the human (plan-2 §10).
 
 `--by human` is refused from the CLI. `-name`/`BOARD_NAME` → `--name`/`ABOARD_NAME`.
 The old single-dash modes do not exist; `aboard -status` prints cobra's unknown-flag error.

@@ -29,6 +29,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -41,14 +42,44 @@ const (
 
 // JournalEntry is one accepted write. `Before` holds the previous state of each
 // tab that changed, keyed by tab id — absent for a tab that was created.
+//
+// `Label` and `Warnings` are the two things a journal entry could never answer.
+//
+// Label is WHY: an entry said who and what, never what the write was for, so
+// "the write that broke the gallery" could not be found in a long journal
+// without reading every payload. It is the caller's own line (`apply --label`),
+// threaded exactly like `__by` and `__base` — stripped off the payload before the
+// document is stored, so it lives on the record of the write and never in the
+// board.
+//
+// Warnings is WHAT WAS WRONG WITH IT: the write-time checks, which until now only
+// ever reached the actor who ran the CLI. A browser write, a raw POST, or an
+// `apply` whose stderr nobody read all produced an empty box that only the human
+// ever found — which is backwards, since the agent is the one still holding the
+// context to fix it. Keyed by tab id, and only for the tabs the write touched.
+//
+// Neither is written into a tab's own `state`, deliberately: the board document
+// is the content, and a note about a write is not content. It also means a
+// warning cannot be laundered into the record by a later write that copies the
+// tab forward.
 type JournalEntry struct {
-	At     string                     `json:"at"               yaml:"at"`
-	By     string                     `json:"by"               yaml:"by"`
-	Origin string                     `json:"origin,omitempty" yaml:"origin,omitempty"`
-	Tabs   []string                   `json:"tabs"             yaml:"tabs"`
-	Names  map[string]string          `json:"names,omitempty"  yaml:"names,omitempty"`
-	NextID int                        `json:"nextId,omitempty" yaml:"nextId,omitempty"`
-	Before map[string]json.RawMessage `json:"before,omitempty" yaml:"before,omitempty"`
+	At     string `json:"at"               yaml:"at"`
+	By     string `json:"by"               yaml:"by"`
+	Origin string `json:"origin,omitempty" yaml:"origin,omitempty"`
+	// Rev is the revision this write PRODUCED — the compare-and-set token the
+	// board carried once it landed. Recorded because a reader with a base rev
+	// has no other way to ask "which tabs moved since I read the document":
+	// `at` is a millisecond clock, which is exactly the token this project
+	// stopped trusting (see revision, server.go). Absent — zero — on entries
+	// written before this landed, and a reader must treat 0 as "unknown", never
+	// as "revision zero".
+	Rev      int                        `json:"rev,omitempty"      yaml:"rev,omitempty"`
+	Label    string                     `json:"label,omitempty"    yaml:"label,omitempty"`
+	Tabs     []string                   `json:"tabs"               yaml:"tabs"`
+	Names    map[string]string          `json:"names,omitempty"    yaml:"names,omitempty"`
+	NextID   int                        `json:"nextId,omitempty"   yaml:"nextId,omitempty"`
+	Warnings map[string][]string        `json:"warnings,omitempty" yaml:"warnings,omitempty"`
+	Before   map[string]json.RawMessage `json:"before,omitempty"   yaml:"before,omitempty"`
 }
 
 type journal struct {
@@ -442,7 +473,10 @@ func JournalHuman(entries []JournalEntry) string {
 		return "no journal entries yet\n"
 	}
 	var b strings.Builder
-	for _, e := range entries {
+	// Indexed, not copied: JournalEntry carries three maps and a slice now, and
+	// a value range copies all of it per entry for a loop that only reads.
+	for i := range entries {
+		e := &entries[i]
 		labels := make([]string, 0, len(e.Tabs))
 		for _, id := range e.Tabs {
 			if n := e.Names[id]; n != "" {
@@ -452,8 +486,32 @@ func JournalHuman(entries []JournalEntry) string {
 			labels = append(labels, id)
 		}
 		fmt.Fprintf(&b, "%s  %-16s %s\n", e.At, e.By, joinOr(labels, "no tab changed"))
+		// Both continuation lines are indented under the write they belong to,
+		// because the entry line is already three columns wide and a label or a
+		// warning appended to it would push the tab list off the terminal — the
+		// column a reader scans.
+		if e.Label != "" {
+			fmt.Fprintf(&b, "%*s  %s\n", len(e.At), "", e.Label)
+		}
+		for _, id := range sortedWarningTabs(e.Warnings) {
+			for _, w := range e.Warnings[id] {
+				fmt.Fprintf(&b, "%*s  ⚠ %s\n", len(e.At), "", w)
+			}
+		}
 	}
 	return b.String()
+}
+
+// sortedWarningTabs orders the warning groups so two runs of `aboard journal`
+// print the same thing. Map order is randomised in Go, and an output that
+// reshuffles itself between runs is one a reader cannot diff.
+func sortedWarningTabs(warnings map[string][]string) []string {
+	ids := make([]string, 0, len(warnings))
+	for id := range warnings {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // Watch streams every change as JSON lines until the connection ends or the

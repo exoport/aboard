@@ -226,3 +226,8 @@ human is reading.
   discarding another session's work or the user's answers.
 - `aboard journal --limit 20` and a `trace` tab are how you tell who did what.
   `lastEditedBy` only ever names the last one.
+- Give a non-obvious write a `--label`: it is the one line on a journal entry that
+  says WHY, and with several sessions writing, "who" and "which tabs" is rarely
+  enough to reconstruct an afternoon. It is navigation inside a local, rotating
+  file — do not cite one anywhere permanent, and do not let it stand in for
+  telling the human.

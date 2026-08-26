@@ -41,6 +41,7 @@ func testServer(t *testing.T, document string) *server {
 		waits:     newWaitHub(),
 		ui:        newUIWatcher(false),
 		journal:   newJournal(root),
+		receipts:  newReceiptStore(root),
 	}
 }
 

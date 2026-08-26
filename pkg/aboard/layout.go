@@ -202,6 +202,12 @@ func (r Root) LogsDir() string { return filepath.Join(r.RunDir(), "logs") }
 // logTabRe first — this becomes a filename.
 func (r Root) LogFile(tab string) string { return filepath.Join(r.LogsDir(), tab+".log") }
 
+// RenderedFile is the mount-receipt sidecar: what the BROWSER reports it drew,
+// per tab. Under run/ with the journal and the logs, never in the state
+// document — it is per-viewer, machine-local and true only for this moment,
+// which is the same rule that keeps selection, zoom and drafts out of the board.
+func (r Root) RenderedFile() string { return filepath.Join(r.RunDir(), "rendered.json") }
+
 // ShotsDir is where test/shot.sh writes. Under the run directory because a
 // screenshot is a machine-local artefact, and inside the project because a
 // snap-confined chromium cannot write outside $HOME.

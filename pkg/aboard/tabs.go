@@ -98,14 +98,18 @@ const (
 	actorUnknown = "unknown"
 )
 
-// The two tab types the ENGINE has to know by name. Every other type is opaque
+// The three tab types the ENGINE has to know by name. Every other type is opaque
 // to Go — a name and a state blob the renderer owns — which is what "tabs are
-// data" means. These two are not: a stack's blocks are a second level of
-// (type, state) pairs the write checker and export must walk, and an html tab is
-// served from its own sandboxed route.
+// data" means. These three are not: a stack's blocks are a second level of
+// (type, state) pairs the write checker and export must walk; an html tab is
+// served from its own sandboxed route; and a `ui` tab is a component TREE, which
+// both the write checker and export walk node by node against the declared
+// catalog in views/ui.spec.json. Naming a type here is the admission that Go
+// reads inside it, so keep the list short and keep the reason attached.
 const (
 	tabTypeStack = "stack"
 	tabTypeHTML  = "html"
+	tabTypeUI    = "ui"
 )
 
 func isHuman(by string) bool { return by == actorHuman }

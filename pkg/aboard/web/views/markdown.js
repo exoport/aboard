@@ -11,9 +11,17 @@
 // hrefs are scheme-checked for the same reason — a `javascript:` URL in a note
 // must render as text, not as a live link.
 //
+// ONE exception, and it is not this file's to make: a ```mermaid fence is handed
+// to diagram.js, which assigns mermaid's own svg output as markup under
+// `securityLevel: 'strict'`. That is the same trust the diagram TAB has always
+// placed in the vendored bundle; the fence does not widen it, and re-parsing the
+// bundle's output here would not narrow it either.
+//
 // Anything unrecognised falls through as literal text, which is the right
 // failure for a subset: a note is never worse off than the plain textarea it
 // replaced.
+
+import { renderMermaidInto } from './diagram.js';
 
 const SAFE_HREF = /^(https?:\/\/|mailto:|\/|\.\/|#)/i;
 
@@ -70,6 +78,40 @@ function heading(line) {
   return el;
 }
 
+function codeBlock(body) {
+  const pre = document.createElement('pre');
+  const code = document.createElement('code');
+  code.textContent = body;
+  pre.append(code);
+  return pre;
+}
+
+/**
+ * A ```mermaid fence, drawn as a figure.
+ *
+ * The board vendors mermaid and, until now, a diagram could only be a whole tab
+ * — so a write-up with one figure in it had to be two tabs, and the figure could
+ * not travel with the prose being promoted into a document.
+ *
+ * Rendered through diagram.js's loader and theme, never a copy of either: two
+ * theme maps drift, which is exactly how the html tab ended up with a palette
+ * that had lost five tokens.
+ *
+ * The SOURCE is what the element holds until a render succeeds, so the failure
+ * state is the mermaid text verbatim — never an empty box, and never a stack
+ * trace. That covers a syntax error and a bundle that would not load, which are
+ * the same thing from the reader's side: no picture, so show the words.
+ */
+function mermaidBlock(source) {
+  const figure = document.createElement('div');
+  figure.className = 'md-mermaid';
+  figure.append(codeBlock(source));
+  if (source.trim()) {
+    renderMermaidInto(figure, source).catch(() => { /* the verbatim source stays */ });
+  }
+  return figure;
+}
+
 /** Build a fragment for `text`. Block-level scan, line by line. */
 export function renderMarkdown(text) {
   const frag = document.createDocumentFragment();
@@ -90,17 +132,17 @@ export function renderMarkdown(text) {
     const line = lines[i];
 
     // Fenced code: verbatim until the closing fence or the end of the text.
-    if (/^```/.test(line)) {
+    // The INFO STRING is kept rather than thrown away, because one value of it
+    // means something here: ```mermaid renders as a diagram.
+    const fence = /^```(.*)$/.exec(line);
+    if (fence) {
       flushParagraph(para);
+      const info = fence[1].trim().toLowerCase();
       const body = [];
       i += 1;
       while (i < lines.length && !/^```/.test(lines[i])) { body.push(lines[i]); i += 1; }
       i += 1;                                     // consume the closing fence
-      const pre = document.createElement('pre');
-      const code = document.createElement('code');
-      code.textContent = body.join('\n');
-      pre.append(code);
-      frag.append(pre);
+      frag.append(info === 'mermaid' ? mermaidBlock(body.join('\n')) : codeBlock(body.join('\n')));
       continue;
     }
 
@@ -203,6 +245,18 @@ export function injectMarkdownStyle() {
       color: var(--muted);
     }
     .md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+    /* A rendered fence. Same well as a code block, because that is what it was
+       before it rendered and what it goes back to if mermaid cannot read it. */
+    .md .md-mermaid {
+      margin: 0 0 0.9em;
+      padding: 10px 12px;
+      background: var(--sunken);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .md .md-mermaid pre { margin: 0; padding: 0; border: 0; background: none; }
+    .md .md-mermaid svg { display: block; max-width: 100%; height: auto; }
     .md a { color: var(--focus); }
     .md strong { color: var(--text); font-weight: 650; }
   `;

@@ -86,6 +86,20 @@ const CSS = `
   font-size: 0.85rem;
 }
 [data-view="trace"] .detail .mono { color: var(--muted); }
+[data-view="trace"] .detail .entry-label { margin: 6px 0 0; color: var(--text); }
+[data-view="trace"] .detail .warned {
+  margin: 6px 0 0;
+  color: var(--mark);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+/* A write that warned is visible without clicking it: same dot, ringed in the
+   same colour the tab banner uses. */
+[data-view="trace"] .event[data-warned="yes"] {
+  border-color: var(--mark);
+  box-shadow: 0 0 0 2px var(--sunken), 0 0 0 3px var(--mark);
+}
 [data-view="trace"] .detail ul { margin: 6px 0 0; padding-left: 18px; }
 [data-view="trace"] .empty { color: var(--muted); }
 [data-view="trace"] .chip {
@@ -179,6 +193,16 @@ export function mountTrace(root, ctx) {
     head.append(who, when);
     detail.append(head);
 
+    // WHY, straight under WHO and WHEN. A journal answered who and what and never
+    // why, which is what made "the write that broke the gallery" unfindable
+    // without reading every payload.
+    if (e.label) {
+      const label = document.createElement('p');
+      label.className = 'entry-label';
+      label.textContent = e.label;
+      detail.append(label);
+    }
+
     const list = document.createElement('ul');
     for (const id of e.tabs || []) {
       const li = document.createElement('li');
@@ -205,6 +229,26 @@ export function mountTrace(root, ctx) {
       origin.textContent = 'origin: ' + e.origin;
       detail.append(origin);
     }
+
+    // What the write-time checks said about this write. On the ENTRY, never on
+    // the tab: the board document is content, and a note about a write is not.
+    // The dot is already marked, so a reader scanning the lanes can see which
+    // writes warned before clicking any of them.
+    const warnings = e.warnings && typeof e.warnings === 'object' ? e.warnings : null;
+    for (const id of warnings ? Object.keys(warnings).sort() : []) {
+      for (const text of warnings[id] || []) {
+        const line = document.createElement('p');
+        line.className = 'warned';
+        line.textContent = '⚠ ' + text;
+        detail.append(line);
+      }
+    }
+  }
+
+  // Did this write warn? Read twice — for the dot and for its tooltip.
+  function warningCount(e) {
+    if (!e || !e.warnings || typeof e.warnings !== 'object') return 0;
+    return Object.values(e.warnings).reduce((n, list) => n + (Array.isArray(list) ? list.length : 0), 0);
   }
 
   function paint() {
@@ -249,8 +293,12 @@ export function mountTrace(root, ctx) {
         dot.style.left = (((timeOf(e) - first) / span) * 100).toFixed(3) + '%';
         dot.setAttribute('aria-pressed', String(selected === i));
         const tabs = (e.tabs || []).join(', ') || 'no tab';
-        dot.title = `${e.at} — ${tabs}`;
-        dot.setAttribute('aria-label', `${by} at ${e.at}: ${tabs}`);
+        const warned = warningCount(e);
+        if (warned) dot.dataset.warned = 'yes';
+        const why = e.label ? ` — ${e.label}` : '';
+        const warns = warned ? ` — ${warned} warning${warned === 1 ? '' : 's'}` : '';
+        dot.title = `${e.at} — ${tabs}${why}${warns}`;
+        dot.setAttribute('aria-label', `${by} at ${e.at}: ${tabs}${why}${warns}`);
         dot.addEventListener('click', () => {
           selected = selected === i ? null : i;
           paint();

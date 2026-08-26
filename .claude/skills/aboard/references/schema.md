@@ -185,7 +185,10 @@ state: `<cmd> 2>&1 | aboard log bb126`.
 ```
 
 Reads `.aboard/run/journal.jsonl` rather than the state document, so the history
-is not something an agent can quietly rewrite.
+is not something an agent can quietly rewrite. Each entry also carries `label`
+(why, from `aboard apply --label`) and `warnings` (what the write-time checks said
+about that write, keyed by tab). Both belong to the WRITE, so neither is ever in a
+tab's `state`.
 
 ### vote
 

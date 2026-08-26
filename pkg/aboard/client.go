@@ -34,6 +34,35 @@ const replyReadLimit = 4 << 10
 // refusal in here that a caller can fix by re-reading rather than by retrying.
 var ErrNoBase = errors.New("no compare-and-set base")
 
+// ErrWarnings is what --strict returns when the document warns. A sentinel so
+// the cli layer can tell "your document is wrong" from "the board refused you",
+// and so a script can match on it rather than on a sentence.
+var ErrWarnings = errors.New("the document warns and --strict was asked for")
+
+// ApplyOptions is everything `aboard apply` decides before it posts.
+//
+// A struct rather than five more positional parameters: three of the five are
+// bools, and `Apply(ctx, root, name, by, false, true, false, …)` is a call
+// nobody can read at the site or review in a diff.
+type ApplyOptions struct {
+	// By is the actor recorded in lastEditedBy and on every tab the write
+	// touched. Never "human" — see Apply.
+	By string
+	// Label is why this write is happening, recorded on the journal entry and
+	// nowhere in the board document.
+	Label string
+	// Force writes with no compare-and-set at all, and says so on stderr.
+	Force bool
+	// Check runs the write-time checks and stops there: nothing is posted, and no
+	// board needs to be running. The cheap habit before a write.
+	Check bool
+	// Strict turns any warning into a refusal. Opt-in per call, because warning
+	// rather than refusing is the default for a good reason — a spec can lag its
+	// renderer, and a board that rejects writes over its own stale documentation
+	// would be worse than one that documents late.
+	Strict bool
+}
+
 // Apply posts a board document to the running board instead of writing the file
 // directly. Direct writes have no compare-and-set, so two agents — or an agent
 // and the browser — can silently drop each other's changes; going through the
@@ -47,7 +76,8 @@ var ErrNoBase = errors.New("no compare-and-set base")
 // minimal shape in the docs overwrote everything written since it was read, exit
 // 0, nothing on stderr. It is refused now, and --force is the way to say you
 // meant it.
-func Apply(ctx context.Context, root Root, name, by string, force bool, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
+func Apply(ctx context.Context, root Root, name string, options ApplyOptions, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
+	by, force := options.By, options.Force
 	if by == actorHuman {
 		// The human acts in the browser, and the guarantees in tabs.go key off
 		// this exact string: a write stamped `human` may delete tabs, clear
@@ -85,8 +115,16 @@ func Apply(ctx context.Context, root Root, name, by string, force bool, assets f
 	// The base, before anything else is printed. A document with none is refused
 	// rather than warned about, so there is nothing to read past — and the caller
 	// will see the write warnings on the retry that carries a base.
+	//
+	// --check skips this whole question. It is a question about CONCURRENCY —
+	// "has the board moved since you read it" — and a check that posts nothing
+	// cannot lose anybody's work. Refusing to check a document because it has no
+	// `rev` would make the cheap habit unavailable in exactly the case it is
+	// cheapest: a document being built up before it is ever applied.
 	base := applyBase(doc)
 	switch {
+	case options.Check:
+		// Nothing to compare against, because nothing is going to be posted.
 	case force:
 		// Deliberate and announced. An unconditional write is occasionally the
 		// right thing — repairing a document the browser cannot render, seeding a
@@ -95,68 +133,193 @@ func Apply(ctx context.Context, root Root, name, by string, force bool, assets f
 		// line, because it is the one that says another writer may be about to
 		// lose their work.
 		fmt.Fprintf(errOut, "warning: --force: writing without compare-and-set — anything written since you read this document is overwritten\n")
+		// CLEARED, not merely unused. The document still carries the `rev` it was
+		// read at, and postDocument puts whatever base it is handed on the wire —
+		// so leaving it set here would make --force a compare-and-set write that
+		// announced itself as an unconditional one.
+		base = ""
 	case base == "":
 		return fmt.Errorf("%w: this document has no `rev` (and no `updatedAt`), so the write would overwrite anything since you read it — re-read .aboard/aboard.json (or GET /aboard.json), edit THAT document so it keeps its `rev`, or pass --force to write unconditionally", ErrNoBase)
-	default:
-		doc["__base"] = base
 	}
 
 	// Then the warnings, the version one before the rest: it is the only failure
 	// here that blanks the WHOLE board rather than one field, so it is the one
 	// worth reading first if a caller reads only the first line.
 	//
-	// Both are warnings, both print here rather than server-side, and that is
-	// deliberate: a CLI warning can only reach the actor who runs the CLI. That is
-	// the right audience for these two, because both are mistakes only an agent
-	// can make — the browser sends the version it loaded and writes state through
-	// the renderers themselves.
+	// Printed HERE as well as recorded server-side, and both halves are needed. A
+	// CLI warning can only reach the actor who runs the CLI, which is the right
+	// audience for these — a stale `version` and undeclared state are mistakes
+	// only an agent can make, since the browser sends the version it loaded and
+	// writes state through the renderers themselves. But an agent that pipes
+	// stderr to /dev/null used to be the end of it, so the server now puts the
+	// same strings on the journal entry and in front of the human (journal.go).
+	// This is the copy that reaches the one actor still holding the context to fix
+	// it, and it is the only copy that can stop the write.
+	//
+	// The one check no document can perform comes after it: does this write set
+	// state the renderer never reads? Without it, state.foo is stored, ignored,
+	// and reported to the human as done. Warnings and not refusals — a spec can
+	// lag its renderer, and refusing writes over stale documentation would be
+	// worse than documenting late. Descends into ui trees and stack blocks
+	// (caps.go).
+	warnings := []string{}
 	if warning := wrongVersion(body); warning != "" {
+		warnings = append(warnings, warning)
+	}
+	warnings = append(warnings, writeWarnings(assets, body)...)
+	for _, warning := range warnings {
 		fmt.Fprintf(errOut, "warning: %s\n", warning)
 	}
 
-	// The one check no document can perform: does this write set state the
-	// renderer never reads? Without it, state.foo is stored, ignored, and
-	// reported to the human as done. A warning and not a refusal — a spec can lag
-	// its renderer, and refusing writes over stale documentation would be worse
-	// than documenting late. Descends into ui trees and stack blocks (caps.go).
-	for _, warning := range writeWarnings(assets, body) {
-		fmt.Fprintf(errOut, "warning: %s\n", warning)
+	// --strict is the guard for a loop that must stop rather than ship a wrong
+	// tab, and it is opt-in per call: it does not move the default, it declines
+	// it. Refused BEFORE the board is contacted, so "nothing was written" needs no
+	// qualification.
+	if options.Strict && len(warnings) > 0 {
+		return fmt.Errorf("%w: %d warning(s), nothing written", ErrWarnings, len(warnings))
+	}
+	// --check stops here, having contacted nothing. The failure mode the flag is
+	// designed against is a session that never runs it, so it says what it did
+	// even when it found nothing — a command that prints nothing on success is a
+	// command people stop believing they ran.
+	if options.Check {
+		if len(warnings) == 0 {
+			fmt.Fprintf(out, "checked: no warnings — nothing was written (drop --check to apply)\n")
+			return nil
+		}
+		fmt.Fprintf(out, "checked: %d warning(s) — nothing was written\n", len(warnings))
+		return nil
 	}
 
 	inst, err := RunningInstance(root, name)
 	if err != nil {
 		return err
 	}
-	doc["__origin"] = "apply"
-	doc["__by"] = by
+	// The label rides beside __by and __base, and it is handed to postDocument
+	// rather than written onto the document here: the merged retry below posts a
+	// document rebuilt from the board's own, so a key set on ours would not
+	// survive it — and the merged write is the SAME write, so it keeps the same
+	// reason on the record.
+	label := strings.TrimSpace(options.Label)
 
-	payload, err := json.Marshal(doc)
+	code, got, err := postDocument(ctx, inst.URL, doc, base, by, label)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, inst.URL+"/aboard.json", bytes.NewReader(payload))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("posting to %s: %w", inst.URL, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	got, _ := io.ReadAll(io.LimitReader(resp.Body, replyReadLimit))
 
-	switch resp.StatusCode {
+	switch code {
 	case http.StatusOK:
 		fmt.Fprintf(out, "applied to %s as %q\n", inst.URL, by)
 		return nil
 	case http.StatusConflict:
-		return fmt.Errorf("refused: the board changed since you read it (%s) — re-read the board document, redo the edit, apply again", strings.TrimSpace(string(got)))
+		// Not the end of the write any more. See merge.go: somebody else landed
+		// between our read and our write, and unless they touched a tab WE touched
+		// that is a document we can rebuild rather than a document to throw away.
+		return retryMerged(ctx, inst, doc, base, by, label, got, out, errOut)
 	case http.StatusForbidden:
-		return fmt.Errorf("refused by the board (%s) — this is the origin/host guard; a client on loopback with no Origin header is what it expects", strings.TrimSpace(string(got)))
+		return fmt.Errorf("refused by the board (%s) — this is the origin/host guard; a client on loopback with no Origin header is what it expects", strings.TrimSpace(got))
 	default:
-		return fmt.Errorf("board returned %d: %s", resp.StatusCode, strings.TrimSpace(string(got)))
+		return fmt.Errorf("board returned %d: %s", code, strings.TrimSpace(got))
 	}
+}
+
+// conflictRefusal is the sentence a 409 got before merging existed, and still
+// gets when merging cannot help. One function so the two paths cannot drift into
+// two different accounts of the same refusal.
+func conflictRefusal(body string) error {
+	return fmt.Errorf("refused: the board changed since you read it (%s) — re-read the board document, redo the edit, apply again",
+		strings.TrimSpace(body))
+}
+
+// retryMerged is the 409 branch: rebuild the write against the document as it is
+// now, and post it ONCE more.
+//
+// Once, and the bound is deliberate. A board being written to continuously would
+// otherwise have `apply` retrying against a moving target for as long as the
+// writes kept coming, and an agent's command that never returns is worse than one
+// that returns a refusal it can act on.
+func retryMerged(ctx context.Context, inst Instance, ours map[string]any, base, by, label, firstBody string,
+	out, errOut io.Writer,
+) error {
+	// The control keys are ours, not the document's: they were added for the post
+	// that just failed, and the merge compares root fields.
+	delete(ours, "__base")
+	delete(ours, "__origin")
+	delete(ours, "__by")
+	delete(ours, "__label")
+
+	merged, err := mergeOnConflict(ctx, inst, ours, base)
+	if err != nil {
+		if errors.Is(err, ErrCollision) {
+			// The cases that are never merged silently, exactly as the browser
+			// refuses to merge one: picking a winner is not a decision a retry
+			// gets to make, and neither is deciding that a tab whose provenance
+			// the journal cannot settle was probably nobody's.
+			return err
+		}
+		// Anything else — a timestamp base, a journal that no longer covers the
+		// window — is reported as the plain conflict it always was, with the reason
+		// on stderr so the agent knows why the merge did not even run.
+		fmt.Fprintf(errOut, "warning: could not merge this conflict: %v\n", err)
+		return conflictRefusal(firstBody)
+	}
+
+	code, got, err := postDocument(ctx, inst.URL, merged.doc, merged.base, by, label)
+	if err != nil {
+		return err
+	}
+	if code != http.StatusOK {
+		if code == http.StatusConflict {
+			return fmt.Errorf("refused twice: the board changed again while the merge was being built (%s) — re-read the board document, redo the edit, apply again",
+				strings.TrimSpace(got))
+		}
+		return fmt.Errorf("board returned %d on the merged write: %s", code, strings.TrimSpace(got))
+	}
+	fmt.Fprintf(errOut, "note: the board moved while you were writing; merged onto rev %s, keeping the board's version of %s\n",
+		merged.base, joinOr(merged.kept, "no tab"))
+	fmt.Fprintf(out, "applied to %s as %q (merged)\n", inst.URL, by)
+	return nil
+}
+
+// postDocument sends one document and reports what the board said.
+//
+// `base` is passed in rather than re-derived from the document, and that is not
+// tidiness: --force deliberately sends NO base while the document it sends still
+// carries a `rev`, so a postDocument that read the field would have quietly
+// turned every forced write back into a compare-and-set one.
+//
+// `doc` is mutated with the control keys, which is what every caller wants: they
+// are part of the write, not part of the document — and `label` is one of them,
+// so the merged retry carries the same reason as the write it is redoing.
+func postDocument(ctx context.Context, url string, doc map[string]any, base, by, label string) (status int, body string, err error) {
+	if base != "" {
+		doc["__base"] = base
+	}
+	doc["__origin"] = "apply"
+	doc["__by"] = by
+	// Stripped by the server before the document is stored, exactly like the two
+	// above, and recorded on the journal entry instead. Sent only when there is
+	// one: an empty label on every entry is a column of nothing.
+	if label != "" {
+		doc["__label"] = label
+	}
+
+	payload, marshalErr := json.Marshal(doc)
+	if marshalErr != nil {
+		return 0, "", marshalErr
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url+"/aboard.json", bytes.NewReader(payload))
+	if err != nil {
+		return 0, "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("posting to %s: %w", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	got, _ := io.ReadAll(io.LimitReader(resp.Body, replyReadLimit))
+	return resp.StatusCode, string(got), nil
 }
 
 // applyBase reads the compare-and-set base out of the document being submitted.

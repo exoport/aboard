@@ -47,8 +47,13 @@ func applyTarget(t *testing.T) (Root, *submitted) {
 
 func runApply(t *testing.T, root Root, force bool, doc string) (out, errOut string, err error) {
 	t.Helper()
+	return runApplyWith(t, root, ApplyOptions{By: "agent-1", Force: force}, doc)
+}
+
+func runApplyWith(t *testing.T, root Root, options ApplyOptions, doc string) (out, errOut string, err error) {
+	t.Helper()
 	var stdout, stderr bytes.Buffer
-	err = Apply(t.Context(), root, "", "agent-1", force, web.FS,
+	err = Apply(t.Context(), root, "", options, web.FS,
 		strings.NewReader(doc), &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
 }

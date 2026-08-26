@@ -2,6 +2,86 @@
 
 ## Unreleased
 
+- **feat: a write warning reaches the person who can see it.** `POST /aboard.json`
+  runs the write-time checks over the tabs the write TOUCHED — never the whole
+  board — and the strings land on that journal entry, in the POST reply, on the
+  SSE change frame, in the tab's own notice banner, and on the trace tab beside
+  the write that caused them. Until now a warning could only ever reach the actor
+  who ran the CLI, so an `apply` whose stderr nobody read produced an empty box
+  that only the human ever found — which is backwards, since the agent is the one
+  still holding the context to fix it. Scoped deliberately: a whole-document scan
+  would re-report every pre-existing mistake as though this write had made it, and
+  a warning that always fires is one people learn to skip. No warning is ever
+  written into a tab's `state`. The reply and the frame also name the tabs the
+  checks RAN over (`checked`), which is what lets a banner come back DOWN: a clean
+  tab is absent from `warnings`, indistinguishable from a tab the write never
+  looked at, so without it the human would keep a warning about a tree the agent
+  had already repaired.
+- **feat: `aboard apply --check` and `--strict`.** `--check` runs those same checks
+  and stops — nothing posted, no board need be running, and no `rev` required,
+  because it is a question about content and not about concurrency. `--strict`
+  turns any warning into a refusal (exit 1, nothing written), for a loop that must
+  stop rather than ship a wrong tab. Warning-not-refusing stays the default; a
+  spec can lag its renderer.
+- **feat: `aboard apply --label "…"` records WHY a write happened.** Stripped off
+  the payload beside `__by` and `__base`, stored on the journal entry and never in
+  the board document, and printed by `aboard journal`, `aboard watch` and the trace
+  tab. A journal answered who and what and never why, so "the write that broke the
+  gallery" could not be found without reading every payload. It is navigation
+  inside a local, rotating file — never a record to cite anywhere permanent.
+- **feat: `aboard history <tab>`, and the change banner links to what a tab said
+  before.** The journal has always recorded the state each changed tab held before a
+  write; it was reachable only by parsing `journal.jsonl` by hand. `GET /history?tab=`
+  and the new subcommand read it out, newest first, naming who replaced each version and
+  saying plainly where the record ends — rotation keeps one generation. `--at N` prints a
+  WHOLE document `apply` accepts, with one tab's state replaced: a single-tab document
+  would be a document that deletes every other tab.
+- **feat: `apply` merges a `409` instead of discarding the write.** Compare-and-set is
+  whole-document, so any concurrent write conflicts with any other — the human dismissing
+  a notice used to throw away an agent's whole document. It now re-reads, asks the journal
+  which tabs moved since its base, re-applies its own tabs where the server did not touch
+  them, and retries once. A genuine same-tab collision is named and stops, exactly as the
+  browser refuses to merge one silently. Journal entries carry `rev` so "since when" has an
+  answer that is not a millisecond clock. It also stops, rather than guessing, when the
+  journal cannot say who moved a tab: it records a tab's state before a write but not its
+  name, note or type, so a tab renamed on the board while you wrote to a different one is
+  named and refused — and said in those words, because "both sides changed the same tab"
+  would be a sentence about an edit the caller never made.
+- **feat: mount receipts — `aboard rendered <tab>`.** After every mount, and debounced
+  after a press, the browser posts the declared control ids it drew, any undeclared one,
+  and any unknown-component marker to `POST /rendered` → `.aboard/run/rendered.json`
+  (a sidecar, never the board document). `aboard wait --for "rendered <id>"` blocks until a
+  browser mounts a tab. The command prints its own two limits: no receipt means nobody had
+  the tab open, and a recorded press means the control was reached, never that it behaved.
+- **feat: `aboard uploads` accounts for `.aboard/uploads/`** — every file with its size and
+  the tabs whose raw state, name or note mention it. `--prune` prints what it would remove
+  and refuses without `--yes`. `GET /uploads` is now declared in the manifest.
+- **feat: an `html` tab's frame is painted from `app.css`'s own `:root`.** It carried a
+  hand-copied palette, and the copy had already lost `--accent-dim`, `--drop` and all three
+  `--status-*` tokens — a widget naming one got no colour and no warning. The frame now
+  parses the stylesheet it is served beside (embedded, or on disk under `--dev`) and injects
+  the whole set, failing CLOSED to the old literal so a widget is never left with no ground
+  and no ink.
+- **feat: a ```` ```mermaid ```` fence in markdown renders as a diagram** — in a `notes` tab
+  and in a stack's notes block, through `diagram.js`'s own loader and theme config (exported
+  and shared, never copied). A write-up with one figure in it needed two tabs before, and the
+  figure could not travel with the prose being promoted. A fence that will not parse shows its
+  source verbatim rather than an empty box.
+- **fix: a context menu no longer closes itself the moment it opens.** It armed its
+  close-on-scroll listener synchronously, and a scroll event is dispatched at the next
+  rendering opportunity rather than when the scrolling happened — so a scroll already in
+  flight when the right-click landed arrived just after the menu had opened and shut it,
+  with no JavaScript of ours in the stack to blame. On screen it read as a menu that
+  flickers; in the suite it read as a right-click test that failed only in some orders, on
+  a board with enough tabs for the page to scroll at all. The listener is armed a frame
+  late, and the menu's first item is focused with `preventScroll` — it is `fixed` and was
+  just placed inside the viewport, so nothing should ever scroll to reach it.
+- **feat: `aboard export` renders a `ui` tree** as an indented outline, resolving every
+  `{bind}` against `state.data`. `ui` is the type `CLAUDE.md` tells agents to prefer and it
+  was the one type export could not read. Which prop carries a node's text is declared in
+  `views/ui.spec.json` (`text`, `layout`), so `aboard capabilities ui` answers it too. A `ui`
+  table exports as bullets: a markdown table two bullet levels deep is not a table to most
+  renderers.
 - **fix: the compare-and-set token is a revision, not a clock** — the document
   carries a server-stamped `rev`, and `__base` compares against it. `updatedAt`
   was the base and two writes inside one millisecond shared it, so a stale write

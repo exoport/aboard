@@ -141,7 +141,10 @@ func Commands() []Command {
 			Doc:  "read a board document on stdin and write it through the running board (compare-and-set)",
 			Flags: []Flag{
 				{Name: "by", Type: "string", Def: "agent-1", Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
+				{Name: "check", Type: "bool", Def: "false", Doc: "run the write warnings and stop: nothing is posted, and no board need be running"},
 				{Name: "force", Type: "bool", Def: "false", Doc: "write without compare-and-set, overwriting anything since you read the document"},
+				{Name: "label", Type: "string", Doc: "why this write is happening; recorded on the journal entry, not in the board"},
+				{Name: "strict", Type: "bool", Def: "false", Doc: "refuse the write if anything warns (exit 1, nothing written)"},
 			},
 			Exits: commonExits(),
 		},
@@ -150,7 +153,7 @@ func Commands() []Command {
 			Doc:  "block until the board is poked or until a predicate matches",
 			Flags: []Flag{
 				{Name: "by", Type: "string", Def: "agent-1", Doc: "who is waiting; shown on the human's notify button"},
-				{Name: "for", Type: "string", Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>"`},
+				{Name: "for", Type: "string", Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>"`},
 				{Name: "note", Type: "string", Doc: "why you are waiting; shown on the button beside your name"},
 				{Name: "timeout", Type: "duration", Def: "10m0s", Doc: "how long to block before giving up"},
 			},
@@ -175,6 +178,17 @@ func Commands() []Command {
 			Exits: commonExits(),
 		},
 		{
+			Name: "history",
+			Args: "<tab>",
+			Doc:  "list what a tab said before, from the journal; --at N prints a document `apply` accepts",
+			Flags: []Flag{
+				{Name: "at", Type: "int", Def: "0", Doc: "print the document that restores version N instead of listing (1 is the most recent)"},
+				{Name: "limit", Type: "int", Def: "20", Doc: "how many versions to list"},
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+			},
+			Exits: commonExits(),
+		},
+		{
 			Name:  "watch",
 			Doc:   "follow every change as JSON lines until interrupted",
 			Exits: commonExits(),
@@ -183,6 +197,25 @@ func Commands() []Command {
 			Name:  "log",
 			Args:  "<tab>",
 			Doc:   "read stdin and append it to a tab's sidecar log, line by line",
+			Exits: commonExits(),
+		},
+		{
+			Name: "rendered",
+			Args: "[tab]",
+			Doc:  "print what the browser reported it drew: control ids, presses, and unknown-component markers",
+			Flags: []Flag{
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+			},
+			Exits: commonExits(),
+		},
+		{
+			Name: "uploads",
+			Doc:  "list the files under .aboard/uploads/ with their size and the tabs that mention them",
+			Flags: []Flag{
+				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: "prune", Type: "bool", Def: "false", Doc: "show which unreferenced files would be deleted"},
+				{Name: "yes", Type: "bool", Def: "false", Doc: "with --prune, actually delete them"},
+			},
 			Exits: commonExits(),
 		},
 		{

@@ -120,3 +120,130 @@ func tinyPNG() []byte {
 	out = append(out, chunk("IDAT", idat.Bytes())...)
 	return append(out, chunk("IEND", nil)...)
 }
+
+/* ---------- accounting and prune ---------- */
+
+const uploadBoard = `{
+  "version": 3,
+  "rev": 1,
+  "nextId": 9,
+  "tabs": [
+    {"id": "bb1", "name": "Screen", "type": "markup",
+     "state": {"images": [{"src": "uploads/kept.png"}]}},
+    {"id": "bb2", "name": "Widget", "type": "html",
+     "state": {"html": "<img src=\"uploads/in-a-widget.png\">"}}
+  ]
+}`
+
+func seedUploads(t *testing.T, root Root, names ...string) {
+	t.Helper()
+	if err := os.MkdirAll(root.UploadsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		if err := os.WriteFile(root.UploadFile(name), []byte("not really a png"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func uploadBoardRoot(t *testing.T) Root {
+	t.Helper()
+	root := Root(t.TempDir())
+	if err := os.MkdirAll(root.Dir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.StateFile(""), []byte(uploadBoard), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// The reference scan reads each tab's RAW state text and not its declared
+// fields, and that is the whole correctness of it: an html widget's markup can
+// name a file no spec knows about, and a scan over declared fields would call
+// that image an orphan and offer to delete something the human is looking at.
+func TestUploadsFindsAFileNamedOnlyInAWidgetsMarkup(t *testing.T) {
+	root := uploadBoardRoot(t)
+	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
+
+	rep, err := Uploads(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]UploadRow{}
+	for _, f := range rep.Files {
+		byName[f.Name] = f
+	}
+	if got := byName["in-a-widget.png"].Tabs; len(got) != 1 || got[0] != "bb2" {
+		t.Errorf("a file named only inside an html widget must be found: %v", got)
+	}
+	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "bb1" {
+		t.Errorf("kept.png: %v", got)
+	}
+	if byName["orphan.png"].Referenced() {
+		t.Errorf("orphan.png is mentioned nowhere: %+v", byName["orphan.png"])
+	}
+	if rep.Orphaned != 1 {
+		t.Errorf("orphaned = %d, want 1", rep.Orphaned)
+	}
+}
+
+// Deletion is irreversible and `.aboard/` is gitignored, so there is no copy
+// anywhere to go back to: pruning removes the unreferenced files and NOTHING
+// else, whatever else is in the directory.
+func TestPruneRemovesOnlyTheUnreferencedFiles(t *testing.T) {
+	root := uploadBoardRoot(t)
+	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
+
+	rep, err := Uploads(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := PruneUploads(root, rep.Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != "orphan.png" {
+		t.Fatalf("removed %v, want just orphan.png", removed)
+	}
+	for _, keep := range []string{"kept.png", "in-a-widget.png"} {
+		if _, err := os.Stat(root.UploadFile(keep)); err != nil {
+			t.Errorf("%s was deleted and is referenced: %v", keep, err)
+		}
+	}
+	if _, err := os.Stat(root.UploadFile("orphan.png")); !os.IsNotExist(err) {
+		t.Errorf("orphan.png survived the prune: %v", err)
+	}
+}
+
+// A board with no uploads directory at all is an empty list, not a failure: an
+// image has simply never been pasted into it.
+func TestUploadsOnABoardThatHasNeverHadOne(t *testing.T) {
+	root := uploadBoardRoot(t)
+	rep, err := Uploads(root, "")
+	if err != nil {
+		t.Fatalf("a board with no uploads directory must not be an error: %v", err)
+	}
+	if len(rep.Files) != 0 || rep.Orphaned != 0 {
+		t.Errorf("unexpected report: %+v", rep)
+	}
+}
+
+// The listing has to say on what evidence it calls a file unreferenced, because
+// the next thing the reader does is delete things.
+func TestTheUploadsListingSaysHowItDecided(t *testing.T) {
+	root := uploadBoardRoot(t)
+	seedUploads(t, root, "orphan.png")
+	rep, err := Uploads(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := rep.Human(false)
+	if !strings.Contains(got, "text search") {
+		t.Errorf("the listing must say the scan is textual:\n%s", got)
+	}
+	if !strings.Contains(got, "* 1 unreferenced") {
+		t.Errorf("the totals must count the orphans:\n%s", got)
+	}
+}

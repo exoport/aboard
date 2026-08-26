@@ -182,13 +182,21 @@ func (h *waitHub) snapshot() ([]waiter, *pokeEvent) {
 //	tab bb71            that tab changed
 //	answer bb15         that tab changed AND a human made the change
 //	node bb58=done      that node reached that status
+//	rendered bb133      a browser MOUNTED that tab and posted a receipt
 //
 // An unknown form is refused at request time rather than accepted and never
 // fired: the caller learns immediately instead of after the timeout. That is the
 // whole reason not to grow this into an expression language — every form here can
 // fail loudly, and a grammar cannot.
+//
+// `rendered` is the one form that is NOT about a write. Every other predicate is
+// evaluated against an accepted change to the document; a mount changes nothing
+// at all, so it is released from the receipt endpoint instead (see releaseRendered).
+// Worth stating rather than discovering: an agent waiting on `rendered` is
+// waiting for a HUMAN to have the tab open, and nothing on the board can cause
+// that — the same honesty the notify button has about a board nobody is watching.
 type predicate struct {
-	kind  string // "poke" | "change" | "tab" | "answer" | "node"
+	kind  string // "poke" | "change" | "tab" | "answer" | "node" | "rendered"
 	id    string
 	value string
 }
@@ -204,7 +212,7 @@ func parsePredicate(raw string) (predicate, error) {
 			return predicate{}, fmt.Errorf("%q takes no argument", fields[0])
 		}
 		return predicate{kind: fields[0]}, nil
-	case "tab", "answer":
+	case "tab", "answer", predRendered:
 		if len(fields) != 2 {
 			return predicate{}, fmt.Errorf("%s needs one id, e.g. %q", fields[0], fields[0]+" bb71")
 		}
@@ -216,7 +224,7 @@ func parsePredicate(raw string) (predicate, error) {
 		parts := strings.SplitN(fields[1], "=", 2)
 		return predicate{kind: "node", id: parts[0], value: parts[1]}, nil
 	default:
-		return predicate{}, fmt.Errorf("unknown predicate %q — try poke, change, tab <id>, answer <id>, node <id>=<status>", fields[0])
+		return predicate{}, fmt.Errorf("unknown predicate %q — try poke, change, tab <id>, answer <id>, node <id>=<status>, rendered <id>", fields[0])
 	}
 }
 
@@ -224,8 +232,10 @@ func parsePredicate(raw string) (predicate, error) {
 // the document as written, `entry` the summary of what changed in it.
 func (p predicate) matches(doc []byte, entry JournalEntry) bool {
 	switch p.kind {
-	case eventPoke:
-		return false // only an explicit poke releases those
+	case eventPoke, predRendered:
+		// Neither is a write. A poke is released by the button; a mount receipt is
+		// released by the browser posting one (releaseRendered).
+		return false
 	case "change":
 		return len(entry.Tabs) > 0
 	case "tab":
@@ -277,6 +287,44 @@ func nodeHasStatus(doc []byte, id, status string) bool {
 	}
 	walk(root)
 	return found
+}
+
+// predRendered is the predicate kind, the event name a released waiter prints,
+// and the word in the CLI flag's help — one constant so those cannot drift, the
+// same reason eventPoke is one.
+const predRendered = "rendered"
+
+// releaseRendered wakes every session waiting for a particular tab to be drawn.
+//
+// Separate from releaseMatching because the trigger is separate: a receipt is
+// not an accepted write, has no journal entry and changed nothing about the
+// document, so there is no `doc` and no `entry` to match against.
+func (h *waitHub) releaseRendered(tab string) int {
+	ev := pokeEvent{
+		Event: predRendered,
+		At:    time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+		By:    "browser",
+		Note:  tab,
+	}
+	h.mu.Lock()
+	targets := make([]*waiter, 0, len(h.active))
+	for id, w := range h.active {
+		if w.pred.kind == predRendered && w.pred.id == tab {
+			targets = append(targets, w)
+			delete(h.active, id)
+		}
+	}
+	h.mu.Unlock()
+
+	released := 0
+	for _, w := range targets {
+		select {
+		case w.ch <- ev:
+			released++
+		default:
+		}
+	}
+	return released
 }
 
 // releaseMatching wakes every session whose predicate this write satisfies.

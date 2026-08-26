@@ -96,6 +96,82 @@ func TestRightClickingATableRow(t *testing.T) {
 	}
 }
 
+// Two halves of one rule, and they are tested together because a fix for either
+// one alone is a regression in the other: a context menu is closed by a scroll
+// that happens AFTER it opened, and is NOT closed by one that was already in
+// flight when it opened.
+//
+// The second half is what a right-click on a partly visible row does — the
+// browser brings the row into view, the scroll EVENT is dispatched at the next
+// rendering opportunity, and by then the menu is already open. It closed itself,
+// with no JavaScript of ours in the stack; on screen it read as a menu that
+// flickers, and in the suite as a right-click test that failed only in some
+// orders, on a board with enough tabs for the strip to wrap and the page to
+// scroll at all.
+func TestAContextMenuOutlivesTheScrollThatOpenedItAndClosesOnTheNextOne(t *testing.T) {
+	s := open(t, "tab=bb111")
+
+	// A short window, so the page is taller than the viewport and can scroll at
+	// all. This is not a contrivance: it is the same condition a docked board or a
+	// wrapped tab strip produces, and a page that cannot scroll cannot exhibit
+	// either half of the rule.
+	if err := s.page.SetViewportSize(900, 420); err != nil {
+		t.Fatal(err)
+	}
+
+	if scrollable, err := s.page.Evaluate(`() => document.documentElement.scrollHeight > innerHeight`); err != nil {
+		t.Fatal(err)
+	} else if scrollable != true {
+		t.Fatal("the page does not scroll, so this test asserts nothing")
+	}
+
+	// Scroll and right-click in ONE task, which is the hazard exactly: the scroll
+	// EVENT for that scroll is not dispatched until the next rendering
+	// opportunity, so it arrives after the handler has already opened the menu.
+	// Driving it from the page rather than from the driver is deliberate — the
+	// driver scrolls, then waits for the element to be stable, which drains the
+	// event before it clicks and hides the very race being pinned. The
+	// `contextmenu` event is a real one on the real row; only its timing is ours.
+	if _, err := s.page.Evaluate(`() => {
+		const row = document.querySelector('[data-tab="bb111"][data-active="yes"] tr[data-id="bb189"]');
+		if (!row) throw new Error('no row to right-click');
+		window.scrollTo(0, document.documentElement.scrollHeight);
+		const at = row.getBoundingClientRect();
+		row.dispatchEvent(new MouseEvent('contextmenu', {
+			bubbles: true, cancelable: true, button: 2,
+			clientX: at.left + 8, clientY: at.top + 8,
+		}));
+	}`); err != nil {
+		t.Fatal(err)
+	}
+	menu := s.page.Locator(".ctx-menu")
+	if err := expect.Locator(menu).ToContainText("bb189"); err != nil {
+		t.Fatalf("the menu did not survive the scroll that was already in flight when it opened: %v", err)
+	}
+	// Still there after a frame has actually passed — an assertion that looked
+	// once would pass against a menu that is about to close itself.
+	if _, err := s.page.Evaluate(`() => new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go)))`); err != nil {
+		t.Fatal(err)
+	}
+	if err := expect.Locator(menu).ToBeVisible(); err != nil {
+		t.Fatalf("the menu closed itself a frame after opening: %v", err)
+	}
+
+	// The behaviour the delay must not have removed. A menu is anchored to a point
+	// in the viewport, so a page that scrolls under it leaves it pointing at
+	// nothing.
+	moved, err := s.page.Evaluate(`() => { const was = window.scrollY; window.scrollTo(0, was > 100 ? 0 : document.documentElement.scrollHeight); return window.scrollY !== was; }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved != true {
+		t.Fatal("the page did not actually scroll, so this half asserts nothing")
+	}
+	if err := expect.Locator(menu).ToBeHidden(); err != nil {
+		t.Errorf("scrolling the page must close the menu: %v", err)
+	}
+}
+
 // The delete-row button — the control that shipped documented nowhere while the
 // skill advertised the feature, which is the incident the whole declared-controls
 // series exists to prevent.

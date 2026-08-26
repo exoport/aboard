@@ -20,6 +20,7 @@ opinion about it.
       instance.json        port, pid, url, state file — the discovery record
       instance.<name>.json the same, for a named board
       journal.jsonl        the append-only log of accepted writes (+ .1 rotation)
+      rendered.json        mount receipts: what a browser reported it drew, per tab
       logs/<tab>.log       sidecar output for a `log` tab
       shots/               screenshots from test/shot.sh
 ```
@@ -27,7 +28,9 @@ opinion about it.
 The split is between **content** and **machine-local runtime**. `aboard.json`,
 `uploads/` and `recipes/` are content: a `markup` tab references an upload by name and
 would break without it. Everything under `run/` is true only for this machine and this
-moment.
+moment — including `rendered.json`, which is per-VIEWER as well: it says what a browser
+drew, which is the same class of fact as selection, zoom and a chat draft, and is
+therefore exactly as unwelcome in the board document.
 
 `run/` is nested inside `.aboard/` rather than sitting beside it so that a project
 ignores **one** path and loses nothing it wanted to keep:

@@ -45,6 +45,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 )
 
 // The control declarations are emitted as a module the renderers import
@@ -73,6 +74,20 @@ type componentSpec struct {
 	// props whose element shape is fixed: kv pairs, checklist items, tabs panels,
 	// table columns. Keyed by the prop name.
 	ItemProps map[string][]string `json:"itemProps,omitempty"`
+	// Text names the props carrying this component's DISPLAY text, in reading
+	// order. `a|b` is "the first of these that is set", mirroring the renderer's
+	// own `value ?? text`; `=p` is "the value in state.data at the path the prop
+	// `p` names", which is how a `field`'s answer is reached.
+	//
+	// Declared rather than tabled in Go because it is a fact about the catalog,
+	// and the catalog is declared. `aboard export` is its consumer: checkUITree
+	// validates prop NAMES and has no opinion about which prop is the text, so
+	// without this the outline would need a second, unchecked copy of the
+	// component list living in export.go.
+	Text []string `json:"text,omitempty"`
+	// Layout marks a component that draws no content of its own — a box its
+	// children sit in. It gets no line in an exported outline.
+	Layout bool `json:"layout,omitempty"`
 }
 
 // controlSpec is one thing the human can press, declared beside the renderer
@@ -174,7 +189,7 @@ const SchemaVersion = 3
 // every path listed answers.
 var declaredRoutes = []routeSpec{
 	{"GET", "/aboard.json", "current state"},
-	{"POST", "/aboard.json", "write, compare-and-set (__base is the document's rev; __origin, __by). same-origin only"},
+	{"POST", "/aboard.json", "write, compare-and-set (__base is the document's rev; __origin, __by, __label). same-origin only"},
 	{"GET", "/events", "SSE: state changes, waiter count, and the UI signature"},
 	{"GET", "/health", "who owns this port, and which binary is serving"},
 	{"GET", "/capabilities", "this manifest"},
@@ -183,10 +198,13 @@ var declaredRoutes = []routeSpec{
 	{"POST", "/poke", "release every waiting session"},
 	{"GET", "/waiters", "who is waiting right now"},
 	{"GET", "/journal", "recent accepted writes, with the previous state of each changed tab"},
+	{"GET", "/history", "one tab's recorded prior states, newest first (?tab=<id>&limit=N)"},
 	{"GET", "/watch", "those writes as JSON lines, as they happen"},
+	{"POST", "/rendered", "a mount receipt from the browser: control ids drawn, pressed, and any unknown-component markers"},
 	{"POST", "/log", "append output to a tab's sidecar log"},
 	{"GET", "/log", "the tail of one"},
 	{"POST", "/upload", "an image pasted or dropped by the human"},
+	{"GET", "/uploads", "list them: url, bytes and mtime"},
 	{"GET", "/uploads/<file>", "serve one, from disk"},
 }
 
@@ -638,13 +656,9 @@ func wrongVersion(raw []byte) string {
 // state — got no checking at all. Both of the mistakes that prompted this were in
 // a ui tree, and both applied cleanly with nothing on stderr.
 func writeWarnings(assets fs.FS, raw []byte) []string {
-	specs, err := loadSpecs(assets)
+	byType, err := specsByType(assets)
 	if err != nil {
 		return nil
-	}
-	byType := map[string]typeSpec{}
-	for i := range specs {
-		byType[specs[i].Type] = specs[i]
 	}
 
 	var doc struct {
@@ -660,7 +674,71 @@ func writeWarnings(assets fs.FS, raw []byte) []string {
 
 	out := []string{}
 	for _, tab := range doc.Tabs {
+		warningScans.Add(1)
 		out = append(out, checkTabState(byType, tab.ID, tab.Type, tab.State, 0)...)
+	}
+	return out
+}
+
+// specsByType is loadSpecs keyed by type, which is the only form either checker
+// wants.
+func specsByType(assets fs.FS) (map[string]typeSpec, error) {
+	specs, err := loadSpecs(assets)
+	if err != nil {
+		return nil, err
+	}
+	byType := make(map[string]typeSpec, len(specs))
+	for i := range specs {
+		byType[specs[i].Type] = specs[i]
+	}
+	return byType, nil
+}
+
+// warningScans counts the TABS whose state the warning checker looked inside.
+//
+// A counter in production code for the same reason document.go has three: the
+// claim being made is about the real write path, and the claim here is the one
+// this feature could most easily get wrong. `writeWarnings` walks a whole
+// document, which is right for `apply` — the caller submitted the whole thing —
+// and wrong on the server, where the write is one edit and the board may be
+// thousands of tabs. Worse than the cost: the example board ships a deliberately
+// invalid `sparkline` in its gallery, so a whole-document scan would attach that
+// warning to EVERY write, on every tab, for ever. A warning that fires
+// unconditionally is not a warning, and no suppression mechanism may be added for
+// that node (it is a demonstration). Scoping is what keeps it honest, and this
+// counter is what proves the scoping.
+var warningScans atomic.Int64
+
+// changedTabWarnings runs the same checks over only the tabs a write actually
+// touched, keyed by tab id so the browser can put each warning on the tab it is
+// about.
+//
+// The key is the TAB, but the message keeps its own `where` prefix — which for a
+// stack block is "bb32/bb37". One wording, in the journal, on stderr and in the
+// banner: a warning a reader has seen in a terminal must be recognisable on a
+// screen.
+func changedTabWarnings(byType map[string]typeSpec, tabs []docTab) map[string][]string {
+	var out map[string][]string
+	for i := range tabs {
+		t := &tabs[i]
+		if !t.changed || len(t.State) == 0 {
+			continue
+		}
+		warningScans.Add(1)
+		var state map[string]any
+		if json.Unmarshal(t.State, &state) != nil {
+			// Not an object. The write itself is legal — state is opaque — and a
+			// renderer that wanted a bag of fields will show its own emptiness.
+			continue
+		}
+		found := checkTabState(byType, t.ID, t.Type, state, 0)
+		if len(found) == 0 {
+			continue
+		}
+		if out == nil {
+			out = map[string][]string{}
+		}
+		out[t.ID] = found
 	}
 	return out
 }
@@ -881,41 +959,54 @@ func childNodes(obj map[string]any) []uiChild {
 // checkBind resolves a {bind:"a.b"} READ against state.data, the way the renderer
 // will. A path that leads nowhere renders as an empty string, which is
 // indistinguishable on screen from a value that is genuinely empty.
-//
-// Only the OBJECT form is a read. `field.bind` and a checklist item's `bind` are
-// plain strings naming where to WRITE, so they are not required to exist yet —
-// which is why this checks for the object and not for the prop name.
 func checkBind(where, at string, value any, data map[string]any) []string {
-	obj, ok := value.(map[string]any)
+	dotted, ok := bindPath(value)
 	if !ok {
 		return nil
 	}
-	bindPath, ok := obj["bind"].(string)
-	if !ok {
-		return nil
-	}
-	// Whether the key was FOUND, never whether its value is non-nil. Those are
-	// different questions and conflating them cost a false positive on the first
-	// real tree this ran against: `demo.n` is an empty number field, initialised to
-	// JSON null on purpose, and a checker that calls correct state a mistake is
-	// worse than no checker — it is the noise that teaches people to skip stderr.
-	var cursor any = data
-	found := true
-	for key := range strings.SplitSeq(bindPath, ".") {
-		step, isMap := cursor.(map[string]any)
-		if !isMap {
-			found = false
-			break
-		}
-		if cursor, found = step[key]; !found {
-			break
-		}
-	}
-	if found {
+	if _, found := lookupBind(dotted, data); found {
 		return nil
 	}
 	return []string{fmt.Sprintf("%s (ui): %s binds to data.%s, which is not in state.data — it will render empty",
-		where, at, bindPath)}
+		where, at, dotted)}
+}
+
+// bindPath returns the path a `{bind:"a.b"}` object names. Only the OBJECT form
+// is a read: `field.bind` and a checklist item's `bind` are plain strings naming
+// where to WRITE, so they are not required to exist yet.
+func bindPath(value any) (string, bool) {
+	obj, ok := value.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	dotted, ok := obj["bind"].(string)
+	return dotted, ok
+}
+
+// lookupBind walks a dotted path into state.data the way views/ui.js does, and
+// reports whether the key was FOUND — never whether its value is non-nil.
+//
+// Those are different questions and conflating them cost a false positive on the
+// first real tree the write checker ran against: `demo.n` is an empty number
+// field, initialised to JSON null on purpose, and a checker that calls correct
+// state a mistake is worse than no checker — it is the noise that teaches people
+// to skip stderr.
+//
+// Shared with export.go, which asks the same question for a different reason: the
+// warning wants "does this resolve", the outline wants "to what".
+func lookupBind(dotted string, data map[string]any) (any, bool) {
+	var cursor any = data
+	found := true
+	for key := range strings.SplitSeq(dotted, ".") {
+		step, isMap := cursor.(map[string]any)
+		if !isMap {
+			return nil, false
+		}
+		if cursor, found = step[key]; !found {
+			return nil, false
+		}
+	}
+	return cursor, found
 }
 
 // checkPalette catches a colour named by a word the renderer does not know.

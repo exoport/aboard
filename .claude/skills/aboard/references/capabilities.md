@@ -64,9 +64,11 @@ cannot act on, caught before anything was contacted — and **3**, which only
 `wait` produces: nobody came.
 
 `--for` takes: `poke` (the human's Notify button), `change` (any write),
-`tab <id>`, `answer <id>` (that tab changed AND a human did it), or
-`node <id>=<status>`. Anything else is refused immediately rather than blocking on
-something that will never fire.
+`tab <id>`, `answer <id>` (that tab changed AND a human did it),
+`node <id>=<status>`, or `rendered <id>` (a browser MOUNTED that tab and posted a
+receipt). Anything else is refused immediately rather than blocking on something
+that will never fire. `rendered` is the one form that is not about a write —
+nothing on the board can cause it, so it is a wait for a HUMAN to open the tab.
 
 `--by human` is refused from the CLI. The human's writes come from the browser;
 an agent claiming to be them would hide its own tracks in the journal, which is
@@ -207,6 +209,11 @@ in order to edit the source.
 
 The human can: edit the source, re-render, copy source, hide the editor.
 
+A diagram does not have to be a whole tab: a ` ```mermaid ` fence inside a
+`notes` block with `markdown: true` renders through this same loader and theme.
+Use a `diagram` TAB when the diagram is the subject and the human should edit its
+source; use a fence when it is a figure inside prose.
+
 Gotcha: in `requirementDiagram`, quote any `text:` containing punctuation.
 
 ### form — typed answers
@@ -287,6 +294,13 @@ true` renders it with a Read/Edit toggle. The human can edit it freely and Copy
 all. If you rewrite it while they are typing, they get a "reload text" affordance
 rather than losing their sentence.
 
+With `markdown: true`, a ` ```mermaid ` fence renders as a diagram — the same
+vendored bundle and the same board-token theme the `diagram` tab uses, so a
+figure can sit inside a write-up instead of needing a tab of its own. A fence
+mermaid cannot parse shows its source verbatim rather than an empty box. Reach
+for a `diagram` TAB when the diagram IS the subject and the human should edit its
+source; reach for a fence when it is a figure inside prose you intend to promote.
+
 ### html — build anything
 
 **Prefer `ui` over `html` whenever `ui` can express it.** Not a style note — three
@@ -321,7 +335,11 @@ over the network**. That containment is deliberate: the server has no auth, so
 anything that could reach it could rewrite the whole board.
 
 It inherits the board palette as CSS custom properties; override freely. Plain
-HTML — no build step, no imports, no framework.
+HTML — no build step, no imports, no framework. The palette is `app.css`'s own
+`:root`, parsed and injected — **every** token the board has, not a subset that
+was accurate once — so `var(--status-doing)` or `var(--accent-dim)` resolves in a
+widget exactly as it does in a renderer. `aboard capabilities` does not list the
+token names; `app.css` is where they are stated, once.
 
 Inside the frame:
 
@@ -449,6 +467,12 @@ problem rather than a mistake — so read the stderr warnings from `aboard apply
 which descend into the tree and name an unknown component, an unknown prop, a
 wrong item shape and a `{bind}` that resolves nowhere.
 
+`aboard export <tab>` prints a `ui` tree as an indented outline, with every
+`{bind}` resolved and every tick and typed answer read out of `state.data` — so
+the type you are told to prefer is promotable without a browser. It is the
+MATERIAL, not a screenshot: an outline cannot see a layout that is legal and
+unreadable, so it is not evidence that the tab renders correctly.
+
 No iframe and no script, so it inherits the board's type, contrast and palette for
 free — the trade is a closed catalog. **`ui` for an ordinary shape, `html` when the
 interaction itself is the point.**
@@ -497,8 +521,9 @@ count cannot lie or go stale.
   the state file and act on what changed.
 - exit **3** — timed out. Nobody came. Say so rather than pretending you waited.
 - `--for` narrows it: `poke`, `change`, `tab <id>`, `answer <id>` (that tab
-  changed AND a human did it), `node <id>=<status>`. An unknown predicate is
-  refused immediately rather than blocking on something that will never fire.
+  changed AND a human did it), `node <id>=<status>`, `rendered <id>` (a browser
+  mounted that tab). An unknown predicate is refused immediately rather than
+  blocking on something that will never fire.
 
 Tell the user you are waiting, and say what you are waiting for — a lit button
 with no explanation is a mystery. `aboard poke` is the same gesture from the
