@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`. Nothing in the list below has started. Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Item 1 done. Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -55,7 +55,7 @@ history now; a board may still be running there on 46624 — never write to it.
 
 ## The order
 
-### 1. Review fixes A — the two races  ☐
+### 1. Review fixes A — the two races  ☑ `63d9efd` (plus `PROJECT=` for the browser suite, the commit before it)
 
 Source: `development/research/review-d6c2f84-20260825.md` (High). Scope: `postState` gets a
 mutex from `ReadFile` through `writeAtomic`; `fanout`/`notifyWatchers` stop sending on channels
