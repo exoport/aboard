@@ -26,7 +26,11 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 ### How-to guides — _recipes for specific problems_
 
 - [How to install aboard](how-to/install.md)
-- [How to run aboard inside VS Code](how-to/run-in-vscode.md)
+- [How to run aboard inside VS Code](how-to/run-in-vscode.md) — docking the board in the built-in Simple Browser, and the blank-widget-tab gotcha
+- [How to use the VS Code extension](how-to/use-the-vscode-extension.md) — the sidebar tree and the panel, how it finds a board, and what is still unproven about it
+- [How to run a second board in one project](how-to/run-a-second-board.md) — `--name`, what gets its own copy, and the four things two boards share
+- [How to put aboard behind a reverse proxy](how-to/serve-under-a-path-prefix.md) — `serve --base-path`, the trailing slash, the `Host` allow-list and the same-origin rule
+- [How to promote a board tab into a document](how-to/promote-a-tab-into-a-document.md) — `aboard export`, what to rewrite rather than paste, and demoting the tab afterwards
 - [How to write a recipe](how-to/write-a-recipe.md)
 - [How to embed aboard in ape](how-to/embed-in-ape.md)
 - [How to verify a release artifact](how-to/verify.md)
@@ -42,6 +46,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 
 ### Explanation — _the why and the what_
 
+- [How aboard runs](explanation/how-aboard-runs.md) — the moving parts in one pass: one binary, the port derived from the path, the instance record, the two ways in, the watcher, the journal as the undo
 - [Why a local, non-authoritative channel](explanation/why-a-local-non-authoritative-channel.md) — what the board is FOR, the three tiers, and how a conclusion gets promoted
 - [Why tabs are data](explanation/why-tabs-are-data.md) — a tab is a name, a type and its own state, and what that buys
 - [Why four guarantees are server-enforced](explanation/why-four-guarantees-are-server-enforced.md) — the things an agent must not be able to do, even by accident

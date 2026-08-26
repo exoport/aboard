@@ -21,6 +21,11 @@ aboard version
 before continuing. Other install paths (release archive, build from source) are in
 [How to install aboard](../how-to/install.md).
 
+> **Before the first release**, that command exits with a 404 from the module proxy:
+> nothing has been tagged yet. Build from a clone of the repository instead —
+> `make install` — and carry on from step 2. [How to install
+> aboard](../how-to/install.md) has the detail.
+
 ## 2. Create a board
 
 Go to a project you actually work in — a scratch directory is fine, but the board is
@@ -59,7 +64,7 @@ aboard serve
 It prints where it is listening and stays in the foreground:
 
 ```
-aboard ->  http://localhost:43211   (embedded UI, v0.1.0)
+aboard  ->  http://localhost:43211   (embedded UI, 0.1.0)
 state  ->  /home/you/work/your-project/.aboard/aboard.json
 project->  /home/you/work/your-project
 In VS Code: Ctrl/Cmd+Shift+P -> "Simple Browser: Show" -> paste the URL above.

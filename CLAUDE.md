@@ -178,6 +178,13 @@ start a second board for the same project and prints the URL of the one already
 running — take that URL rather than freeing the port. The board a colleague or another
 session is watching is not yours to restart.
 
+That refusal is anchored to the PORT, not the project: `serve --port <a free port>` (or
+`PORT=`) starts a second server on the same state file, rewrites `run/instance.json` to
+point at itself, and on exit removes it — leaving `aboard status` reporting no board
+while the original serves on. Measured 2026-08-26. Use `--name` for a second board.
+**And never `pkill -f "aboard serve"`**: it matches every board on the machine, including
+the human's. Kill by the pid in the instance record, as `restart.sh` does.
+
 ## Decisions already made — do not relitigate
 
 - **Tabs are data, not code.** A new renderer is three declarations, and all three are load-bearing — [why](docs/explanation/why-tabs-are-data.md).

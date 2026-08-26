@@ -254,11 +254,19 @@ A write that omits `__base` is still serialised, but it is not compared against 
 The lock is process-local: it orders the writers inside ONE server and nothing else.
 That is why `apply` posts here rather than writing the file itself, which is what puts
 an agent's write in the same queue as the browser's. It is also why a second server on
-one project has to be prevented a level up: `serve` recognises this project's own board
-before it binds and refuses to start beside it, whether the port was derived or given
-explicitly with `--port`/`PORT`. (The explicit port used to skip that check, so two
-servers on one state file was one flag away — and neither lock would have seen the
-other.) See
+one project has to be prevented a level up: before binding, `serve` probes whoever holds
+the port it is about to take, recognises this project's own board, and refuses to start
+beside it — on the derived path and on an explicit `--port`/`PORT` alike. (The explicit
+port used to skip the probe entirely.)
+
+**That check is per PORT, not per project**, and the gap is worth stating rather than
+implying: `--port` (or `PORT`) naming a *free* port starts a second server on the same
+state file, because there is no occupant on that port to recognise. Neither lock sees the
+other, and the newcomer rewrites `run/instance.json` to point at itself — so every client
+command follows the second server, and when it exits it takes the record with it and
+`aboard status` reports no board while the original is still serving. Use
+[`--name`](layout.md#named-boards) for a second board; do not reach for `--port` to get
+one. See
 [why writes are serialised](../explanation/why-writes-are-serialised.md).
 
 **What the server stamps, whatever you sent:** `version` (this server writes its own

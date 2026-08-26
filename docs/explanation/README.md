@@ -1,7 +1,8 @@
 # Explanation
 
-Explanation docs answer "why" — design rationale, conceptual background, the shape of
-the problem aboard solves. Unlike [Tutorials](../tutorials/) and
+Explanation docs answer "why", and the "how does this actually work" that is asked in
+order to understand rather than in order to act — design rationale, conceptual
+background, the shape of the problem aboard solves. Unlike [Tutorials](../tutorials/) and
 [How-to guides](../how-to/), explanation is not action-oriented; unlike
 [Reference](../reference/), it is not exhaustive description. It is discursive. A
 reader of explanation is trying to deepen their understanding, not get something done
@@ -14,6 +15,7 @@ every few months.
 
 ## Available explanation
 
+- [how-aboard-runs.md](how-aboard-runs.md) — the moving parts, in one pass: one binary, the port derived from the path, the instance record, the two ways in and the one way through, the watcher, the journal as the undo, and what the server will not do.
 - [why-a-local-non-authoritative-channel.md](why-a-local-non-authoritative-channel.md) — what the board is FOR and what it must never be: three words that are three separate claims, the three tiers matched by lifetime, where a promoted thing goes, and which comes first — the board or the document.
 - [why-tabs-are-data.md](why-tabs-are-data.md) — a tab is a name, a `type` and its own `state`; what that buys, and the three declarations a new renderer needs.
 - [why-four-guarantees-are-server-enforced.md](why-four-guarantees-are-server-enforced.md) — deleting a tab, clearing a change marker, un-acking a message, clearing another actor's read state: four things an agent must not be able to do even by accident.
@@ -26,8 +28,12 @@ every few months.
 
 ## Planned explanation
 
-- **Why the port is derived from the path.** Stable URLs, no collisions between checkouts, and what it costs when two projects hash close.
-- **Why compare-and-set on the whole document.** Whole-file CAS is coarse; the alternative — per-tab merge — was tried and what it cost.
+- **Why compare-and-set on the whole document.** Whole-file CAS is coarse; the alternative — per-tab merge — was tried and what it cost. Still worth its own page: [why writes are serialised](why-writes-are-serialised.md) argues the lock and the token, not the granularity.
+
+Port derivation used to be listed here. It is answered in
+[how-aboard-runs.md](how-aboard-runs.md) — stable URLs, no collisions between checkouts,
+and what happens when a stranger holds the port — with the formula itself in
+[the layout reference](../reference/layout.md#port-derivation).
 
 ## Writing explanation
 

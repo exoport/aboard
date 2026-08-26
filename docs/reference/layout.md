@@ -89,7 +89,16 @@ If the derived port is taken by something that is not a board, the server probes
 project's own** board, it refuses to start a duplicate and points at the running one.
 
 Overrides, in precedence order: `--port N`, then the `PORT` environment variable, then
-the derived port.
+the derived port. An explicit port that is busy is a plain error rather than a walk —
+you asked for that port.
+
+The duplicate refusal is anchored to the **port**, not to the project, so an explicit
+port that is *free* has no occupant to recognise: it starts a second server on the same
+state file, and the newcomer overwrites `run/instance.json` with its own details.
+`--port` moves one board; it is not the way to have two. Use
+[a named board](#named-boards) for that, and see
+[the compare-and-set contract](http-api.md#post-aboardjson) for what two servers on
+one file costs.
 
 ## Named boards
 
@@ -184,4 +193,6 @@ meaningful rather than an error:
 
 - [The state file](state-file.md) — what is inside `aboard.json`.
 - [HTTP API](http-api.md) — the routes that read and write these paths.
+- [How aboard runs](../explanation/how-aboard-runs.md) — the same parts as a mental model rather than a tree.
+- [How to run a second board in one project](../how-to/run-a-second-board.md) — the named-board table above, with its consequences worked through.
 - [How to run aboard inside VS Code](../how-to/run-in-vscode.md) — using the stable URL.

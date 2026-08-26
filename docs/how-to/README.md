@@ -7,18 +7,27 @@ unlike [Reference](../reference/), they're goal-oriented rather than exhaustive.
 
 ## Available guides
 
+**Getting it running**
+
 - [How to install aboard](install.md)
-- [How to run aboard inside VS Code](run-in-vscode.md)
+- [How to run aboard inside VS Code](run-in-vscode.md) — docking the board in the built-in Simple Browser
+- [How to use the VS Code extension](use-the-vscode-extension.md) — the sidebar tree and panel, and what is still unproven about them
+
+**Running it your way**
+
+- [How to run a second board in one project](run-a-second-board.md) — `--name`, and the four things two boards still share
+- [How to put aboard behind a reverse proxy](serve-under-a-path-prefix.md) — `serve --base-path`, and the four traps
+
+**Getting work out of it**
+
+- [How to promote a board tab into a document](promote-a-tab-into-a-document.md) — `aboard export`, what to rewrite, and demoting the tab
 - [How to write a recipe](write-a-recipe.md)
+
+**Building on it**
+
 - [How to embed aboard in ape](embed-in-ape.md)
 - [How to verify a release artifact](verify.md)
 - [How to run the browser suite](run-the-browser-suite.md)
-
-## Planned guides
-
-- **How to run a second board in one project.** `--name`, the separate state file, the separate port and instance record, and when a side investigation deserves one. (What a name does and does NOT qualify — the journal, logs, receipts, uploads and recipes stay per project — is already answered in [the layout reference](../reference/layout.md#named-boards), along with `aboard boards`.)
-- **How to put aboard behind a reverse proxy.** `serve --base-path`, what the injected base constant covers, and what to check in the browser's network panel.
-- **How to promote a board tab into a document.** `aboard export`, what to rewrite rather than paste, and demoting the tab afterwards.
 
 ## Writing a how-to guide
 

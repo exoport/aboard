@@ -47,11 +47,16 @@ yank the server out from under the first. If you genuinely want a separate board
 side investigation that should not disturb the main one — give it a name:
 
 ```bash
+aboard init --name review
 aboard serve --name review
 ```
 
-That derives its own port, uses its own state file and records itself separately, so
-the two never interfere.
+That derives its own port, uses its own state file and records itself separately, so the
+two **documents** never interfere. The rest of `.aboard/` is per project and both boards
+share it — one journal, one uploads directory, one set of sidecar logs — and tab ids are
+allocated per board, so the same id can mean two different tabs. The consequences are
+worth reading before you rely on it:
+[How to run a second board in one project](run-a-second-board.md).
 
 ## When the page reloads itself
 
@@ -96,13 +101,20 @@ aboard serve --base-path /aboard
 ```
 
 The prefix is injected into the shell as a single constant, and every request the page
-makes builds from it: the stylesheet and module imports, every fetch, the SSE stream,
-and an `html` tab's iframe `src`. Point the Simple Browser at the prefixed URL.
+makes builds from it: every fetch, the SSE stream, and an `html` tab's iframe `src`. The
+stylesheet and the module imports stay relative instead, which is why the URL has to end
+in a slash — the server redirects `<prefix>` to `<prefix>/` for you. Point the Simple
+Browser at the prefixed URL.
+
+If there is an actual proxy in front of it, three more things bite — the `Host`
+allow-list, the same-origin rule on writes, and SSE buffering. They are all in
+[How to put aboard behind a reverse proxy](serve-under-a-path-prefix.md).
 
 ## When something else draws the tab list
 
-A host that frames the board and provides its own navigation — a VS Code extension
-with a sidebar tree, for instance — asks for the board without its own tab strip:
+A host that frames the board and provides its own navigation — [the VS Code
+extension](use-the-vscode-extension.md), for instance — asks for the board without its
+own tab strip:
 
 ```
 http://localhost:<port>/?chrome=notabs#tab=bb13
@@ -138,5 +150,7 @@ For scripted screenshots, two things bite and both have the same fix — use the
 ## See also
 
 - [Your first board](../tutorials/first-board.md) — the whole loop including this step.
+- [How to use the VS Code extension](use-the-vscode-extension.md) — the other way to get a board into VS Code: a sidebar tree and a panel, rather than one browser tab. Not yet verified in a real editor.
+- [How to put aboard behind a reverse proxy](serve-under-a-path-prefix.md) — the prefix above, in full, including the traps a proxy adds.
 - [The `.aboard/` layout](../reference/layout.md) — the instance file the URL comes from.
 - [HTTP API](../reference/http-api.md) — the routes the page is using while you watch it.

@@ -5,6 +5,14 @@ installing it is putting one file on your `PATH`. There is nothing to install al
 it — no Node, no `node_modules`, no asset directory — and nothing it needs from the
 network at runtime.
 
+> **Nothing has been published yet.** There is no tag on the repository, so the module
+> proxy and the GitHub Releases page both have nothing to serve: options 1, 2 and 3
+> below return a 404 today, and so does cloning the public URL in option 4. **Until the
+> first release, install from a clone you already have** — `make install`, which is
+> option 4 with a local path. The rest of this page is written for the day the first tag
+> lands rather than deleted and rewritten then; treat it as a description of the
+> install paths, not as four things you can do this afternoon.
+
 ## Option 1 — `go install` (simplest if you have Go)
 
 ```bash
@@ -57,8 +65,12 @@ cd aboard
 make install        # → /usr/local/bin/aboard
 ```
 
+This is the only one that works before the first release, and then only from a clone
+you already have — `make install` in the checkout, skipping the `git clone`.
+
 Override the destination with `make install INSTALL_DIR=/opt/local/bin` if you cannot
-write to `/usr/local/bin`.
+write to `/usr/local/bin`. The directory has to exist already — `install` does not create
+it, so `mkdir -p` first.
 
 ## Check the install
 

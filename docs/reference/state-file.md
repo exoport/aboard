@@ -137,10 +137,15 @@ component, an unknown prop on a known component, a wrong item shape, a bad block
 `{bind}` that resolves nowhere, a colour name the board does not have, or a `version`
 this board does not write.
 
-**None of them refuse the write.** A spec can lag its renderer, and a board that rejected
-writes because its own documentation was behind would be worse than one that documents
-late. But read them: `apply` printing `applied` and exiting 0 is not evidence that
-anything renders. The failure this catches is `ui` failing *silently and successfully* —
+**None of them refuse the write by default.** A spec can lag its renderer, and a board
+that rejected writes because its own documentation was behind would be worse than one
+that documents late. Two flags opt out of that default: `apply --check` runs the checks
+and posts nothing (no server need be running, and the document needs no `rev`), and
+`apply --strict` turns any warning into a refusal — exit 1, nothing written — which is
+the guard for a loop that must stop rather than ship a wrong tab.
+
+Read the warnings either way: `apply` printing `applied` and exiting 0 is not evidence
+that anything renders. The failure this catches is `ui` failing *silently and successfully* —
 the human finding the empty panel before the agent that made it hears anything, which is
 backwards, because the agent is the one still holding the context to fix it.
 
@@ -149,3 +154,4 @@ backwards, because the agent is the one still holding the context to fix it.
 - [The `.aboard/` layout](layout.md) — where this file lives, and what lives beside it.
 - [HTTP API](http-api.md) — the compare-and-set contract that writes it.
 - [The capability manifest](capabilities.md) — the per-type declarations, and how to ask for them.
+- [How aboard runs](../explanation/how-aboard-runs.md) — where this file sits in the loop, and why `apply` posts rather than writing it.

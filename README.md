@@ -32,6 +32,12 @@ to ship alongside, and nothing on the network at runtime.
 
 ## Install
 
+> **No release has been published yet.** There is no tag, and nothing is on the module
+> proxy or in GitHub Releases, so every command in this section returns a 404 today.
+> Until the first tag exists, build it from a clone: `make install` (or `go build
+> ./cmd/aboard`). Everything below is how installing will work, and is kept here rather
+> than removed so that it is right on the day the tag lands.
+
 With a Go toolchain (1.26 or later):
 
 ```bash
@@ -90,6 +96,15 @@ gotchas are in [How to run aboard inside VS Code](docs/how-to/run-in-vscode.md).
 A board with nothing on it is the normal starting point: `aboard init` without
 `--example` gives you an empty one, and agents open the tabs they need.
 
+There is also a **VS Code extension** — a sidebar tree of the board's tabs beside the
+board in a panel — in a separate repository. It is written and unit-tested but has never
+been loaded into a running editor, so the Simple Browser above is the route to take
+today: [How to use the VS Code extension](docs/how-to/use-the-vscode-extension.md).
+
+Forgotten which boards you left running? **`aboard boards`** lists every one on the
+machine, with its project path, from the process table rather than a registry (Linux
+only; it exits 2 elsewhere and points you at `aboard status`).
+
 ## The tab types
 
 Fifteen renderers. A tab picks one with its `type`, owns its own `state`, and may set
@@ -133,8 +148,11 @@ interaction itself is the point; `table` the moment you find yourself writing ro
 | `aboard poke`               | Release every session waiting on this board, as the human's notify button does.       |
 | `aboard journal`            | Recent accepted writes: when, who, which tabs.                                         |
 | `aboard watch`              | The same, as JSON lines, until interrupted.                                            |
+| `aboard history <tab>`      | What one tab said before, out of the journal. `--at N` prints a document that restores it. |
 | `aboard log <tab>`          | Pipe a command's output into a `log` tab.                                              |
 | `aboard export <tab\|key>`  | One tab as markdown (or `--format csv`), for pasting into the project's own documents. |
+| `aboard uploads`            | The images the human pasted, and which tabs mention them. `--prune --yes` deletes the rest. |
+| `aboard rendered [tab]`     | What a browser reported it actually drew — not proof that it behaved.                  |
 | `aboard capabilities [type]`| What this board can do. No server needed; `--check` gates the committed skill copy.    |
 | `aboard recipes list\|show` | The recipes available here, and one recipe's body or its `--template`.                 |
 | `aboard version`            | Build identity of this binary.                                                         |
@@ -192,15 +210,20 @@ identical everywhere else, including `capsHash`. See
 
 ## Documentation
 
-Full docs follow [Diátaxis](https://diataxis.fr/) — pick the quadrant that matches what
-you need:
+**[docs/README.md](docs/README.md) is the index.** Everything below is linked from
+there, and it follows [Diátaxis](https://diataxis.fr/) — pick the quadrant that matches
+what you need:
 
-- **[Tutorials](docs/tutorials/)** — learn aboard by walking through a complete example.
-- **[How-to guides](docs/how-to/)** — install, run it in VS Code, write a recipe, embed it in ape, verify a release.
-- **[Reference](docs/reference/)** — the CLI, the `.aboard/` layout, the state file, the HTTP API, the capability manifest.
-- **[Explanation](docs/explanation/)** — the design rationale, including the decisions that are closed.
+- **[Tutorials](docs/tutorials/)** — [Your first board](docs/tutorials/first-board.md): install, seed, serve, dock, write, watch, export.
+- **[How-to guides](docs/how-to/)** — [install](docs/how-to/install.md), [run it in VS Code](docs/how-to/run-in-vscode.md), [run a second board](docs/how-to/run-a-second-board.md), [put it behind a reverse proxy](docs/how-to/serve-under-a-path-prefix.md), [promote a tab into a document](docs/how-to/promote-a-tab-into-a-document.md), write a recipe, embed it in ape, verify a release.
+- **[Reference](docs/reference/)** — the [CLI](docs/reference/cli.md), the [`.aboard/` layout](docs/reference/layout.md), the [state file](docs/reference/state-file.md), the [HTTP API](docs/reference/http-api.md), the [capability manifest](docs/reference/capabilities.md).
+- **[Explanation](docs/explanation/)** — [how aboard runs](docs/explanation/how-aboard-runs.md), and the design rationale, including the decisions that are closed.
 
-Start at [docs/README.md](docs/README.md) for a guided index.
+If you are new, three pages get you furthest:
+[Your first board](docs/tutorials/first-board.md),
+[How aboard runs](docs/explanation/how-aboard-runs.md), and
+[Why a local, non-authoritative channel](docs/explanation/why-a-local-non-authoritative-channel.md)
+— what the board is FOR, which is the half of this tool that is not code.
 
 ## Development
 

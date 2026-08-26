@@ -126,7 +126,9 @@ fails if it has drifted from the declarations.
 The manifest is also what the write path checks against: `aboard apply` warns on stderr
 when a document sets state no renderer reads — an unknown component, an unknown prop, a
 wrong item shape, a bad block field, a `{bind}` that resolves nowhere, or a colour name
-this board does not have. It warns and never refuses. See
+this board does not have. It warns rather than refusing — unless you ask it to:
+`apply --check` runs the checks and posts nothing, and `apply --strict` refuses on any
+warning. See
 [the state file](state-file.md#writes-are-validated-and-the-validation-warns).
 
 ## See also

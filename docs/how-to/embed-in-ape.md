@@ -12,6 +12,10 @@ Add the module, then add one command:
 go get github.com/exoport/aboard@latest
 ```
 
+(Until the first tag is pushed, that returns a 404 from the module proxy — see [how to
+install aboard](install.md). A host building against it today points a `replace`
+directive at a local checkout.)
+
 ```go
 import (
     "github.com/exoport/aboard/pkg/aboard"

@@ -79,13 +79,20 @@ its port it probes whoever holds it, recognises this project's own board, and re
 start beside it, naming the URL and pid of the one already running. One board, one
 server, one lock.
 
-"Handled a level up" is doing real work in that sentence, and the level above has a hole
-in it: an explicit `--port` (or `PORT`) is taken literally and binds without probing, so
-a second server for the same project is still something you can ask for by name. Neither
-lock would see the other, and the two of them would race exactly as two goroutines used
-to. Closing that is a separate change in the same review; it is recorded here because a
-page about what serialisation guarantees should say where the guarantee is anchored and
-how firmly.
+"Handled a level up" is doing real work in that sentence, and the level above is anchored
+to a PORT rather than to a project. `serve` now probes whoever holds the port it is about
+to bind on the explicit path as well as the derived one — that half was closed — but a
+`--port` (or `PORT`) naming a *free* port has no occupant to recognise, so a second
+server for the same project is still something you can ask for by name. Neither lock sees
+the other, and the two of them race exactly as two goroutines used to; worse, the
+newcomer rewrites `run/instance.json` to point at itself, so every client command follows
+it and the original board becomes invisible while continuing to serve.
+
+Closing that properly means asking "does this project already have a live board?" rather
+than "is this port taken?" — a different question, with a stale-record case of its own to
+answer. It is recorded here because a page about what serialisation guarantees should say
+where the guarantee is anchored and how firmly, and the honest answer is: firmly, inside
+one server, and a second server is prevented only where the two would collide on a port.
 
 **Anything that edits `.aboard/aboard.json` behind the server's back.** An `Edit` from a
 tool, a text editor, a script with a redirect — none of them can be serialised by a lock
@@ -134,6 +141,12 @@ Exactly what the API always promised. Of N simultaneous writes off one base, one
 `200` and the rest get `409` with the live `rev`. A `409` is not an error to route
 around: it means a real change landed while you were thinking. Re-read, redo the edit on
 the fresh copy, apply again.
+
+`aboard apply` does that for you **once**: it re-reads, asks the journal which tabs moved
+since the base it started from, re-applies its own tabs where the server did not touch
+them, and retries. What it will not do is merge a genuine same-tab collision — that is
+named, with the field as well as the tab, and refused, exactly as the browser refuses
+it.
 
 The browser does not simply retry, because the human is the one actor whose work cannot
 be reconstructed: it fetches fresh, re-applies the tabs the human touched where the
