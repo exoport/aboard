@@ -28,9 +28,11 @@ make caps                      # ONLY when a views/*.spec.json or the command ta
 ./aboard capabilities --check  # must exit 0 after make caps
 make docs-cli                  # when the cobra tree changed (docs/reference/cli.md is generated)
 make docs-check                # always, if you touched docs/ or README.md
-make smoke                     # the browser suite: ONE run per tool call, timeout 180000,
-                               # output to a file, read the whole file. Needs a RUNNING server
-                               # started DETACHED (setsid nohup … &), on a scratch project.
+PROJECT=<scratch> make smoke   # the browser suite: ONE run per tool call, timeout 180000,
+                               # output to a file, read the whole file. PROJECT is REQUIRED:
+                               # a scratch project seeded with `aboard init --example --gitignore`
+                               # whose server you started DETACHED (setsid nohup … &) from that
+                               # directory. The suite WRITES to the board it is aimed at.
                                # (make e2e replaces it once plan-2 item 4 lands.)
 ```
 
