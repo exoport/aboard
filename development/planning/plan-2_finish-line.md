@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–4 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–5 and 7 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -115,7 +115,7 @@ complement. Visual regression is NOT in this item.
 declared gestures have at least one test, the "provable only by a human click" sentence is deleted
 from every document, and `smoke.sh` is gone.
 
-### 5. JSON hot paths  ☐
+### 5. JSON hot paths  ☑ `da96af0`
 
 Source: `development/handoffs/handoff-json-hot-paths.md`. Scope, in its own decided order: the
 benchmark harness with the "before" numbers recorded in that file; (2) parse once and keep the
@@ -139,7 +139,7 @@ proposal, not a decision; do not build it before the answer.
 **Done when** items 1–10 are shipped with their handoff sections marked done and `capsHash`
 regenerated, and item 11 is either built to the human's answer or explicitly parked.
 
-### 7. Panel prerequisites on the aboard side  ☐
+### 7. Panel prerequisites on the aboard side  ☑ `913eef6` (built in a worktree in parallel with item 5, rebased onto it)
 
 Source: `development/handoffs/handoff-board-for-vscode-panel.md` §4–§6, in its stated order:
 `?chrome=` suppresses the board's own tab strip per viewer (a URL parameter, never server state);
