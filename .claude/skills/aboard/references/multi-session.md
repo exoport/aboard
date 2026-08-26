@@ -72,6 +72,12 @@ A `409` is not an error to route around. It means a real change landed while you
 were thinking. Re-read `.aboard/aboard.json`, redo your edit on the fresh copy,
 apply again.
 
+This holds for writes that arrive at the same instant, not just for one that is
+late: the server serialises the whole read-compare-write span, so of several
+simultaneous writes off one base exactly one is applied and the others are
+refused. A refused write reaches neither the board nor the journal, so a `409` is
+also the guarantee that nothing of yours landed halfway.
+
 ## 3. Say who you are
 
 `--by` lands in `lastEditedBy` and on every tab you touched. Use `agent-1`,

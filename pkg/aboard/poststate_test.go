@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/exoport/aboard/pkg/aboard/web"
 )
 
 // testServer is the write path with nothing else attached: a state file in a
@@ -28,8 +30,11 @@ func testServer(t *testing.T, document string) *server {
 		t.Fatal(err)
 	}
 	return &server{
-		opts:      Options{Logger: log.New(io.Discard, "", 0)},
-		root:      root,
+		opts: Options{Logger: log.New(io.Discard, "", 0)},
+		root: root,
+		// The real embedded tree, because /events hands every client the UI
+		// signature before anything else and a nil FS is a nil dereference there.
+		assets:    web.FS,
 		stateFile: state,
 		clients:   map[chan string]struct{}{},
 		watchers:  map[chan string]struct{}{},

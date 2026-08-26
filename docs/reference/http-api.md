@@ -69,6 +69,24 @@ Re-read, redo the edit, and post again. The check is whole-document, so any conc
 write conflicts with any other; that is coarse on purpose, and the browser handles its
 own case by merging rather than discarding what the human just typed.
 
+**Under concurrency.** Writes are serialised: the server holds one lock across the whole
+read → compare-and-set → reconcile → write span, so posts that arrive together are
+applied one at a time rather than interleaved. Of N simultaneous writes built on the
+same base, exactly one gets `200` and the rest get `409` — the losers are refused, not
+queued and applied on top, because each was built on a document that no longer exists by
+the time its turn comes. A refused write reaches neither the state file nor the journal.
+A write that omits `__base` is still serialised, but it is not compared against anything
+— it is applied whole, and the last one in wins.
+
+The lock is process-local: it orders the writers inside ONE server and nothing else.
+That is why `apply` posts here rather than writing the file itself, which is what puts
+an agent's write in the same queue as the browser's. It is also why a second server on
+one project has to be prevented a level up: `serve` recognises this project's own board
+on the port it derives and refuses to start beside it — but an explicit `--port` or
+`PORT` is taken literally and skips that check, so two servers on one state file is
+something you can still ask for, and no lock in either of them would see the other. See
+[why writes are serialised](../explanation/why-writes-are-serialised.md).
+
 **What the server stamps, whatever you sent:** `version` (this server writes its own
 schema version by definition), `nextId` (reconciled so it never regresses or falls
 behind an id in use), `updatedAt`, and `lastEditedBy`.

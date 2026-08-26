@@ -21,6 +21,7 @@ every few months.
 - [why-no-diff-renderer.md](why-no-diff-renderer.md) — closed, not deferred, and the reason kept: a diff tab makes asking cheap, and anything cheap gets overused.
 - [why-html-tabs-are-sandboxed.md](why-html-tabs-are-sandboxed.md) — `connect-src 'none'` plus an opaque origin is the containment; `frame-ancestors` is not, and why it lists VS Code's webview origins.
 - [why-two-identities.md](why-two-identities.md) — `aboard` and `ape-aboard` sharing one `.aboard/`: what differs, what must not, and why the manifest's app name is neither.
+- [why-writes-are-serialised.md](why-writes-are-serialised.md) — one lock across read → compare-and-set → write, what it deliberately leaves out, and the fanout race that killed the process.
 - [why-the-manifest-is-declared.md](why-the-manifest-is-declared.md) — declaration as the canonical source rather than a scrape; why controls are a list; why the command table replaced walking the flag registry; and why `gestures` stays deliberately unverifiable.
 
 ## Planned explanation

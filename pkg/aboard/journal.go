@@ -270,14 +270,14 @@ func (s *server) notifyWatchers(entry JournalEntry) {
 	if err != nil {
 		return
 	}
+	// Under the lock, exactly as fanout does and for the same reason: handleWatch
+	// unsubscribes by deleting its channel and closing it, so sending to a copy
+	// taken before the lock was released is a send on a closed channel — a panic,
+	// here on the goroutine of whoever just wrote to the board.
 	s.mu.Lock()
-	targets := make([]chan string, 0, len(s.watchers))
-	for ch := range s.watchers {
-		targets = append(targets, ch)
-	}
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
-	for _, ch := range targets {
+	for ch := range s.watchers {
 		select {
 		case ch <- string(body):
 		default:

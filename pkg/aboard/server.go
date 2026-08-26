@@ -43,6 +43,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -112,6 +113,14 @@ type server struct {
 	mu       sync.Mutex
 	clients  map[chan string]struct{}
 	watchers map[chan string]struct{} // `aboard watch` consumers (journal.go)
+
+	// writeMu serialises the whole read → compare-and-set → reconcile → write
+	// span of a POST (see commitState). A SEPARATE lock from s.mu on purpose:
+	// s.mu guards the two subscriber maps, which every broadcast touches, and
+	// reusing it here would park every SSE frame behind a disk write. They also
+	// nest in one direction only — writeMu may be held while taking s.mu, never
+	// the reverse — which is what keeps the pair deadlock-free.
+	writeMu sync.Mutex
 
 	// Sessions blocked on /wait, released by the human's notify button or by
 	// another session's poke (see wait.go).
@@ -223,8 +232,8 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	}
 	defer srv.removeInstance()
 
-	go srv.watch()
-	go srv.watchUI()
+	go srv.guard("state watcher", srv.watch)
+	go srv.guard("ui watcher", srv.watchUI)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", srv.route)
@@ -565,6 +574,64 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	delete(incoming, "__base")
 	delete(incoming, "__by")
 
+	res, bad := s.commitState(incoming, raw, base, by, origin)
+	if bad != nil {
+		writeJSON(w, bad.code, bad.body)
+		return
+	}
+
+	// Publishing happens OUTSIDE the write lock, and the ordering is the reason:
+	// the journal entry is on disk before any of this runs, so a watcher that
+	// reacts instantly cannot arrive before the record of what it is reacting to.
+	// Releasing a waiter can also fan out to every open page, and none of that
+	// wants the next writer queued behind it.
+	if len(res.entry.Tabs) > 0 {
+		s.notifyWatchers(res.entry)
+		if released := s.waits.releaseMatching(res.doc, res.entry); released > 0 {
+			s.opts.Log().Printf("released %d waiting session(s) on: %s", released, joinOr(res.entry.Tabs, "no tab"))
+			s.broadcastWaiters()
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updatedAt": res.stamp})
+}
+
+// commitResult is what an accepted write hands back to the unlocked half of
+// postState: the document as it reached disk, the one change summary its three
+// consumers share, and the stamp the caller is told about.
+type commitResult struct {
+	doc   []byte
+	entry JournalEntry
+	stamp string
+}
+
+// apiError is a refusal the caller still has to write. The locked half returns
+// one rather than writing the reply itself, so the write lock is never held
+// while talking to a client.
+type apiError struct {
+	code int
+	body map[string]string
+}
+
+// commitState is read → compare-and-set → reconcile → write, as ONE critical
+// section.
+//
+// It used to be none: the file was read, the CAS compared, the tabs reconciled
+// and the result renamed into place with no mutual exclusion at all, so two
+// overlapping POSTs both read the same `updatedAt`, both passed the check, and
+// both wrote — 40 of 40 barrier-synchronised trials returned two 200s with one
+// edit gone from disk, and the journal recorded the lost write as if it had
+// landed. Compare-and-set cannot work across a window it does not cover: the
+// comparison and the write have to be indivisible or the comparison is advice.
+//
+// This lock only covers THIS process. Two servers on one state file would still
+// race, which is why `aboard serve` refuses a duplicate rather than trusting the
+// file, and why `apply` posts to the running board instead of writing the file
+// itself — every writer that matters arrives through this function.
+func (s *server) commitState(incoming map[string]any, raw []byte, base, by, origin string) (commitResult, *apiError) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
 	currentRaw, _ := os.ReadFile(s.stateFile)
 
 	// Compare-and-set: refuse the write if the file moved on since the browser
@@ -573,8 +640,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		var cur map[string]any
 		if json.Unmarshal(currentRaw, &cur) == nil {
 			if live, ok := cur["updatedAt"].(string); ok && live != base {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "conflict", "live": live})
-				return
+				return commitResult{}, &apiError{http.StatusConflict, map[string]string{"error": "conflict", "live": live}}
 			}
 		}
 	}
@@ -583,8 +649,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	// marker, and every tab it did change gets stamped so the UI can show a dot.
 	tabs, err := reconcileTabs(currentRaw, raw, by)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{"error": err.Error()}}
 	}
 	incoming["tabs"] = tabs
 
@@ -614,8 +679,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 
 	out, err := json.MarshalIndent(incoming, "", "  ")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "encode failed"})
-		return
+		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "encode failed"}}
 	}
 	out = append(out, '\n')
 
@@ -624,24 +688,22 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	entry := changeSummary(currentRaw, tabs, by, origin)
 
 	if err := s.writeAtomic(out); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "write failed"})
-		return
+		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "write failed"}}
 	}
 
 	s.mu.Lock()
 	s.pendingOrigin = origin
 	s.mu.Unlock()
 
+	// The journal append stays inside the lock with the write it records. Outside
+	// it, two writers could rename in one order and append in the other, and the
+	// journal is the record a session reads to reconstruct what happened — an
+	// order it invented would be worse than no record at all.
 	if len(entry.Tabs) > 0 {
 		s.journal.append(entry)
-		s.notifyWatchers(entry)
-		if released := s.waits.releaseMatching(out, entry); released > 0 {
-			s.opts.Log().Printf("released %d waiting session(s) on: %s", released, joinOr(entry.Tabs, "no tab"))
-			s.broadcastWaiters()
-		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "updatedAt": stamp})
+	return commitResult{doc: out, entry: entry, stamp: stamp}, nil
 }
 
 // Write via a temp file in the same directory, then rename. A reader (Claude
@@ -712,6 +774,29 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// guard runs one of the long-lived background goroutines so a panic inside it is
+// reported through Options.Logger instead of taking the process down.
+//
+// Defence in depth, not the fix: nothing in the fanout path panics any more (see
+// fanout). But these two are the only goroutines in the server with no HTTP
+// handler above them — net/http recovers a panicking handler and keeps serving,
+// while a bare `go f()` that panics ends the process — and the board dying is the
+// worst failure this program has: the human's page goes blank, every session
+// blocked on `wait` is released with nothing, and the instance file survives to
+// point the next command at a port nobody is listening on.
+//
+// It does not restart the goroutine. A poll loop that panicked once will panic
+// again on the next tick, and a silent restart loop is how a bug becomes a log
+// nobody reads.
+func (s *server) guard(name string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			s.opts.Log().Printf("panic in the %s, which has stopped: %v\n%s", name, r, debug.Stack())
+		}
+	}()
+	fn()
+}
+
 // Poll rather than use an OS watcher: it keeps the dependency list short, and
 // unlike a single-file watch it cannot be defeated by an editor replacing the
 // file, which a rename-based save does.
@@ -762,15 +847,28 @@ func (s *server) broadcast() {
 
 // fanout pushes one SSE payload to every open page. Shared by the state watcher
 // and by the waiter count (wait.go), which the notify button listens for.
+//
+// The sends happen UNDER the lock, and that is the fix for a race that killed the
+// process outright. It used to copy the channels, release the lock, then send —
+// and `events` unsubscribes by deleting its channel from the map AND closing it,
+// so a client that hung up inside that window had its channel closed before the
+// send arrived, and a send on a closed channel panics. `watch()` is a bare
+// goroutine with no handler above it, so the whole server died and `aboard
+// status` reported a stale record for a board that had been fine a moment ago.
+//
+// Under the lock rather than "delete without closing", which would also have
+// worked: the alternative makes correctness depend on nobody, ever, closing a
+// subscriber channel — an invariant spread across two files, enforced by nothing,
+// and reinstated by the next person who reads `close(ch)` as tidy. Here the rule
+// is local and visible at the site that has to obey it. It costs nothing:
+// every send is already non-blocking, so a wedged client cannot hold the lock,
+// and the critical section is a bounded walk over a handful of channels with no
+// I/O in it.
 func (s *server) fanout(payload string) {
 	s.mu.Lock()
-	targets := make([]chan string, 0, len(s.clients))
-	for ch := range s.clients {
-		targets = append(targets, ch)
-	}
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
-	for _, ch := range targets {
+	for ch := range s.clients {
 		select {
 		case ch <- payload:
 		default: // a wedged client must not stall the watcher

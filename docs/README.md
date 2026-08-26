@@ -48,6 +48,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [Why there is no diff renderer](explanation/why-no-diff-renderer.md) — closed, not deferred, and the reason kept so nobody re-derives it
 - [Why html tabs are sandboxed](explanation/why-html-tabs-are-sandboxed.md) — `connect-src 'none'`, an opaque origin, and the `frame-ancestors` story
 - [Why two identities](explanation/why-two-identities.md) — `aboard` and `ape-aboard` over one `.aboard/`
+- [Why writes are serialised](explanation/why-writes-are-serialised.md) — one writer at a time, what a 409 means under concurrency, and the two locks
 - [Why the manifest is declared](explanation/why-the-manifest-is-declared.md) — declaration as the canonical source, controls as a list, and the unverifiable remainder
 
 ## Contributing to the docs
