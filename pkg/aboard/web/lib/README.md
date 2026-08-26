@@ -37,7 +37,7 @@ Nothing in it is reachable at runtime except what `views/diagram.js` calls.
 ```sh
 curl -sL -o vendor/mermaid.min.js https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js
 sha256sum vendor/mermaid.min.js          # record the new hash above
-./test/smoke.sh                          # views still mount
+make e2e                                 # views still mount, and diagrams still draw
 # then open /test/mermaid-probe.html to confirm which diagram types still render
 ```
 

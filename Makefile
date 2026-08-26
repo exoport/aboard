@@ -36,8 +36,14 @@ CAPS_MD      := .claude/skills/aboard/references/reference.generated.md
 CAPS_RECIPES := .claude/skills/aboard/references/recipes.md
 
 .PHONY: help
+# The character class carries 0-9 deliberately: without it `e2e` — the browser
+# suite, the target this project most wants a session to run — matched nothing
+# and was invisible in `make help`, while CLAUDE.md said help listed the
+# available targets. A help rule that silently omits a target is worse than no
+# help rule, because it reads as proof the target does not exist.
+# TestEveryDocumentedMakeTargetIsListedByHelp keeps this honest.
 help:              ## Show this help.
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort \
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort \
 	  | awk 'BEGIN {FS = ":[^#]*## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 .PHONY: build

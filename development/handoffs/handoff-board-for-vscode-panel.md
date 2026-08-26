@@ -1,11 +1,13 @@
 # Handoff — `aboard`-side changes to let a VS Code extension own the tab strip
 
-**Status: landed, 2026-08-26 (plan-2 item 7).** The framing fix (§2) and the three
+**Status: DONE — landed as `913eef6` on 2026-08-26 (plan-2 item 7).** The framing fix (§2) and the three
 items the port already satisfies (§3) came with the port itself. The three genuine
 prerequisites — `?chrome=` (§4), the `active` message (§5) and the storage guards
 (§6) — are **shipped**, with the browser suite covering all three (`test/e2e/embed_test.go`).
 §3's open question is answered and needed no code: `GET /health` has exposed the
-configured base path all along, as `base`.
+configured base path all along, as `base`. The extension that consumes all of this is
+in the `aboard_vscode` repo, built and unit-tested; **running it in a real VS Code is
+gated on the human** — plan-2 §10.
 
 **Rewritten from:** `handoff-board-for-vscode-panel.md`, written 2026-08-24 on the
 `board` spike by `agent-research`, stamped against spike commit `7e5a179`.

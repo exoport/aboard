@@ -1,8 +1,11 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–8 done (9 in progress); item 8 done in aboard_vscode (`6711c15` there). Tick items here
-as they land (commit hash beside each), so a session resuming after a context clear reads this
-file and knows exactly where it is.**
+**Status: COMPLETE. Written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at
+`28252bb`) and finished 2026-08-26. All nine items are done — the hash beside each is the
+commit that landed it; item 8 landed in the `aboard_vscode` repo (`6711c15` + `ca72ca6` there),
+not this one. §10 is the only list still open, and every entry in it is a question for the
+human rather than work to pick up. A session resuming after a context clear reads this line and
+knows there is no queue: ask the human what is next.**
 
 This is the master list. Every item points at the document that holds its detail; this file
 holds the ORDER, the scope boundary of each item, and what "done" means. Decided with the human
@@ -149,7 +152,7 @@ cannot take the page down. Each verified per the handoff's Verification subsecti
 tests (the active-tab message is observable from the harness).
 **Done when** the extension's M2 and M4 no longer have a "if it has not landed" clause.
 
-### 8. The VS Code extension — implemented, not installed  ☑ aboard_vscode `6711c15` (built out of order, in parallel with item 3, because it is a separate repo; a reconcile against items 7's landed contract happens in item 7/9)
+### 8. The VS Code extension — implemented, not installed  ☑ aboard_vscode `6711c15` + `ca72ca6` (built out of order, in parallel with item 3, because it is a separate repo; a reconcile against items 7's landed contract happens in item 7/9)
 
 Source: `/home/diegos/_dev/exoport/aboard_vscode/docs/handoff.md` (§5 layout, §6 the two moving
 parts, §7 the tree, §8 milestones M1–M5). Scope: the repo scaffold exactly as §5 (`package.json`
@@ -170,13 +173,20 @@ Code, no hand-verification checklist (§11), no marketplace ladder (§9). Build 
 implemented as code with §10's hardening cases handled where they are pure logic, and the README
 says plainly that it is unverified in a real VS Code.
 
-### 9. Close the books  ☐
+### 9. Close the books  ☑ `<this commit>`
 
 Scope: CLAUDE.md's status and the skill reflect everything above; `development/README.md`'s order
 list is replaced by "see plan-2 — complete"; each handoff's Status line says done; the review file
 is fully dispositioned; `CHANGELOG.md` Unreleased carries one line per item; `make ci-local`
 green; the memory note for this project updated.
 **Done when** a fresh session reading `development/` finds nothing open except §10.
+
+Three real fixes came with the bookkeeping rather than being recorded as more debt, because each
+was one line and each made a green ladder lie: `make help` never listed `e2e` (its grep was
+anchored on `^[a-zA-Z_-]+:`, and `2` is not in that class) while CLAUDE.md called it the list of
+available targets; `test/shot.sh` exited 0 when every screenshot FAILED; and the browser suite's
+baseline test asserted two wall-clock millisecond comparisons measured inside a shared machine's
+Chromium, which flaked once and would again.
 
 ### 10. Gated on the human — do not start without an answer
 
@@ -198,3 +208,37 @@ green; the memory note for this project updated.
 - The judgement calls listed in `handoff-phase-e-finish.md` (`make dist` dropped, `restart.sh`
   kept, NOTICE in archives, the `vuln` job, hidden commands outside the declared table) stand
   until the human says otherwise.
+- **The example board's prose names "Claude" seven times** — counted in
+  `pkg/aboard/example/aboard.json`, and listed exactly, so the answer is a yes or no and not
+  another survey: two `dag` NODE titles, both "Claude reads and reacts" (`bb5` in the Plan
+  tab, `bb149` in the same graph re-used as the Dependencies block of the Migration review
+  stack); two `dag` node `note`s (`bb10`, `bb11`); a `form`'s `intro` (`bb46`, "Claude asks,
+  you answer here"); a `markup` image `caption` (`bb152`); and a `markup` region `note`
+  (`bb153`). Not one of them is a TAB name or a tab `note`, which is why nothing in the tab
+  strip gives them away. Every one is visible on every
+  `aboard init --example` board, including in projects that have nothing to do with this one. The
+  clean-break rename was of the TOKEN and the colour name (`--claude` → `--agent`); it deliberately
+  did not touch prose, and whether the demo content should say "the agent" instead is one decision
+  with seven strings behind it. **Not edited** — it is the human's voice in a fixture they will see
+  every time they seed a board, and an agent renaming the human's own words is the wrong default.
+- **The notify button's confirmation is repainted away.** Pressing it says "notified N sessions",
+  and the SSE `waiters` frame that the poke itself causes arrives a moment later and redraws the
+  button over the message — so the one piece of feedback the action has is visible for a few frames
+  (recorded in `test/e2e/notify_test.go`, which asserts the poke, not the message). A ~1.5 s
+  suppression of `refreshWaiters` after a poke would fix it. Left alone because it is an interface
+  taste call — a suppression window is a lie about live state for its duration, and how long a
+  confirmation should out-rank the truth is the human's to say.
+- **`apply`'s 409 merge stops on a foreign RENAME of a tab you did not touch.** The merge asks the
+  journal what each tab held at the base it started from, and `JournalEntry.Before` holds a tab's
+  `state` and nothing else — no name, no note, no type. So a tab renamed on the board while an
+  agent wrote to a DIFFERENT tab cannot be classified, and the merge refuses by name rather than
+  guessing, which is the right refusal for the record it has. Widening the journal entry to carry
+  the whole tab would make it mergeable — and that is a schema decision about a file that rotates,
+  is read by `history`, and is the board's only undo, so it is not one to take while tidying up.
+- **`aboard <cmd>` is hardcoded in user-facing prose** — 13 places by item 6's reviewer's count,
+  four of them added by item 6 itself, and more again if help text and the generated headers are
+  counted. This is the latent hosted-mode finding above, now measured: under `ape aboard` every one
+  of those sentences names a command the user does not have. Wiring `Options.Argv0` (or equivalent)
+  through the messages is a whole-repo change and belongs WITH the ape mount, not before it —
+  recorded here so nobody rediscovers it one string at a time, and so the ape plan starts with a
+  number rather than a survey.

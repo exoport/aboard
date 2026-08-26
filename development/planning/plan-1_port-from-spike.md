@@ -170,7 +170,7 @@ aboard [--cwd DIR] <command>
   serve        [--name N] [--port P] [--state FILE] [--dev] [--base-path /p]      the default is NOT serve; a bare `aboard` prints help
   status       [--output-format]                                                     running? url, pid, caps beacon, skill staleness
   init         [--name N] [--example] [--gitignore]
-  apply        [--by ACTOR] [--name N]                                               stdin JSON → compare-and-set through the running server
+  apply        [--by ACTOR] [--check] [--strict] [--label S] [--force] [--name N]   stdin JSON → compare-and-set through the running server
   wait         [--for PRED] [--timeout D] [--note S]                                 exit 0 released, 3 timed out
   poke         [--note S]
   journal      [--limit N] [--output-format]
@@ -186,8 +186,10 @@ aboard [--cwd DIR] <command>
 ```
 
 `history`, `rendered` and `uploads` were added by plan-2 item 6 (handoff-13-features
-`bb363`, `bb368`, `bb369`), which is why they are here and not in the original grammar.
-`boards` is NOT here: it is gated on the human (plan-2 §10).
+`bb363`, `bb368`, `bb369`), which is why they are here and not in the original grammar,
+and so were `apply`'s `--check`, `--strict` (`bb362`), `--label` (`bb371`) and `--force`
+(the review's no-base finding, plan-2 item 2). `boards` is NOT here: it is gated on the
+human (plan-2 §10).
 
 `--by human` is refused from the CLI. `-name`/`BOARD_NAME` → `--name`/`ABOARD_NAME`.
 The old single-dash modes do not exist; `aboard -status` prints cobra's unknown-flag error.
@@ -198,6 +200,9 @@ The old single-dash modes do not exist; `aboard -status` prints cobra's unknown-
 - `make caps` (builds twice; asserts the generated reference and controls module are current)
 - `make smoke` against a server started detached for the repo's own `.aboard/` (seeded with
   `aboard init --example`), never in the foreground of a call that might time out
+  — **historical: `make smoke` and `test/smoke.sh` were retired by plan-2 item 4. The
+  browser suite is `make e2e`, which seeds its own temporary board and needs no server
+  at all. This ladder is the record of how plan 1 was verified, not a list to run today.**
 - `make shot` of at least: the gallery tab, one html tab (shoot `/tab/<id>/html` directly), the
   help panel (`#help`) — and LOOK at the pictures
 - for the rename commit: `grep -rn '\bboard\b' --include=*.go --include=*.js --include=*.html --include=*.css --include=*.md --include=*.json` and justify every survivor (data contract: `bb` ids, the `board.json` schema keys, `by: "claude"` in chat history handling)

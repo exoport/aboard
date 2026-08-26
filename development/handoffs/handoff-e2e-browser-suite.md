@@ -1,6 +1,14 @@
 # Handoff — a real end-to-end browser suite, run locally, fully autonomous
 
-**Status: LIVE. Order: after the review fixes
+**Status: DONE — landed as `c3db7a7` on 2026-08-26 (plan-2 item 4).** `test/e2e/` is the
+suite, `make e2e` runs it, `test/smoke.sh` and the `node` dependency are gone, and
+`docs/how-to/run-the-browser-suite.md` is the user-facing page including the table that
+maps every retired shell check to its `e2e` equivalent. Item 6 of the "What to build, in
+order" list below — visual regression — was explicitly NOT built and is not queued: it is
+the flakiest layer and nothing has asked for it. Everything else in this document is the
+record of why the suite looks the way it does.
+
+**Was: LIVE. Order: after the review fixes
 (`development/research/review-d6c2f84-20260825.md`, highs + behaviour mediums), before
 `handoff-json-hot-paths.md`.** Decided with the human on 2026-08-25. Local only — `make e2e` —
 never in GitHub CI (decision 13 of plan-1 stands: Go unit tests gate CI; the browser suite is a

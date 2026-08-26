@@ -1,5 +1,12 @@
 # Handoff — 13 features for `aboard` (the first build queue)
 
+**Status: DONE for items 1–10, 2026-08-26 (plan-2 item 6, commit `d69197a`); item 11
+(`bb372` `boards`) is PARKED, gated on the human — plan-2 §10.** Each item's own section
+carries a **DONE** heading and a note saying what actually shipped, which is not always
+what the original sketch below it proposed; where the two disagree, the DONE note is the
+record and the sketch is preserved as written. Nothing here is a live instruction any
+more except `bb372`, and that one is a question for the human before it is work.
+
 ## Provenance
 
 This rewrites `handoff-13-features.md`, generated 2026-08-25 on the `board` spike
@@ -179,7 +186,8 @@ rather than rebuilt: the journal records a name and a state and never a `type`.
 **What it does.** `journal.go` already writes every changed tab's prior state to
 `.aboard/run/journal.jsonl` on every accepted write. This adds a read path over it: a
 new `GET /history?tab=` route, and a new `aboard history <tab> [--limit N] [--at N]`
-subcommand — **not yet in plan-1's CLI grammar table; add it there when this ships.**
+subcommand — **added to plan-1's CLI grammar table when it shipped, along with
+`rendered` and `uploads`.**
 `history <tab>` lists prior versions with who wrote them; `history <tab> --at N`
 prints the document form `aboard apply` accepts, for an explicit restore.
 

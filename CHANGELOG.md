@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+Everything below closes `development/planning/plan-2_finish-line.md`, which is complete.
+The entries are one per user-visible change, so the larger plan items appear as several
+lines and the ones with no user-visible surface — the suite, the extension — appear as one.
+
+- **fix: the write path is serialised, and a `409` means nothing of yours landed.**
+  Two overlapping POSTs both passed compare-and-set and both wrote, so one edit was
+  destroyed with a `200` and the journal recorded the lost write as though it had
+  landed (40/40 barrier-synchronised trials). One lock now spans read → compare-and-set
+  → reconcile → write; the losers are refused, not queued on top of each other. And the
+  SSE fanout no longer sends on a channel its reader has closed — a client disconnecting
+  inside that window killed the whole process, leaving a stale instance record behind.
+- **perf: a write costs the edit, not the board.** The server keeps the state document
+  parsed in memory and a POST decodes the incoming body exactly once and the document on
+  disk not at all; unchanged tabs are compared as bytes and carry their derived facts
+  forward. One small edit on a board of 5 000 tabs no longer canonicalises 5 000 states
+  twice and walks the whole document for ids twice. `GET /aboard.json` is served from that
+  cache with an `ETag`, the file watcher is stat-gated, and the JSON codec is
+  `encoding/json/v2` (via the Go team's published mirror) for the raw-value paths a board
+  is made of. Every claim has a counting test; the numbers are in
+  `development/handoffs/handoff-json-hot-paths.md`.
+- **feat: the board can be framed by an editor.** `?chrome=full|notabs|none` hides the
+  board's own tab strip for one viewer — a URL parameter, never server state, because two
+  viewers must be able to disagree about chrome while agreeing about content — the page
+  announces its active tab to its embedder (`{__aboard:'active', tab}`), and every
+  `localStorage`/`sessionStorage` read is wrapped, so a host that refuses storage to a
+  third-party frame can no longer take the page down.
+- **test: a real browser suite — `make e2e`.** playwright-go behind `//go:build e2e`,
+  seeding its own temporary board and serving the engine in-process, so it needs no server,
+  no `PROJECT` and no human, and it cannot touch anybody's board. It clicks, drags, wheels,
+  right-clicks and types through every renderer's declared gestures, reaches inside the
+  sandboxed widget frame, and exercises SSE rather than switching it off. `test/smoke.sh`,
+  the `node` dependency and the "provable only by a human click" sentence are gone with it.
+- **A VS Code extension exists, in its own repo** (`aboard_vscode`): the board's tabs as a
+  native `TreeView`, the board itself in a webview panel, and every write a human is allowed
+  to make. Implemented and unit-tested, and **never loaded into a real VS Code** — that
+  install is gated on the human.
 - **feat: a write warning reaches the person who can see it.** `POST /aboard.json`
   runs the write-time checks over the tabs the write TOUCHED — never the whole
   board — and the strings land on that journal entry, in the POST reply, on the
@@ -159,9 +195,15 @@
 - **hardening: an `html` tab's CSP carries `sandbox allow-scripts`**, so the opaque
   origin holds when the document is fetched standalone rather than framed.
   `connect-src 'none'` is still the containment.
-- **`capsHash` moved `9facfc76` → `6ff337ed`**: the command table declares
-  subcommands, so `recipes list` and `recipes show` and their flags are part of the
-  described surface and appear in the generated reference.
+- **`capsHash` ends this release at `9defc6c6`.** It moved twice on the way:
+  `9facfc76` → `6ff337ed` when the command table gained subcommands, so
+  `recipes list`, `recipes show` and their flags became part of the described
+  surface; then `6ff337ed` → `9defc6c6` when `history`, `rendered`, `uploads` and
+  `apply`'s `--check`/`--strict`/`--label`/`--force` did. Both moves are correct
+  and both are recorded, because the intermediate value is the one a half-updated
+  skill will be carrying — and `aboard status` comparing a skill's stamp against
+  the binary's is how a session finds out its reference describes a board that no
+  longer exists.
 
 - **feat: aboard, ported from the `board` spike** — a single Go binary serving a
   shared visual board for a human and one or more agent sessions, with the whole

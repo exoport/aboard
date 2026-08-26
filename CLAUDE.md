@@ -38,6 +38,31 @@ different `capsHash`, the skill is describing a board that no longer exists: run
 Then read the board itself, and each tab's `note` — that is the human's statement of
 what the tab is FOR, and it carries intent the contents cannot.
 
+### Where the project stands
+
+**Nothing is open.** `development/planning/plan-2_finish-line.md` is complete as of
+2026-08-26: the two races, the review's behaviour/coverage/low findings, the browser
+suite, the JSON hot paths, the eleven reviewed features, the VS Code panel's
+server-side prerequisites, and the extension itself (in `aboard_vscode`, built and
+unit-tested, never loaded into a real VS Code). Every handoff in
+`development/handoffs/` says DONE or SUPERSEDED at the top, and the review file has a
+disposition beside every finding.
+
+**The one open list is that plan's §10** — ten entries, and every one of them is a
+question rather than work: the `boards` subcommand's registry, the remote and the first
+tag, Go 1.27, the `ape aboard` mount and the `aboard <cmd>` strings that go with it,
+installing the extension, the example board's prose, the notify confirmation's repaint,
+the journal record `apply`'s merge would need widening to survive a foreign rename, and
+a pointer to the judgement calls in `handoff-phase-e-finish.md` that stand until
+overruled. `development/README.md` carries a separate list — five findings that are real,
+are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
+count, `BUILD_DATE`, the pinned-versus-`$PATH` divergence — in golangci-lint AND in
+gofumpt — and `make install INSTALL_DIR`), each with what it would take, so nobody
+re-measures them.
+
+If you are resuming and looking for the next task, **there is not one queued — ask the
+human.** No remote exists yet, so nothing here has ever been pushed.
+
 ### Directory map
 
 | Path                              | Purpose                                                                                                                              |
@@ -95,11 +120,22 @@ Tooling is pinned via [bingo](https://github.com/bwplotka/bingo) — `.bingo/Var
 plus a per-tool `.mod`. Upgrade with `bingo get <module>@<version>` and commit the
 regenerated files.
 
+**A pinned tool and the same tool on `$PATH` are two different tools, and this repo
+runs both.** `make lint` and `make fmt` take the bingo pin; the `golangci-lint-mod`
+pre-commit hook and a bare `gofumpt -l .` take `$PATH`, which is normally a different
+version. Measured 2026-08-26: `make lint` (pinned v2.6.0) reports **0** where
+`make pre-commit` (PATH v2.11.1) reports **11**, and `gofumpt -l .` (PATH v0.9.2)
+reports the tree clean where `make fmt` (pinned v0.10.0) rewrites
+`pkg/aboard/history_test.go`. Read either as "a different version of the tool says
+this", never as "the tree regressed" — and check which copy you just ran before
+believing a number. `development/README.md` carries the open decision about which of
+the two should move; nothing in CI or `make ci-local` depends on the unpinned copy.
+
 ### Commits
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
 - The subject is the claim; the body is the reasoning and the mistakes found on the way.
-- Pre-commit hooks must pass before a commit lands.
+- Pre-commit hooks must pass before a commit lands — with the divergence above in mind: `make pre-commit` currently reports findings `make lint` does not, from an unpinned analyzer, and which of the two gates moves is an open decision in `development/README.md`.
 
 ## Two hard rules
 
@@ -149,7 +185,7 @@ session is watching is not yours to restart.
   this: `at` is a millisecond clock, which is the token this project stopped trusting.
 - **Writes are serialised, and a `409` is the guarantee that nothing of yours landed.** One lock across read → compare-and-set → reconcile → write, and the token compared is a **revision counter** (`rev`), never a timestamp; the losers of a simultaneous write are refused, not queued on top — [why](docs/explanation/why-writes-are-serialised.md).
 - **The board answers loopback only, and refuses a cross-site write.** A `Host` outside `localhost`/`127.0.0.1`/`[::1]` is `403` (the DNS-rebinding guard), and so is any mutating request whose `Origin` is not the board's own — [the rules](docs/reference/http-api.md#who-is-allowed-to-ask). Neither is authentication; the server has none. They stop a browser from being the thing that reaches it for somebody else.
-- **A write warning goes to the journal entry and to the screen, never into a tab.** `POST /aboard.json` runs the write-time checks over the tabs the write TOUCHED, and the strings ride the journal entry, the POST reply, the SSE frame, the tab's notice banner and the trace tab. Scoped on purpose: a whole-document scan would re-report every pre-existing mistake as though this write had made it — the example board's deliberately invalid `sparkline` would then ride along on every write ever made, and a warning that always fires is one people learn to skip. It still warns on a write that touches ITS tab, and there is no suppression mechanism for it. The reply and the frame also name the tabs the checks RAN over, which is the only thing that can take a banner back DOWN: a clean tab is absent from the warnings, which is the same shape as a tab the write never looked at, so a page that only ever received warnings could raise a banner and never lower one. `apply --check` runs the checks and posts nothing; `apply --strict` refuses on any warning. Warning-not-refusing stays the default, because a spec can legitimately lag its renderer.
+- **A write warning goes to the journal entry and to the screen, never into a tab.** `POST /aboard.json` runs the write-time checks over the tabs the write TOUCHED, and the strings ride the journal entry, the POST reply, the SSE frame, the tab's notice banner and the trace tab. Scoped on purpose: a whole-document scan would re-report every pre-existing mistake as though this write had made it — the example board's deliberately invalid `sparkline` would then ride along on every write ever made, and a warning that always fires is one people learn to skip. It still warns on a write that touches ITS tab, and there is no suppression mechanism for it. The reply and the frame also name the tabs the checks RAN over, which is the only thing that can take a banner back DOWN: a clean tab is absent from the warnings, which is the same shape as a tab the write never looked at, so a page that only ever received warnings could raise a banner and never lower one. `apply --check` runs the checks and posts nothing; `apply --strict` refuses on any warning. Warning-not-refusing stays the default, because a spec can legitimately lag its renderer. `apply --label "…"` records WHY a write happened — stripped off the payload beside `__by` and `__base`, stored on the journal entry and never in the board document, and printed by `journal`, `watch` and the trace tab. A journal answered who and what and never why, so "the write that broke the gallery" could not be found without reading every payload; it is navigation inside a local, rotating file, never a record to cite anywhere permanent.
 - **Nothing in the browser executes anything.** Action buttons, `gate` verdicts and `ui` buttons RECORD an intent; the agent that asked acts on it. That is what makes a stray click harmless on a server with no auth.
 - **Ids are board-wide monotonic, tagged `bb`, with no type prefix** — [reference](docs/reference/state-file.md#ids). Form *field* ids stay semantic.
 - **An id is enough coming FROM the human and not enough going TO them.** They say an id and you can look it up; you say one and they may have nothing. Name the thing and put the id beside it — "the Migration review tab (`<id>`)", never "the button in `<id>`".
@@ -184,6 +220,7 @@ session is watching is not yours to restart.
   spec knows about, and a declared-field scan would call that image an orphan and offer to
   delete something the human is looking at. `--prune` alone prints and refuses.
 - **Per-viewer UI state never goes in the state file** — selection, zoom, collapsed blocks, marks-hidden, chat drafts, mount receipts, and the chrome a host asks for when it frames the board (`?chrome=full|notabs|none`). Two viewers can look at one board in the same second and must disagree about all of it while agreeing about content, so it lives in the URL — [the shell's URL surface](docs/reference/http-api.md).
+- **The board can be FRAMED, and says so out loud.** Three things exist for a host that owns the tab strip — a VS Code extension is the first: `?chrome=notabs` suppresses the board's own strip for that viewer; the page posts `{__aboard: 'active', tab: '<id>'}` to its parent whenever the active tab changes, so a sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the board and not only clicks that started outside it; and every `localStorage`/`sessionStorage` access is wrapped, because a third-party frame can be refused storage outright and an unguarded read would take the whole page down rather than lose a remembered scroll position. None of the three is server state, and none of them is a hook a host can use to make the board DO anything — the rule that nothing in the UI starts a session holds across the frame boundary too.
 - **One resolved root.** Paths are joined in `layout.go` and nowhere else — enforced by `TestNothingOutsideLayoutJoinsAPath`, an AST walk, because the rule had four violations for as long as nothing checked it. The port is derived from the discovered root, so the URL is the same from any subdirectory.
 - **Dependencies are cobra + pflag + yaml.v3 + `go-json-experiment/json` and their closure.** The JSON one is the Go team's own published mirror of `encoding/json/v2`, which Go 1.27 makes the default `encoding/json`; it has zero dependencies of its own and aliases the stdlib implementation once the toolchain moves. It is here for the raw-value paths the board is made of — a tab's `state` is opaque bytes — where it is 3–7× the v1 encoder, and for `jsontext.Value.Canonicalize()`, which replaced an unmarshal-and-re-marshal round trip. `writeOptions` in `pkg/aboard/document.go` pins `Deterministic` and `EscapeForHTML` so the bytes it writes are byte-identical to what `encoding/json` wrote (asserted); do not drop the second without escaping at `htmltab.go`'s `<script>` splice first. No vendor directory; the mermaid bundle is committed at `pkg/aboard/web/lib/` because Go treats `vendor/` specially. **`playwright-go` is TEST-ONLY**: it is reached only from `test/e2e/`, every file of which is behind `//go:build e2e`, so it never enters the binary — `go list -deps ./cmd/aboard` does not mention it and neither does `go version -m ./aboard`. Its module path is `github.com/mxschmitt/playwright-go`, which is what the community fork publishes in its own `go.mod` at these tags.
 
@@ -226,7 +263,7 @@ session parked on `aboard wait`, has to survive a restart and a week away.
 - **`make e2e` writes its evidence twice on a failure** — into the temp board it drove, and into `<repo>/.aboard/run/e2e/<TestName>/`, which is gitignored and survives the run. A trace (`npx playwright show-trace`), a full-page screenshot, the board document, and that page's console. **Look at the screenshot.**
 - **A CLI command in a doc is a claim. Run it.** The spike's resume section said `-journal -l 20` when the flag was `-limit`, so the third command a resuming session ran exited 2. Nothing tests the commands in prose; if you write one, execute it once.
 - **`apply` succeeding is not evidence that anything renders.** It prints `applied` and exits 0 for a document that draws an empty box — `ui` is the worst offender, because an unknown component shows a marker but an unknown PROP shows nothing at all. Read the stderr warnings, then shoot the tab and **look at the picture**.
-- **Screenshots land under the target project's `.aboard/run/shots/`** because a snap-confined chromium cannot write outside `$HOME`. That constraint and `PROJECT=/tmp/...` pull against each other: if `make shot` writes nothing at all against a scratch project under `/tmp`, the confinement is why, and a scratch project under `$HOME` is the way out.
+- **Screenshots land under the target project's `.aboard/run/shots/`** because a snap-confined chromium cannot write outside `$HOME`. That constraint and `PROJECT=/tmp/...` pull against each other: if `make shot` writes nothing at all against a scratch project under `/tmp`, the confinement is why, and a scratch project under `$HOME` is the way out. `test/shot.sh` exits **1** when no picture was written at all, and clears each shot's previous PNG before taking it — a stale file from an earlier run is indistinguishable from a fresh one, so without that the exit code would still have been lying. A PARTIAL run exits 0 on purpose: one mistyped tab id among five is a typo, not a broken environment.
 
 ## Documentation
 

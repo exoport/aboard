@@ -76,6 +76,15 @@ TABS="$*"
 [ -z "$TABS" ] && TABS="kanban dag diagram form markup"
 mkdir -p "$OUT"
 
+# Counted, because this script used to exit 0 when every single shot FAILED —
+# which is the confined-chromium case below, the one it warns about by name. A
+# screenshot tool that reports success having written nothing is worse than one
+# that cannot run: `make shot` in a ladder went green and the human found the
+# missing pictures. A PARTIAL run still exits 0 on purpose: one mistyped tab name
+# among five is a typo, not a broken environment, and the FAILED line already
+# says which.
+WROTE=0
+
 # Said ONCE, up front, because the browser's own message for it is a lie. A
 # confined chromium refusing to write outside $HOME reports "No such file or
 # directory" for a directory that plainly exists, so the reader goes looking for
@@ -105,13 +114,35 @@ for tab in $TABS; do
     *"#"*) url="$BASE/?nosse=1&tab=${tab%%#*}#${tab#*#}" ;;
     *)     url="$BASE/?nosse=1&tab=$tab" ;;
   esac
+  # Clear the previous run's picture first, or "did this shot work" is really
+  # "has this tab EVER been shot into this directory" — a stale PNG makes a
+  # failed run look like a successful one, which is the same lie the exit code
+  # below exists to stop telling.
+  #
+  # `|| true` because a failing command aborts a `set -e` script with no message
+  # at all — the trap this file's header already warns about, sprung here on the
+  # first try: an unwritable shots directory made `rm` fail and the whole script
+  # ended mid-loop printing nothing. And if the file survives the removal we
+  # cannot tell this run's picture from the last one's, so that shot is failed
+  # before the browser is even started.
+  rm -f "$OUT/$name.png" 2>/dev/null || true
+  if [ -e "$OUT/$name.png" ]; then
+    echo "  $name FAILED (cannot clear the previous $OUT/$name.png)" >&2
+    continue
+  fi
   timeout 90 "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars \
     --window-size="${WIDTH:-1280},${HEIGHT:-940}" --virtual-time-budget=10000 \
     --screenshot="$OUT/$name.png" \
     "$url" 2>/dev/null || true
   if [ -s "$OUT/$name.png" ]; then
     echo "  $OUT/$name.png"
+    WROTE=$((WROTE + 1))
   else
     echo "  $name FAILED" >&2
   fi
 done
+
+if [ "$WROTE" -eq 0 ]; then
+  echo "no screenshot was written — nothing here was verified" >&2
+  exit 1
+fi

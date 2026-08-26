@@ -49,10 +49,17 @@ numbers are in the D2a report), run `make lint test docs-check xcompile-windows 
 `aboard init --example`, run `make smoke` ONCE per tool call and LOOK at the screenshots, then have
 an independent reviewer re-run the ladder. Commit the result.
 
+**Historical: `make smoke` no longer exists.** `test/smoke.sh` was retired by plan-2 item 4 and
+the browser suite is `make e2e`, which seeds its own temporary board. The paragraph above is
+what Phase E was actually verified with, kept as the record; it is not a ladder to run today.
+
 ## After Phase E
 
-The queue starts with `handoff-json-hot-paths.md` (decided 2026-08-25: structural JSON fixes
-first, then json/v2, no per-tab resources), then `handoff-13-features.md`.
+**All of it has since landed.** The queue that started here was `handoff-json-hot-paths.md`
+(decided 2026-08-25: structural JSON fixes first, then json/v2, no per-tab resources) and then
+`handoff-13-features.md`; both are DONE, and everything owed after them was ordered and
+executed as `development/planning/plan-2_finish-line.md`, which is complete. The only open
+list left is that plan's §10 — the things gated on the human.
 
 ## Open judgement calls the agents made — the human may want to overrule
 
@@ -73,6 +80,8 @@ first, then json/v2, no per-tab resources), then `handoff-13-features.md`.
   **Closed 2026-08-26**: `test/e2e` drives the sketch pad's Undo inside the sandboxed frame and reads
   `state.data` back off the server, and does the same for an html block inside a stack
   (`TestAWidgetWritesThroughTheBridge`, `TestAWidgetInsideAStackBlockWritesThroughTheBridge`).
-- The 11 open features of the 13-feature review are queued, not built.
+- ~~The 11 open features of the 13-feature review are queued, not built.~~ **Closed 2026-08-26**:
+  ten of the eleven shipped as plan-2 item 6 (`d69197a`); the eleventh, `boards` (`bb372`), is
+  parked on the human's answer — plan-2 §10, and the judgement call below is the question.
 - The spike's own board was found DOWN mid-session and restarted with its own `restart.sh` on
   port 46624; nothing in its tree was written.

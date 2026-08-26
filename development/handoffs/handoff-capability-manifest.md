@@ -68,6 +68,11 @@ that from the code.
   renders visibly flagged as undeclared — no DOM scrape needed, no title-text
   heuristics, no false-positive chrome. **Do not resurrect the sweep.** This is a
   closed decision inherited from the spike, not a gap this rewrite left open.
+  **Mount receipts (`bb368`, plan-2 item 6) are not the sweep coming back**, and the
+  distinction is the whole reason they were allowed: every id a receipt carries is
+  already DECLARED in a `.spec.json`, nothing is matched against `gestures`, and no
+  title text is read. The browser reports which declared controls it drew; it does not
+  guess which buttons ought to have been documented.
 
 **One more thing beyond the original proposal, worth carrying forward explicitly:**
 `controls` in a `.spec.json` is a **list**, not a map, because — unlike state
