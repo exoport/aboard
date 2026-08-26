@@ -12,6 +12,30 @@
 </head>
 <body>
 
+<!-- Per-viewer chrome, asked for in the URL: ?chrome=full | notabs | none.
+     Chrome visibility belongs to the VIEWER, never to aboard.json — two viewers
+     can look at one board in the same second and must disagree about chrome
+     while agreeing about content. ?nosse=1 and the #tab= fragment are the same
+     shape. An embedder that draws its own tab list (a VS Code panel) has no
+     other way to ask: the frame is cross-origin, so it can neither inject CSS
+     nor reach this DOM.
+
+     Stamped here, in a classic script at the top of <body>, rather than in the
+     module below: a module is deferred, so the strip would paint and then
+     vanish. An unknown value falls back to `full` — a typo that blanks the UI
+     is worse than a typo that does nothing. The rules themselves are in
+     app.css, keyed off this attribute. -->
+<script>
+(function () {
+  // A LIST, not an object keyed by value: `?chrome=constructor` would find a
+  // truthy inherited property on an object literal and get stamped through.
+  // Nothing breaks — no CSS rule matches it, so it renders as `full` anyway —
+  // but the attribute would then say something the shell never chose.
+  var want = new URLSearchParams(location.search).get('chrome');
+  document.body.dataset.chrome = ['full', 'notabs', 'none'].indexOf(want) >= 0 ? want : 'full';
+})();
+</script>
+
 <div class="board-head">
 
 <div class="topbar">
@@ -1295,13 +1319,64 @@ function ensureMounted(id) {
   }
 }
 
+// Which tab you were last on is a NICETY, and storage is not always there to
+// hold it. Inside a webview the board runs as a third-party frame, where storage
+// is partitioned and, in some configurations, refused outright — and a refusal
+// is a thrown SecurityError, not a null. Thrown from inside activate() it took
+// tab switching down with it, which is the one gesture an embedder depends on.
+// These are the UI's only two localStorage call sites; guarding both turns a
+// total failure into a forgotten preference. (views/ui.js reaches for
+// sessionStorage to remember which panel of a `tabs` component was open, and it
+// has been guarded since it was written — same reason, same shape.)
+function rememberTab(id) {
+  try { localStorage.setItem('aboard.tab', id); } catch {}
+}
+
+function lastTab() {
+  try { return localStorage.getItem('aboard.tab'); } catch { return null; }
+}
+
+// A host that embeds the board keeps its own tab list, and the board switches
+// tabs on its own — [ and ], 1-9, and whichever tab it picks on load. A sidebar
+// that can only ever SEND navigation drifts the moment the human presses ], and
+// a highlight that lies is worse than no highlight at all: it is the thing they
+// trust to answer "where am I".
+//
+// '*' as the target origin, deliberately: the embedder's vscode-webview://<uuid>
+// origin is not knowable in advance, and the tab id is already in this page's own
+// URL, so there is nothing here to disclose. The receiver authenticates by
+// comparing event.source, not origin.
+//
+// Nothing else travels this way. The tab list, the document and the notices are
+// read from /aboard.json and /events like every other client — a second, weaker
+// channel for the same data is a bug factory.
+//
+// It says what CHANGED, not what happened. repaint() re-activates the current
+// tab at the end of every pass, and a pass runs on every foreign write arriving
+// over SSE — so announcing from inside activate() unconditionally would post the
+// same id again every time an agent touched the board. That is not harmless
+// noise: the embedder this was built for answers each message by revealing the
+// row in its tree, so an unchanged tab re-announced ten times a minute drags the
+// human's sidebar back under their cursor. One id remembered here is the whole
+// fix, and it makes "posted whenever the active tab changes" the true sentence
+// the documentation was already writing.
+let announcedTab = null;
+
+function announceActive(id) {
+  if (window.parent === window) return;
+  if (id === announcedTab) return;
+  announcedTab = id;
+  try { parent.postMessage({ __aboard: 'active', tab: id }, '*'); } catch {}
+}
+
 function activate(id) {
   // The note belongs to the tab you are looking at, so it repaints on every
   // switch — not only on a document reload.
   setTimeout(renderTabNote, 0);
   if (!tabById(id)) return;
   activeId = id;
-  localStorage.setItem('aboard.tab', id);
+  rememberTab(id);
+  announceActive(id);
   for (const btn of $tabs.children) {
     btn.setAttribute('aria-selected', String(btn.dataset.id === id));
   }
@@ -1459,7 +1534,7 @@ function repaint({ announce = false } = {}) {
     }
   }
   if (!tabById(activeId)) {
-    activeId = localStorage.getItem('aboard.tab');
+    activeId = lastTab();
     if (!tabById(activeId)) activeId = tabs()[0] ? tabs()[0].id : null;
   }
 

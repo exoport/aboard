@@ -59,6 +59,16 @@ func open(t *testing.T, query string) *session {
 // the live-reload tests start for themselves.
 func openAt(t *testing.T, base, query string) *session {
 	t.Helper()
+	return openReady(t, base, query, "#tabs .tab")
+}
+
+// openReady is openAt with the readiness check named, because "the board is on
+// screen" is not the same sentence on every page: under `?chrome=notabs` the tab
+// strip is deliberately hidden, so waiting for it to become VISIBLE waits for
+// something that will never happen and the failure reads as a broken board
+// rather than as the chrome doing its job.
+func openReady(t *testing.T, base, query, ready string) *session {
+	t.Helper()
 
 	ctx, err := browser.NewContext(playwright.BrowserNewContextOptions{
 		Viewport: &playwright.Size{Width: 1400, Height: 1000},
@@ -116,10 +126,10 @@ func openAt(t *testing.T, base, query string) *session {
 	}
 	// The shell builds its tab strip after the first fetch, so "the page loaded"
 	// is not "the board is on screen".
-	if err := page.Locator("#tabs .tab").First().WaitFor(playwright.LocatorWaitForOptions{
+	if err := page.Locator(ready).First().WaitFor(playwright.LocatorWaitForOptions{
 		State: playwright.WaitForSelectorStateVisible,
 	}); err != nil {
-		t.Fatalf("the tab strip never appeared: %v", err)
+		t.Fatalf("%s never appeared: %v", ready, err)
 	}
 
 	t.Cleanup(s.finish)

@@ -3,11 +3,13 @@ package aboard
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -91,6 +93,60 @@ func TestServeShellInjectsTheBasePath(t *testing.T) {
 		want := `window.ABOARD_BASE = "` + NormalizeBasePath(base) + `";`
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("base %q: the shell does not carry %s", base, want)
+		}
+	}
+}
+
+// And the other direction: what a CLIENT of a prefixed board reads back.
+//
+// `Instance.Base` has carried the prefix since the port and nothing pinned it,
+// because nothing in Go had a reason to look — it is read by an editor extension
+// building its own URLs, which is the one caller no test here represents. It is
+// `omitempty`, so the failure mode of a rename is not an error anywhere: the
+// field simply stops appearing, and the client silently addresses the wrong
+// path. `http-api.md` documents it by name now, which makes it a promise.
+func TestHealthReportsTheBasePath(t *testing.T) {
+	for _, base := range []string{"", "/brd"} {
+		s := testServer(t, htmlTabBoard)
+		s.base = NormalizeBasePath(base)
+		if err := s.writeInstance(s.root, ""); err != nil {
+			t.Fatalf("base %q: writing the instance record: %v", base, err)
+		}
+
+		rec := httptest.NewRecorder()
+		s.route(rec, httptest.NewRequest(http.MethodGet,
+			"http://localhost"+s.base+"/health", http.NoBody))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("base %q: GET %s/health answered %d", base, s.base, rec.Code)
+		}
+
+		// Decoded as a map, not as an Instance: the question is what a client
+		// reading JSON sees, and `omitempty` is invisible through the struct.
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("base %q: /health is not JSON: %v", base, err)
+		}
+		got, present := body["base"]
+		switch {
+		case base == "" && present:
+			t.Errorf("a board at the server root reports base %q; the field is omitempty so a client can treat its absence as \"no prefix\"", got)
+		case base != "" && got != s.base:
+			t.Errorf("base %q: /health reports base %v, want %q", base, got, s.base)
+		}
+
+		// The instance file says the same thing, and it has to: a prefixed board
+		// answers /health only AT the prefix, so a client that does not already
+		// know it cannot learn it from there.
+		raw, err := os.ReadFile(s.root.InstanceFile(""))
+		if err != nil {
+			t.Fatalf("base %q: reading the instance record: %v", base, err)
+		}
+		var rec2 map[string]any
+		if err := json.Unmarshal(raw, &rec2); err != nil {
+			t.Fatalf("base %q: the instance record is not JSON: %v", base, err)
+		}
+		if rec2["base"] != body["base"] {
+			t.Errorf("base %q: the instance record says %v and /health says %v", base, rec2["base"], body["base"])
 		}
 	}
 }

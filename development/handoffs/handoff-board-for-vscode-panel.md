@@ -1,9 +1,11 @@
 # Handoff — `aboard`-side changes to let a VS Code extension own the tab strip
 
-**Status:** the framing fix (§2) and the three items the port already satisfies (§3)
-are done or will be, as a side effect of the port itself. The three genuine
-prerequisites (§4–§6) are proposed, not started, and belong on the build queue
-alongside `handoff-13-features.md`.
+**Status: landed, 2026-08-26 (plan-2 item 7).** The framing fix (§2) and the three
+items the port already satisfies (§3) came with the port itself. The three genuine
+prerequisites — `?chrome=` (§4), the `active` message (§5) and the storage guards
+(§6) — are **shipped**, with the browser suite covering all three (`test/e2e/embed_test.go`).
+§3's open question is answered and needed no code: `GET /health` has exposed the
+configured base path all along, as `base`.
 
 **Rewritten from:** `handoff-board-for-vscode-panel.md`, written 2026-08-24 on the
 `board` spike by `agent-research`, stamped against spike commit `7e5a179`.
@@ -41,9 +43,9 @@ not learn the schema.
 | write back as the human | works, carries over, **one behaviour changed** | `POST /aboard.json` with `__base`/`__by`/`__origin` — **`__by` is no longer optional in practice**: `bb360` (see `handoff-13-features.md` §0) makes an absent `__by` default to `"unknown"`, not `"human"`, so the extension must always send `__by: "human"` explicitly or it silently loses every human-only power it needs (dismiss, delete, answer a removal request) |
 | the notify channel | works, carries over | `POST /poke`, `GET /waiters` |
 | discovery | works, carries over, **path changed** | `.aboard/run/instance.json` (was `.board/instance.json`) + `GET /health` |
-| **hide the board's own tab strip** | **needed** | §4 |
-| **tell the embedder which tab is active** | **needed** | §5 |
-| **survive storage being refused in a third-party frame** | **needed** | §6 |
+| **hide the board's own tab strip** | **landed** | §4 |
+| **tell the embedder which tab is active** | **landed** | §5 |
+| **survive storage being refused in a third-party frame** | **landed** | §6 |
 
 No new endpoint beyond the one this document itself proposes nowhere — the surface is
 `/aboard.json` + `/events` + `/capabilities` + `/health` + `/poke` + `/waiters`, same
@@ -83,9 +85,22 @@ Code extension — they just happen to cover exactly what it needs.
   HTTP calls directly rather than through the shell's JS. **Open question, not yet
   answered by the port:** whether `GET /health` exposes the configured base path for
   a client to read, or whether the extension is expected to already know it (e.g.
-  because the user typed it into a setting). Flag this to whoever builds §4/§5/§6
-  below — in the common case (no `--base-path` given) it is a non-issue, since the
-  discovered port is enough on its own.
+  because the user typed it into a setting).
+
+  **Answered, and the answer is that it was never missing.** `GET /health` returns
+  the whole `Instance` record, and `Instance.Base` (`pkg/aboard/server.go`) has
+  carried the configured prefix since the port landed — `json:"base"`, `omitempty`,
+  so it is simply absent in the common case where no `--base-path` was given. No
+  code was added for this; `http-api.md`'s `/health` section now says so out loud,
+  because a field that exists and is undocumented is, to a client author, the same
+  as a field that does not exist. The one ordering trap worth naming: a prefixed
+  board answers `/health` only at `<base>/health`, so a client cannot discover the
+  prefix from `/health` itself — it reads it from `.aboard/run/instance.json`,
+  which is exactly what an extension walking up from the workspace folder finds
+  first anyway.
+
+  Note the name. The field is **`base`**, not `basePath`; plan-2's brief for this
+  item guessed the latter, and the extension reads both.
 - **Two identities (plan-1 decision 6).** `GET /health` and the instance file carry
   `app: "aboard"` when the standalone binary serves, `app: "ape-aboard"` when `ape`
   hosts it. An extension's "start the board" fallback (offered when discovery finds
@@ -149,10 +164,14 @@ query and fragment already, this is free but still worth one test.
 
 ### Verification
 
-Assert on rendered DOM, headless: count `class="tab"` elements — zero under `notabs`,
-non-zero without. Do not extract containers or count closing tags (the spike's own
-gotcha, hit twice there already). Assert `#add-tab` and `.tab-note` survive under
-`notabs`. Rebuild (`pkg/aboard/web` is embedded) before checking.
+*(As built.)* Assert on rendered DOM, in a real browser: `#tabs .tab:visible` is zero
+under `notabs` and non-zero without, and `#tabs .tab` is still non-zero either way —
+the strip is hidden, not unbuilt, so a count over ALL of them would have been the
+wrong assertion and would have quietly demanded a shell with two code paths. Do not
+extract containers or count closing tags (the spike's own gotcha, hit twice there
+already). `#add-tab`, `.topbar`, `#poke` and `.tab-note` are asserted to survive
+`notabs`. Rebuild (`pkg/aboard/web` is embedded) before checking — `make e2e` depends
+on `build`, so the suite cannot test a stale copy.
 
 ## 5. Announce the active tab to the embedder
 
@@ -197,11 +216,35 @@ window` so a plain browser posts nothing; do not send the tab list, state, or no
 this way — the extension reads `/aboard.json` and `/events` like every other client,
 and a second weaker channel for the same data is a bug factory.
 
+### One correction to the sketch above: it announces a CHANGE
+
+The code in this section posts from inside `activate(id)` unconditionally, and that
+is not quite right. `repaint()` ends with `activate(activeId)`, and a repaint runs on
+every write that arrives over `/events` — so the same id is posted again every time an
+AGENT touches the board, at whatever rate somebody else happens to be working. The
+extension answers each message with `TreeView.reveal(node, { select: true })`, so the
+human's sidebar selection would be dragged back under their cursor by writes that
+changed nothing they were looking at.
+
+The shell remembers the last id it announced and posts nothing when it has not moved.
+That is one variable, and it makes "posted whenever the active tab changes" — which is
+what every document here already said — true.
+
 ### Verification
 
-A same-origin harness is enough, no VS Code needed: a wrapper page iframes
-`/?nosse=1`, listens for `message`, presses `]` inside the frame, asserts a
-`{__aboard:'active'}` arrives naming a different tab than the first one.
+*(As built.)* A same-origin harness is enough, no VS Code needed: a wrapper page
+iframes `/?chrome=notabs&probe=1`, records every message whose `event.source` is the
+frame, and asserts both halves — one arrives at LOAD naming the tab the board chose
+for itself, and pressing `]` inside the frame produces another naming a different tab,
+which is then confirmed to be the tab actually on screen. A second test pins the
+envelope: every message the board posted is shaped `{__aboard, tab}` and no other. A
+third drives a repaint through the `?probe=1` seam — a foreign write with the write
+taken out — and asserts no two consecutive announcements name the same tab.
+
+One trap, and it cost a run: `Locator.Press` on the frame's `<body>` sends the key to
+the WRAPPER, because `<body>` is not focusable and the keystroke goes to whatever
+frame has focus. Click something inside the frame first. The symptom is an `active`
+message that never arrives, which reads exactly like the feature being broken.
 
 ## 6. Do not let `localStorage` take the page down in a third-party frame
 
@@ -233,21 +276,44 @@ Unchanged reasoning from the spike version, restated with new names:
   clears it in the browser too — one human, one "have you looked". Per-actor read
   state is what `seen` is for, unaffected by any of this.
 
-## 8. Order of work
+## 8. Order of work — done in this order
 
 1. **`?chrome=` (§4).** Nothing else in this document unblocks the extension without it.
 2. **`{__aboard:'active'}` (§5).** Without it the sidebar highlight lies the moment
    the human touches `]`.
 3. **`localStorage` guards (§6).** Same file as §5, same pass.
 
-Per-item done means: `gofumpt`/`go vet` clean if Go was touched, a rebuild (the web
-tree is embedded), `make smoke` green (it pokes the board — do not run it while a
-session is parked on `wait`), and a screenshot actually looked at.
+All three landed together. No Go changed: §4 is a stamp in `aboard.html` plus two
+CSS rules keyed off it, and §5–§6 are three small functions beside `activate()`.
+The suite is `make e2e` now (`make smoke` is gone), and `test/e2e/embed_test.go`
+carries seven tests — every one of them seen failing against the previous shell
+before the change went in.
+
+Three things worth keeping from the build:
+
+- **The stamp is a classic `<script>` at the top of `<body>`, not a line in the
+  module.** The module is deferred, so stamping there paints the tab strip and then
+  removes it — a visible flicker in every embedder, on every load.
+- **`.tabs` is hidden by CSS, not left unbuilt.** The strip still exists in the DOM
+  under `notabs`; `chrome` decides pixels, not whether the shell has a second code
+  path. That is also why the test counts `#tabs .tab:visible` rather than
+  `#tabs .tab` — the original verification note in §4 said "count is zero", which
+  is only true of the version of this feature that forks the shell. The rule is
+  scoped `body[data-chrome="notabs"] .board-head .tabs`: `.tabs` is the shell's own
+  list, and a renderer growing an element by that name inside a view must not have
+  part of its contents blanked by somebody else's chrome switch.
+- **The `active` message reports a change, not a redraw** — see the correction in
+  §5. The first version of it posted from every `activate()` call, and `repaint()`
+  makes one of those on every foreign write.
 
 ## 9. What the extension loses if an item does not land
 
-| skipped | consequence |
-|---|---|
-| §4 `?chrome=` | Two tab lists, one above the other. Ugly, fully functional. |
-| §5 `active` message | Sidebar highlight drifts on `[`, `]`, `1`–`9`, and is unknown until the human's first sidebar click. |
-| §6 storage guards | Nothing today; a future webview that refuses partitioned storage breaks tab switching outright, and it will look like the extension's fault, not the board's. |
+All three landed on 2026-08-26, so this table is now a record of what was avoided
+rather than a risk register. Kept because it is the reason each item was worth
+doing.
+
+| item | status | what was avoided |
+|---|---|---|
+| §4 `?chrome=` | **landed** | Two tab lists, one above the other. Ugly, fully functional. |
+| §5 `active` message | **landed** | Sidebar highlight drifting on `[`, `]`, `1`–`9`, and unknown until the human's first sidebar click. |
+| §6 storage guards | **landed** | Nothing visible today; a webview that refuses partitioned storage would have broken tab switching outright, and it would have looked like the extension's fault rather than the board's. |

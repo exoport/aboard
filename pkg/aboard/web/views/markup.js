@@ -1377,7 +1377,7 @@ export function mountMarkup(root, ctx) {
     const note = document.createElement('input');
     note.type = 'text';
     note.className = 'markup-note';
-    note.placeholder = 'Note for Claude…';
+    note.placeholder = 'Note for the agent…';
     note.addEventListener('input', () => {
       const mark = findMark(imageId, id);
       if (!mark) return;

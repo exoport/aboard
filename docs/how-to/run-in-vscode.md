@@ -99,6 +99,34 @@ The prefix is injected into the shell as a single constant, and every request th
 makes builds from it: the stylesheet and module imports, every fetch, the SSE stream,
 and an `html` tab's iframe `src`. Point the Simple Browser at the prefixed URL.
 
+## When something else draws the tab list
+
+A host that frames the board and provides its own navigation — a VS Code extension
+with a sidebar tree, for instance — asks for the board without its own tab strip:
+
+```
+http://localhost:<port>/?chrome=notabs#tab=bb13
+```
+
+`?chrome=notabs` hides the tab button list and keeps everything else: the topbar, the
+`+` that opens the new-tab dialog, and the tab note. `?chrome=none` drops the whole
+head, for an embedding that wants the view alone. An unrecognised value is treated as
+`full`. It has to be asked for in the URL because the frame is cross-origin: a host
+cannot inject CSS into it or reach its DOM.
+
+Navigation goes both ways. The host points the frame at `#tab=<id>` — a fragment
+change, so the page does not reload — and the board posts
+`{ __aboard: 'active', tab: '<id>' }` to its parent whenever the active tab changes,
+including the tab it picks at load and the ones `[`, `]` and `1`–`9` reach. Without
+that second half a sidebar highlight goes stale the moment the human uses a key. It is
+a *change*: a redraw after somebody else's write repeats nothing, so a host is free to
+reveal or select on every message it gets.
+**Authenticate the message by `event.source`, never by origin** — the board posts with
+`'*'`, because a webview's origin is not knowable in advance.
+
+The full contract is the shell section of [the HTTP API](../reference/http-api.md),
+including what `GET /health` reports about a board served under a prefix.
+
 ## Screenshots of a docked board
 
 For scripted screenshots, two things bite and both have the same fix — use the repo's

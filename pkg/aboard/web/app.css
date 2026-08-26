@@ -98,6 +98,29 @@ body {
 
 .board-head .tabstrip { margin-bottom: 0; }
 
+/* ?chrome= — per-viewer chrome, stamped once onto <body> by the shell.
+ *
+ * `notabs` is what an embedder that draws its own tab list asks for: the button
+ * list goes, and everything else stays. The `+` STAYS on purpose — it is the
+ * only trigger for the new-tab dialog, and hiding it either strands a human
+ * working inside the embedder or forces the embedder to reimplement a dialog
+ * that belongs to the board. So does the topbar, which carries the notify
+ * button and the which-binary-is-serving badge, and so does the tab note, which
+ * is the human's own statement of what they are looking at.
+ *
+ * `none` drops the whole head, for a screenshot or an embedding that wants the
+ * view and nothing around it. Anything else is `full`, and the shell never
+ * writes a fourth value.
+ *
+ * Both rules are scoped to `.board-head` on purpose. `.tabs` is the SHELL's tab
+ * list; a renderer is free to grow an element by that name inside a view (the
+ * `ui` catalog already has a `tabs` component, saved from this only by its
+ * `uic-` prefix), and a chrome switch that silently blanked part of a tab's
+ * contents would be the worst kind of bug — invisible in the mode everyone
+ * develops in. */
+body[data-chrome="notabs"] .board-head .tabs { display: none; }
+body[data-chrome="none"] .board-head { display: none; }
+
 .topbar {
   display: flex;
   flex-wrap: wrap;

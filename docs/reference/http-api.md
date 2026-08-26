@@ -84,6 +84,70 @@ above is reached at `/prefix/...`. A request for exactly `/prefix` is answered w
 one level too high. A path that neither equals the prefix nor starts with `prefix/` is
 `404`.
 
+## `GET /` · `GET /aboard.html`
+
+The shell. Everything below is **per-viewer**: it lives in the URL and never in the
+state file, because two viewers can look at one board in the same second and must
+disagree about chrome and position while agreeing about content. The rule that keeps
+selection, zoom and collapsed blocks out of the document is the same rule.
+
+| in the URL      | what it does                                                                     |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `?tab=<id>`     | Open on that tab. `#tab=<id>&node=<id>` addresses a node inside one, and a fragment change moves the view without reloading the page. |
+| `?chrome=`      | `full` (the default) · `notabs` · `none`. See below.                              |
+| `?nosse=1`      | Do not open the event stream. For headless screenshots, which otherwise never reach network-idle. |
+| `?probe=1`      | A test seam: exposes the shell's document plumbing on `window.__aboardProbe` for the browser suite. Nothing is exposed without it. |
+
+### `?chrome=`
+
+Stamped once as `document.body.dataset.chrome`; the rules are CSS keyed off that
+attribute.
+
+| value    | effect                                                                            |
+| -------- | ----------------------------------------------------------------------------------- |
+| `full`   | Everything. What an unparameterised URL gets, and what an **unrecognised value** gets — a typo that blanks the UI would be worse than one that does nothing. |
+| `notabs` | Hides the tab button list. The topbar (notify button, version badge), the `+` and the tab note all stay. |
+| `none`   | Hides `.board-head` entirely — the view and nothing around it.                     |
+
+This exists for a host that embeds the board and draws its own tab list — a VS Code
+panel, say. It has to be asked for in the URL: the frame is cross-origin, so an
+embedder can neither inject CSS nor reach the DOM, and chrome is a viewer's business
+rather than the board's. `notabs` keeps the `+` on purpose, because it is the only
+trigger for the new-tab dialog: hiding it either strands a human working inside the
+embedder or forces every embedder to reimplement a dialog that belongs to the board.
+
+It composes with the deep link (`?chrome=notabs#tab=bb71`) and survives the board's
+own [self-reload](../how-to/run-in-vscode.md#when-the-page-reloads-itself), which
+preserves query and fragment.
+
+### What the shell posts to an embedder
+
+When the page is framed, `activate()` tells the parent which tab is now on screen:
+
+```js
+{ __aboard: 'active', tab: 'bb13' }
+```
+
+Posted with `'*'` as the target origin, because an embedder's
+`vscode-webview://<uuid>` origin is not knowable in advance and the tab id is already
+in this page's own URL. **The receiver authenticates by comparing `event.source`, not
+by origin.** An unframed page posts nothing.
+
+It is sent whenever the active tab CHANGES — including the tab the board picks for
+itself at load, and the ones `[`, `]` and `1`–`9` reach, which is the whole reason it
+exists: an embedder that only ever *sends* navigation drifts out of sync the moment the
+human uses a key, and a sidebar highlight that lies is worse than none.
+
+A change, not a redraw. The shell re-activates the current tab at the end of every
+repaint, and it repaints on every write that reaches it over `/events` — so an embedder
+that acted on each message would be answering somebody else's agent write by moving the
+human's selection. The board remembers the id it last announced and says nothing when
+it has not moved.
+
+**Nothing else travels this way.** The tab list, the document and the notices are read
+from `/aboard.json` and `/events` like every other client; a second, weaker channel
+for the same data is a bug factory.
+
 ## `GET /aboard.json`
 
 Returns the state file verbatim, `Content-Type: application/json`, with an
@@ -232,6 +296,21 @@ The instance record — `app`, `host`, `argv0`, `version`, `built`, `project`, `
 `port`, `url`, `base`, `state`, `pid`, `started`. Same shape as
 `.aboard/run/instance.json`. `app` is `aboard` or `ape-aboard`, so a client can tell
 whose port it just found.
+
+Two fields are the ones an outside client actually needs:
+
+- **`base`** is the URL prefix this board is served under — whatever
+  `serve --base-path /prefix` was given, or **absent** (it is `omitempty`) when the
+  board is at the server root, which is the common case. A client that builds its own
+  request URLs has to prepend it; a client that only follows `url` already has it.
+  This is what a VS Code extension reads before pointing an iframe anywhere.
+- **`project`** is the absolute project root, which is how a client tells this
+  project's board from an unrelated process squatting on a port it guessed at.
+
+Note the ordering problem this creates for a prefixed board: `/health` is reachable
+only *at* `<base>/health`, so a client that does not already know the prefix cannot
+read it from here. The instance file is the way in — it carries the same `base`, and
+it is found by walking up from the workspace folder.
 
 ## `GET /tab/<id>/html`
 

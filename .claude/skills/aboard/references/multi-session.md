@@ -134,6 +134,50 @@ board; both answer the same routes.
 
 Named boards get their own record: `.aboard/run/instance.<name>.json`.
 
+`base` is the URL prefix the board is served under — from `serve --base-path
+/prefix` — and it is **absent when there is none**, which is the normal case.
+`GET /health` carries the same field. Anything that builds its own request URLs
+(an editor extension, a proxy config, a script) has to prepend it; anything that
+just follows `url` already has it.
+
+## A third viewer: something that EMBEDS the board
+
+A host can frame the shell and provide its own navigation — an editor extension
+with a sidebar tree is the case this was built for. Three things make that work,
+and all three are per-VIEWER, so none of them touches `.aboard/aboard.json`:
+
+```
+http://localhost:<port>/?chrome=notabs#tab=bb13
+```
+
+- **`?chrome=`** — `full` (default) · `notabs` (hide the tab button list, keep the
+  topbar, the `+` and the tab note) · `none` (hide the whole head). An
+  unrecognised value is `full`. It has to be a URL parameter: the frame is
+  cross-origin, so a host can neither inject CSS nor reach the DOM, and two
+  viewers of one board must be able to disagree about chrome while agreeing about
+  content.
+- **`#tab=<id>`** — a fragment change navigates without reloading the page, so
+  whatever the human had panned, scrolled or half-typed survives.
+- **`{__aboard: 'active', tab: '<id>'}`** — posted to `parent` whenever the active
+  tab changes, including the tab the board picks at load and the ones `[`, `]` and
+  `1`–`9` reach. A repaint that lands on the same tab says nothing, so a host may
+  act on every message. Authenticate it by `event.source`; the board posts with
+  `'*'` because a webview's origin is not knowable in advance. Nothing else travels
+  this way — the embedder reads `/aboard.json` and `/events` like every other
+  client.
+
+Two things an embedder must get right, both of which fail SILENTLY:
+
+- **Send `__by: "human"` on every write.** An absent actor is recorded as
+  `unknown` with agent-level powers, so dismissing a marker or answering a removal
+  request comes back `200` and does nothing.
+- **Read `base` from the instance record or `/health`** before building any URL,
+  or a board behind `--base-path` is invisible to you.
+
+If you are the agent working alongside such a host, nothing changes: the board is
+still one shared document, and the human's clicks arrive as writes by `human`
+whether they came from a browser tab or a panel.
+
 ## When sessions should NOT share
 
 A side investigation that must not disturb the main board:
