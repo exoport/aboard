@@ -18,11 +18,16 @@ Two folders, split by **who the document is addressed to**:
   reasoning and none of the instructions.
 
 **Order of the live handoffs**, decided with the human on 2026-08-25:
-[`handoffs/handoff-json-hot-paths.md`](handoffs/handoff-json-hot-paths.md) comes FIRST —
-before `handoff-13-features.md` and `handoff-board-for-vscode-panel.md`. Its own internal
-order is also decided (structural fixes, then the codec, and per-tab resources not at all
-unless a measurement reopens it). `handoff-phase-e-finish.md` is the resume point for the
-port itself and precedes all of them.
+
+1. the review fixes — `development/research/review-d6c2f84-20260825.md`, the two highs and the
+   behaviour mediums, each with a test that fails before and passes after;
+2. [`handoffs/handoff-e2e-browser-suite.md`](handoffs/handoff-e2e-browser-suite.md) — the real
+   browser suite, which is what makes everything after it verifiable;
+3. [`handoffs/handoff-json-hot-paths.md`](handoffs/handoff-json-hot-paths.md) — structural JSON
+   fixes, then json/v2, no per-tab resources unless a measurement reopens it;
+4. `handoff-13-features.md`, then `handoff-board-for-vscode-panel.md`.
+
+`handoff-phase-e-finish.md` is the record of the port and is done.
 
 `git log` is a real source here too. Commit messages in this repo carry the reasoning
 and the mistakes found on the way, so a decision you are about to re-derive is often

@@ -1,7 +1,7 @@
-# Handoff — the JSON hot paths, before anything else on the queue
+# Handoff — the JSON hot paths: structure first, codec second, no per-tab resources
 
-**Status: LIVE. Do this FIRST — before `handoff-13-features.md` and
-`handoff-board-for-vscode-panel.md`.** Decided with the human on 2026-08-25, after a
+**Status: LIVE. Order: after the review fixes and `handoff-e2e-browser-suite.md`, before
+`handoff-13-features.md` and `handoff-board-for-vscode-panel.md`** (see `development/README.md`). Decided with the human on 2026-08-25, after a
 measured look at how the board moves JSON. Order inside this handoff is also decided:
 **(2) the structural fixes first, then (1) the codec, and (3) per-tab resources is NOT to be
 built** unless a problem is measured — the trigger is defined at the end.
