@@ -90,6 +90,29 @@ HTML ends the script block early, so the markup renders and none of the code run
 looks like a styling problem. Check the widget's source for an unescaped closing tag
 before blaming the sandbox.
 
+## Why the board never pops up an OS dialog
+
+A webview — VS Code's, and any `<iframe>` whose `sandbox` attribute omits
+`allow-modals` — **suppresses** `window.alert`, `window.confirm` and `window.prompt`.
+Not styles them differently: suppresses them. `confirm()` returns `false`, `prompt()`
+returns `null`, nothing is drawn, nothing is logged and nothing throws.
+
+So a board that asked its host to ask would have gestures that silently do nothing
+inside the panel while working perfectly in a browser tab. Three of them did, until
+2026-08-26: answering a removal request with **Remove tab**, renaming a tab by
+double-clicking it, and a form's **Reset answers**. The symptom was exactly what you
+would expect and no more: *"I clicked it but nothing happens."*
+
+Every question the board asks is now drawn **in the page**, as a `<dialog>` — which is
+unaffected by `allow-modals`, because it is an element rather than a call into the host.
+Enter confirms it, Escape dismisses it, and the keyboard returns to whatever opened it.
+There is nothing to enable and nothing a host has to grant.
+
+If you are embedding the board somewhere else and a confirmation never appears, that is
+a bug in the board rather than a sandbox you need to widen — the browser suite asserts
+it inside a frame sandboxed `allow-scripts allow-same-origin allow-forms`, with
+`allow-modals` deliberately absent.
+
 ## Behind a prefix
 
 If something in front of the board is routing by path — a reverse proxy, another tool's
@@ -149,7 +172,7 @@ For scripted screenshots, two things bite and both have the same fix — use the
 ## See also
 
 - [Your first board](../tutorials/first-board.md) — the whole loop including this step.
-- [How to use the VS Code extension](use-the-vscode-extension.md) — the other way to get a board into VS Code: a sidebar tree and a panel, rather than one browser tab. Not yet verified in a real editor.
+- [How to use the VS Code extension](use-the-vscode-extension.md) — the other way to get a board into VS Code: a sidebar tree and a panel, rather than one browser tab. Run once in a real editor, and unverified for everything that run did not reach.
 - [How to put aboard behind a reverse proxy](serve-under-a-path-prefix.md) — the prefix above, in full, including the traps a proxy adds.
 - [The `.aboard/` layout](../reference/layout.md) — the instance file the URL comes from.
 - [HTTP API](../reference/http-api.md) — the routes the page is using while you watch it.

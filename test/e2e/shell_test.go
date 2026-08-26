@@ -104,10 +104,15 @@ func TestAPendingRemovalCanBeKept(t *testing.T) {
 }
 
 // The other answer, and the only irreversible gesture in the shell — so it is
-// the one that goes through a native confirm(). Playwright auto-dismisses an
-// unhandled dialog, which would make this test pass while removing nothing, so
-// the message is asserted as well as answered.
-func TestAPendingRemovalCanBeRemovedBehindAConfirm(t *testing.T) {
+// the one that asks first. It used to ask through window.confirm, which a VS
+// Code webview SUPPRESSES: the call returned false, removeTab took its cancel
+// path, and the human's report was "I clicked it but nothing happens". The
+// question is drawn in the page now, and the session's own gate (see openReady)
+// fails this test if a native dialog is raised at all.
+//
+// The message is asserted as well as answered: a confirmation nobody can read
+// before an irreversible action is not a confirmation.
+func TestAPendingRemovalIsRemovedThroughTheBoardsOwnConfirm(t *testing.T) {
 	id := makeScratchTab(t, "Remove me")
 	requestRemoval(t, id)
 
@@ -117,17 +122,48 @@ func TestAPendingRemovalCanBeRemovedBehindAConfirm(t *testing.T) {
 		t.Fatalf("no removal request on the tab: %v", err)
 	}
 
-	dialogs := s.onDialog(true, "")
+	// Cancel first, because a dialog that removes the tab whichever button you
+	// press is the failure mode that would otherwise pass every assertion below.
 	if err := banner.GetByText("Remove tab").Click(); err != nil {
 		t.Fatalf("clicking Remove tab: %v", err)
 	}
-	seen := dialogs.only(t)
-	if seen.Kind != "confirm" {
-		t.Errorf("removing a tab asked a %s, want a confirm", seen.Kind)
+	answer(t, s.boardDialog(), "Keep it")
+	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="` + id + `"]`)).ToBeVisible(); err != nil {
+		t.Errorf("cancelling the confirmation removed the tab anyway: %v", err)
 	}
-	if !strings.Contains(seen.Message, "Remove me") || !strings.Contains(seen.Message, "content is deleted") {
-		t.Errorf("the confirmation does not say what is about to be lost: %q", seen.Message)
+
+	if err := banner.GetByText("Remove tab").Click(); err != nil {
+		t.Fatalf("clicking Remove tab again: %v", err)
 	}
+	dialog := s.boardDialog()
+	if err := expect.Locator(dialog).ToContainText("Remove me"); err != nil {
+		t.Errorf("the confirmation does not name the tab it is about to delete: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("content is deleted"); err != nil {
+		t.Errorf("the confirmation does not say what is about to be lost: %v", err)
+	}
+
+	// The modal owns the keyboard while it is up. window.confirm took the
+	// keyboard away from the page entirely; a <dialog> does not, and showModal()
+	// only makes the rest of the document inert for pointers and focus — it says
+	// nothing about a listener bound to `document`, which is where every one of
+	// the shell's hotkeys lives. So without dialog.js stopping propagation, `]`
+	// walks to another tab BEHIND an unanswered question and `?` stacks the help
+	// panel on top of the modal.
+	if err := s.page.Keyboard().Press("]"); err != nil {
+		t.Fatalf("pressing ] over the dialog: %v", err)
+	}
+	if err := s.page.Keyboard().Press("?"); err != nil {
+		t.Fatalf("pressing ? over the dialog: %v", err)
+	}
+	if err := expect.Locator(s.page.Locator("#help-dialog[open]")).ToHaveCount(0); err != nil {
+		t.Errorf("? opened the help panel on top of an unanswered question: %v", err)
+	}
+	if err := expect.Locator(s.view(id)).ToHaveCount(1); err != nil {
+		t.Errorf("] switched the tab behind an unanswered question: %v", err)
+	}
+
+	answer(t, dialog, "Remove tab")
 
 	eventually(t, "the tab to leave the board", func() bool {
 		list, _ := readDoc(t)["tabs"].([]any)
@@ -143,21 +179,28 @@ func TestAPendingRemovalCanBeRemovedBehindAConfirm(t *testing.T) {
 	}
 }
 
-// Double-click a tab to rename it — the one prompt() in the shell.
-func TestATabIsRenamedThroughAPrompt(t *testing.T) {
+// Double-click a tab to rename it — the one prompt() the shell used to call, and
+// the second gesture the panel silently lost (window.prompt returns null in a
+// webview, which renameTab correctly reads as "cancelled").
+func TestATabIsRenamedThroughTheBoardsOwnPrompt(t *testing.T) {
 	id := makeScratchTab(t, "Before")
 
 	s := open(t, "tab="+id)
 	strip := s.page.Locator(`#tabs .tab[data-id="` + id + `"]`)
 
-	dialogs := s.onDialog(true, "After")
 	if err := strip.Dblclick(); err != nil {
 		t.Fatalf("double-clicking the tab: %v", err)
 	}
-	seen := dialogs.only(t)
-	if seen.Kind != "prompt" {
-		t.Errorf("renaming asked a %s, want a prompt", seen.Kind)
+	dialog := s.boardDialog()
+	// The current name is IN the box and selected, which is what window.prompt's
+	// second argument did — typing replaces it rather than appending to it.
+	if err := expect.Locator(dialog.Locator("input")).ToHaveValue("Before"); err != nil {
+		t.Errorf("the rename box does not start from the current name: %v", err)
 	}
+	if err := dialog.Locator("input").Fill("After"); err != nil {
+		t.Fatalf("typing the new name: %v", err)
+	}
+	answer(t, dialog, "Rename")
 
 	eventually(t, "the new name to reach the server", func() bool {
 		return readDoc(t).tab(t, id)["name"] == "After"
@@ -166,17 +209,64 @@ func TestATabIsRenamedThroughAPrompt(t *testing.T) {
 		t.Errorf("the strip still shows the old name: %v", err)
 	}
 
-	// Cancelling must change nothing. A prompt that returns null and is treated
-	// as an empty string renames the tab to "" and the strip reads "(unnamed)".
-	cancelled := s.onDialog(false, "")
+	// Cancelling must change nothing. askPrompt keeps window.prompt's contract —
+	// null for cancelled, a string for answered, the empty string included — and
+	// a cancel read as "" would rename the tab to nothing and the strip would say
+	// "(unnamed)".
 	if err := strip.Dblclick(); err != nil {
 		t.Fatalf("double-clicking the tab again: %v", err)
 	}
-	if got := cancelled.only(t); got.Kind != "prompt" {
-		t.Errorf("the second gesture asked a %s", got.Kind)
+	cancelled := s.boardDialog()
+	if err := cancelled.Locator("input").Fill("Never saved"); err != nil {
+		t.Fatalf("typing into the second dialog: %v", err)
 	}
+	answer(t, cancelled, "Cancel")
 	if got := readDoc(t).tab(t, id)["name"]; got != "After" {
 		t.Errorf("cancelling the rename changed the name to %q", got)
+	}
+
+	// Enter, which is the other way in. window.prompt answered on Enter and the
+	// replacement has to as well, or the gesture is only half restored — and this
+	// is the path with no <form> under it, so nothing gives it for free.
+	if err := strip.Dblclick(); err != nil {
+		t.Fatalf("double-clicking the tab a third time: %v", err)
+	}
+	entered := s.boardDialog()
+	if err := entered.Locator("input").Fill("Entered"); err != nil {
+		t.Fatalf("typing into the third dialog: %v", err)
+	}
+	if err := s.page.Keyboard().Press("Enter"); err != nil {
+		t.Fatalf("pressing Enter: %v", err)
+	}
+	if err := expect.Locator(entered).ToBeHidden(); err != nil {
+		t.Errorf("Enter left the dialog open: %v", err)
+	}
+	eventually(t, "the Enter-confirmed name to reach the server", func() bool {
+		return readDoc(t).tab(t, id)["name"] == "Entered"
+	})
+
+	// And Escape, which is the other exit and the one a modal without it becomes
+	// a trap for.
+	if err := strip.Dblclick(); err != nil {
+		t.Fatalf("double-clicking the tab a fourth time: %v", err)
+	}
+	escaped := s.boardDialog()
+	if err := escaped.Locator("input").Fill("Escaped away"); err != nil {
+		t.Fatalf("typing into the third dialog: %v", err)
+	}
+	if err := s.page.Keyboard().Press("Escape"); err != nil {
+		t.Fatalf("pressing Escape: %v", err)
+	}
+	if err := expect.Locator(escaped).ToBeHidden(); err != nil {
+		t.Errorf("Escape left the dialog open — a modal you cannot dismiss is a trap: %v", err)
+	}
+	if got := readDoc(t).tab(t, id)["name"]; got != "Entered" {
+		t.Errorf("escaping the rename changed the name to %q", got)
+	}
+	// The keyboard goes back where it was, so the next key is not swallowed by a
+	// detached element.
+	if !s.evalBool(`() => document.activeElement !== document.body`) {
+		t.Error("closing the dialog left the focus on <body> — it should return to what opened it")
 	}
 }
 
@@ -308,6 +398,13 @@ func intents(t *testing.T, tabID string) []any {
 // suite shuffled at least once.
 func makeScratchTab(t *testing.T, name string) string {
 	t.Helper()
+	return makeScratchTabOfType(t, name, "notes", map[string]any{"text": "scratch\n"})
+}
+
+// makeScratchTabOfType is the same allocation for a tab that is not `notes`. The
+// id reasoning above is the whole reason this is one function and not two.
+func makeScratchTabOfType(t *testing.T, name, typ string, state map[string]any) string {
+	t.Helper()
 	d := readDoc(t)
 	next, ok := d["nextId"].(float64)
 	if !ok {
@@ -319,9 +416,9 @@ func makeScratchTab(t *testing.T, name string) string {
 	d["tabs"] = append(list, map[string]any{
 		"id":    id,
 		"name":  name,
-		"type":  "notes",
+		"type":  typ,
 		"note":  "Made by the browser suite; safe to delete.",
-		"state": map[string]any{"text": "scratch\n"},
+		"state": state,
 	})
 	apply(t, d)
 	return id
@@ -397,10 +494,10 @@ func TestRemovingATabSurvivesAReloadArrivingMidSave(t *testing.T) {
 		t.Fatalf("intercepting the save: %v", err)
 	}
 
-	s.onDialog(true, "")
 	if err := banner.GetByText("Remove tab").Click(); err != nil {
 		t.Fatalf("clicking Remove tab: %v", err)
 	}
+	answer(t, s.boardDialog(), "Remove tab")
 
 	select {
 	case <-inFlight:
@@ -434,5 +531,63 @@ func TestRemovingATabSurvivesAReloadArrivingMidSave(t *testing.T) {
 	})
 	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="` + id + `"]`)).ToHaveCount(0); err != nil {
 		t.Errorf("the strip still shows a tab the server does not have: %v", err)
+	}
+}
+
+// The closest headless stand-in for a VS Code webview: the board inside a
+// same-origin <iframe> whose sandbox does NOT include `allow-modals`.
+//
+// That one missing token is the whole bug. Inside such a frame window.confirm is
+// suppressed — it returns false, draws nothing, logs nothing and throws nothing
+// — so the pre-fix `removeTab` took its cancel path and the tab stayed. The
+// board's own <dialog> is unaffected by `allow-modals`, which is why this test
+// passes now and fails against the old code for a reason no other test in the
+// suite can see: every other one runs at the top level, where confirm() works
+// perfectly.
+//
+// Same-origin because that is what the real embedder is not, and it does not
+// matter here: `allow-same-origin` is what lets the framed board read and write
+// its own server, which a cross-origin wrapper would also allow. What is being
+// tested is the SANDBOX, not the origin.
+func TestRemovingATabWorksInsideAFrameWithNoAllowModals(t *testing.T) {
+	id := makeScratchTab(t, "Removed in a webview")
+	requestRemoval(t, id)
+
+	s := openSandboxedWrapper(t, "chrome=notabs&tab="+id)
+	frame := s.page.FrameLocator("#frame")
+
+	banner := frame.Locator(`[data-tab="` + id + `"][data-active="yes"] .banner--removal`)
+	if err := expect.Locator(banner).ToBeVisible(); err != nil {
+		t.Fatalf("no removal request inside the framed board: %v", err)
+	}
+	if err := banner.GetByText("Remove tab").Click(); err != nil {
+		t.Fatalf("clicking Remove tab inside the frame: %v", err)
+	}
+
+	dialog := frame.Locator(boardDialogSelector)
+	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+		t.Fatalf("the board drew no dialog inside a frame with no allow-modals — "+
+			"this is what the human saw as \"I clicked it but nothing happens\": %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("Removed in a webview"); err != nil {
+		t.Errorf("the framed confirmation does not name the tab: %v", err)
+	}
+	if err := dialog.GetByRole("button", playwright.LocatorGetByRoleOptions{
+		Name: "Remove tab", Exact: new(true),
+	}).Click(); err != nil {
+		t.Fatalf("confirming inside the frame: %v", err)
+	}
+
+	eventually(t, "the tab to leave the board", func() bool {
+		list, _ := readDoc(t)["tabs"].([]any)
+		for _, raw := range list {
+			if tab, ok := raw.(map[string]any); ok && tab["id"] == id {
+				return false
+			}
+		}
+		return true
+	})
+	if err := expect.Locator(frame.Locator(`#tabs .tab[data-id="` + id + `"]`)).ToHaveCount(0); err != nil {
+		t.Errorf("the framed strip still holds the tab: %v", err)
 	}
 }

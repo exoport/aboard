@@ -123,6 +123,7 @@ import { openContextMenu, copyText, referenceFor } from './views/menu.js';
 import { tabToMarkdown, nodesToCSV, diagramSVG, download, exportName } from './views/export.js';
 import { inlineEditor, flashSaved } from './views/inline.js';
 import { button, GESTURE_ATTR } from './views/controls.js';
+import { askConfirm, askPrompt } from './views/dialog.js';
 import { api } from './views/api.js';
 
 const CLIENT_ID = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
@@ -1120,10 +1121,28 @@ function buildTabs() {
   }));
 }
 
-async function renameTab(tab) {
-  const next = prompt('Rename tab', tab.name || '');
+// The board asks, never the host. A webview suppresses window.prompt outright,
+// so double-clicking a tab in the VS Code panel used to do nothing at all —
+// prompt() returned null and this function took the cancel path.
+//
+// Re-resolving the tab BY ID after the await is not tidying: the question is now
+// asynchronous, so an SSE reload can replace `doc` while the dialog is open, and
+// writing the new name onto the captured object would mutate a detached tab that
+// pushDoc never serialises. That is the shell's oldest rule — bind by id, never
+// by object — and making this async is exactly what brought it into scope.
+async function renameTab(ref) {
+  const id = ref.id;
+  const before = ref.name || '';
+  const next = await askPrompt('Name', before, {
+    head: 'Rename tab',
+    ok: 'Rename',
+    maxLength: 40,
+    placeholder: '(unnamed)',
+  });
   if (next === null) return;
   const trimmed = next.trim();
+  const tab = tabById(id);
+  if (!tab) return;                                  // answered while the dialog was open
   if (!trimmed || trimmed === tab.name) return;
   tab.name = trimmed.slice(0, 40);
   await save({ immediate: true });
@@ -1364,13 +1383,27 @@ function renderNotices(tab) {
   stampMeta();
 }
 
-async function removeTab(tab) {
-  const dependents = tabs().filter((t) => t.stateFrom === tab.id);
-  let msg = `Remove the tab "${tab.name}"? Its content is deleted.`;
-  if (dependents.length) {
-    msg += `\n\n${dependents.length} other tab(s) read this tab's data and will be emptied: ${dependents.map((t) => t.name).join(', ')}`;
+// The one irreversible gesture in the shell, so it is the one that asks first —
+// and it asks in the page. window.confirm is suppressed in a VS Code webview,
+// where it returns false without drawing anything, so this whole function used
+// to return at the guard and the human's report was "I clicked it but nothing
+// happens" (2026-08-26).
+//
+// The tab and its dependents are recomputed AFTER the answer, for the same
+// reason renameTab re-resolves by id: the question is asynchronous now, and the
+// document can be replaced by a reload while it is on screen.
+async function removeTab(ref) {
+  const id = ref.id;
+  const asked = tabs().filter((t) => t.stateFrom === id);
+  let msg = `Remove the tab "${ref.name}"? Its content is deleted.`;
+  if (asked.length) {
+    msg += `\n\n${asked.length} other tab(s) read this tab's data and will be emptied: ${asked.map((t) => t.name).join(', ')}`;
   }
-  if (!confirm(msg)) return;
+  if (!(await askConfirm(msg, { head: 'Remove tab', ok: 'Remove tab', cancel: 'Keep it', danger: true }))) return;
+
+  const tab = tabById(id);
+  if (!tab) return;                                  // removed elsewhere while we asked
+  const dependents = tabs().filter((t) => t.stateFrom === id);
 
   // A dependent tab would dangle, so give it its own copy of what it was showing.
   for (const dep of dependents) {

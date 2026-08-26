@@ -339,6 +339,13 @@ anything local — canvas, SVG, WebGL, animation, drag-and-drop — and **nothin
 over the network**. That containment is deliberate: the server has no auth, so
 anything that could reach it could rewrite the whole board.
 
+**No `alert`, `confirm` or `prompt`.** The sandbox omits `allow-modals`, so all
+three are suppressed — `confirm()` returns `false`, `prompt()` returns `null`,
+nothing is drawn and nothing is logged — and a widget that asks before acting
+neither asks nor acts. Use a `<dialog>` of your own, which the sandbox does not
+touch. The same trap caught the board's own shell inside a VS Code panel, where
+three gestures were dead for a day; `views/dialog.js` is what it uses now.
+
 It inherits the board palette as CSS custom properties; override freely. Plain
 HTML — no build step, no imports, no framework. The palette is `app.css`'s own
 `:root`, parsed and injected — **every** token the board has, not a subset that

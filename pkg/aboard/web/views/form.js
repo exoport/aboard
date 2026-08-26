@@ -2,6 +2,7 @@
 // the human answers here, and every edit writes straight back to disk.
 
 import { controlsFor } from './controls.js';
+import { askConfirm } from './dialog.js';
 
 const ctl = controlsFor('form');
 
@@ -191,10 +192,27 @@ export function mountForm(root, ctx) {
     return row;
   }
 
-  function onReset() {
+  // Asked in the page, never through window.confirm: a VS Code webview
+  // suppresses that call and returns false, so this button did nothing at all
+  // inside the panel and said nothing about why.
+  //
+  // getFields() is re-read after the answer rather than reused from before it.
+  // The question is asynchronous now, so an agent's write can land while the
+  // dialog is open, and resetting the fields the form had a second ago would
+  // write a stale array back over the live one.
+  async function onReset() {
+    if (getFields().length === 0) return;
+    const yes = await askConfirm('Reset all answers to their neutral defaults?', {
+      head: 'Reset answers',
+      ok: 'Reset answers',
+      cancel: 'Keep them',
+      // Deliberately NOT `danger`. Red is the board's strongest signal and it is
+      // spent on the one gesture that cannot be undone — removing a tab. Answers
+      // can be given again; a tab's content cannot.
+    });
+    if (!yes) return;
     const fields = getFields();
     if (fields.length === 0) return;
-    if (!window.confirm('Reset all answers to their neutral defaults?')) return;
     for (const field of fields) field.value = neutralValue(field);
     syncValues(true);
     ctx.save({ immediate: true }).then(flashSaved).catch(() => flashSaved(false));

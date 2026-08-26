@@ -568,6 +568,70 @@ func TestAnsweringAFormFieldSaves(t *testing.T) {
 	}
 }
 
+// The form's Reset is the third gesture the panel lost: it asked through
+// window.confirm, which a webview suppresses, so the button did nothing at all
+// and said nothing about why.
+//
+// Its own scratch tab rather than bb15, because resetting the fixture's form
+// would reach into whatever TestAnsweringAFormFieldSaves is doing with it, and
+// the suite is run shuffled.
+func TestResettingAFormAsksInThePageAndCancelKeepsTheAnswers(t *testing.T) {
+	id := makeScratchTabOfType(t, "Reset me", "form", map[string]any{
+		"title": "Scratch questions",
+		"fields": []any{
+			map[string]any{"id": "keep", "type": "checkbox", "label": "Keep it", "value": true},
+			map[string]any{"id": "polish", "type": "range", "label": "Polish", "min": 2, "max": 10, "value": 7},
+			map[string]any{"id": "why", "type": "text", "label": "Why", "value": "because"},
+		},
+	})
+	field := func(fieldID string) any {
+		fields, _ := readDoc(t).state(t, id)["fields"].([]any)
+		for _, raw := range fields {
+			if f, ok := raw.(map[string]any); ok && f["id"] == fieldID {
+				return f["value"]
+			}
+		}
+		return nil
+	}
+
+	s := open(t, "tab="+id)
+	reset := s.control(id, "reset")
+
+	// Cancel first: a reset that clears the answers whichever button you press
+	// would satisfy every assertion after this one.
+	if err := reset.Click(); err != nil {
+		t.Fatalf("pressing Reset answers: %v", err)
+	}
+	cancelled := s.boardDialog()
+	if err := expect.Locator(cancelled).ToContainText("neutral defaults"); err != nil {
+		t.Errorf("the reset confirmation does not say what it is about to do: %v", err)
+	}
+	answer(t, cancelled, "Keep them")
+	if err := expect.Locator(s.view(id).Locator(`input[type="checkbox"]`)).ToBeChecked(); err != nil {
+		t.Errorf("cancelling the reset cleared the form anyway: %v", err)
+	}
+	if got := field("keep"); got != true {
+		t.Errorf("cancelling the reset wrote to the server: keep = %v", got)
+	}
+
+	if err := reset.Click(); err != nil {
+		t.Fatalf("pressing Reset answers again: %v", err)
+	}
+	answer(t, s.boardDialog(), "Reset answers")
+
+	eventually(t, "the neutral values to reach the server", func() bool {
+		return field("keep") == false
+	})
+	// Neutral is per TYPE, not "empty": a range goes to its own minimum, which is
+	// 2 here and not 0, and a text field goes to "".
+	if got := field("polish"); got != float64(2) {
+		t.Errorf("the range reset to %v, want its minimum (2)", got)
+	}
+	if got := field("why"); got != "" {
+		t.Errorf("the text field reset to %q, want empty", got)
+	}
+}
+
 func formFieldValue(t *testing.T, fieldID string) any {
 	t.Helper()
 	fields, _ := readDoc(t).state(t, "bb15")["fields"].([]any)

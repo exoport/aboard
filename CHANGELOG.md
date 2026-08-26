@@ -6,6 +6,28 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **fix: the board never calls a native dialog, so its questions survive a webview.**
+  A VS Code webview — and any `<iframe>` whose `sandbox` omits `allow-modals` —
+  SUPPRESSES `window.alert`/`confirm`/`prompt`: `confirm()` returns `false`, `prompt()`
+  returns `null`, nothing is drawn, nothing is logged and nothing throws. Three gestures
+  were therefore dead inside the extension's panel while working perfectly in a browser
+  tab: answering a removal request with **Remove tab**, renaming a tab by double-clicking
+  it, and a form's **Reset answers**. The human's report was the whole of the symptom —
+  *"I clicked it but nothing happens"*. All three now ask through `views/dialog.js`,
+  which draws the question in the page as a `<dialog>` (unaffected by `allow-modals`,
+  being an element rather than a call into the host), with Enter to confirm, Escape to
+  dismiss, focus trapped while it is up and returned to whatever opened it. It also takes
+  the KEYBOARD while it is up, which a `<dialog>` does not do by itself and
+  `window.confirm` did: without that, `]` and `1`–`9` still reached the shell and switched
+  the tab behind an unanswered question. The removal
+  question keeps its paragraphs, which a native `confirm` ran together. Deliberately
+  **no `<form>` in it**: the obvious shape gets Enter for free but needs `allow-forms`,
+  and swapping one silently-swallowed thing for another was the mistake being fixed.
+  Two checks keep it: a Go source test refuses `confirm(`/`prompt(`/`alert(` anywhere in
+  the web tree, and the browser suite fails any test whose page raises a native dialog at
+  all — plus one test that removes a tab from inside a frame sandboxed
+  `allow-scripts allow-same-origin allow-forms`, which fails against the old code for
+  the same reason the panel did.
 - **fix: a second board for one project is refused however its port was chosen.** The
   duplicate check was anchored to the PORT, so `aboard serve --port <anything free>` (or
   `PORT=`) had no occupant to recognise: it started a SECOND server on the same state

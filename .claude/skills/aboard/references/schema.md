@@ -329,6 +329,13 @@ CSP of `connect-src 'none'` — so it can do anything local (canvas, SVG, WebGL,
 animation) and **nothing over the network**. It inherits the board's palette as
 CSS custom properties; override freely.
 
+**Do not call `alert`, `confirm` or `prompt` in a widget.** That sandbox has no
+`allow-modals`, so all three are suppressed: `confirm()` returns `false`,
+`prompt()` returns `null`, nothing is drawn and nothing is logged. A widget that
+asks before doing something therefore never asks and never does it, silently.
+Draw your own `<dialog>`, which the sandbox does not touch. The board's own
+shell hit exactly this inside a VS Code panel; the fix is `views/dialog.js`.
+
 Inside the frame a bridge is available:
 
 ```js

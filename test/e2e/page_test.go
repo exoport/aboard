@@ -41,6 +41,9 @@ type session struct {
 
 	mu      sync.Mutex
 	console []string
+	// natives is every window.alert/confirm/prompt the page raised. The board is
+	// not allowed to raise any: a webview suppresses them silently.
+	natives []string
 }
 
 // open loads the board in a fresh context.
@@ -107,13 +110,25 @@ func openReady(t *testing.T, base, query, ready string) *session {
 		s.record("requestfailed: " + r.URL())
 	})
 
-	// A dialog with no handler is auto-dismissed by Playwright, which turns a
-	// `confirm()` into a silent "Cancel" and a `prompt()` into null — i.e. the
-	// gesture appears to do nothing and the test fails somewhere else entirely.
-	// So the default here is LOUD: dismiss it, and say in the console log that
-	// nothing had claimed it. Tests that mean to answer one call s.onDialog.
-	s.setDialog(func(d playwright.Dialog) {
-		s.record(fmt.Sprintf("unclaimed dialog (%s): %q — dismissed", d.Type(), d.Message()))
+	// The board does not call a native dialog any more, and this is the gate that
+	// keeps it that way in every test at once rather than in one.
+	//
+	// `window.alert/confirm/prompt` are SUPPRESSED inside a VS Code webview —
+	// confirm() returns false, prompt() returns null, nothing is drawn and
+	// nothing is logged — so a native dialog that works perfectly here is a
+	// gesture that is dead in the panel. Playwright's own default makes that
+	// worse: an unhandled dialog is auto-dismissed, which is exactly the
+	// webview's behaviour, so the test passes while nothing happened.
+	//
+	// So: dismiss it (there is nothing to answer), record it, and fail the test
+	// that raised it in `finish` — from the test's own goroutine, because a
+	// t.Errorf out of this callback can arrive after the test has completed.
+	page.OnDialog(func(d playwright.Dialog) {
+		line := fmt.Sprintf("native dialog (%s): %q", d.Type(), d.Message())
+		s.record(line + " — dismissed")
+		s.mu.Lock()
+		s.natives = append(s.natives, line)
+		s.mu.Unlock()
 		_ = d.Dismiss()
 	})
 
@@ -142,64 +157,48 @@ func (s *session) record(line string) {
 	s.console = append(s.console, line)
 }
 
-// setDialog REPLACES the handler rather than adding one. Playwright calls every
-// registered dialog listener, and the first to answer wins — so a test that only
-// added its own would be racing the loud default below, and the loser's Accept
-// silently fails on an already-answered dialog.
-func (s *session) setDialog(fn func(playwright.Dialog)) {
-	s.page.RemoveListeners("dialog")
-	s.page.OnDialog(fn)
+// nativeDialogs is what the page asked the HOST to draw. It must always be
+// empty: see the handler in openReady for why an entry here is a defect and not
+// a detail.
+func (s *session) nativeDialogs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.natives...)
 }
 
-// onDialog answers the next native dialog and records what it said, so a test
-// can assert on the MESSAGE — "Remove the tab …? Its content is deleted." is a
-// sentence the human reads before an irreversible action, and it is worth
-// pinning.
-func (s *session) onDialog(accept bool, promptText string) *dialogRecord {
-	rec := &dialogRecord{}
-	s.setDialog(func(d playwright.Dialog) {
-		rec.mu.Lock()
-		rec.seen = append(rec.seen, dialogSeen{Kind: d.Type(), Message: d.Message()})
-		rec.mu.Unlock()
-		s.record(fmt.Sprintf("dialog (%s): %q -> accept=%v", d.Type(), d.Message(), accept))
-		if accept {
-			if promptText != "" {
-				_ = d.Accept(promptText)
-			} else {
-				_ = d.Accept()
-			}
-			return
-		}
-		_ = d.Dismiss()
-	})
-	return rec
-}
+/* ---------- the board's own dialog ---------- */
 
-type dialogSeen struct {
-	Kind    string
-	Message string
-}
+// boardDialogSelector is the marker views/dialog.js stamps on its <dialog>. A
+// selector rather than a helper taking a root, because Page and FrameLocator
+// spell `Locator` with different option types and the framed tests need both.
+// `.sheet-dialog` would have matched the new-tab sheet and the dag's
+// delete-confirm too, and those are not this.
+const boardDialogSelector = `dialog[data-dialog="board"]`
 
-type dialogRecord struct {
-	mu   sync.Mutex
-	seen []dialogSeen
-}
-
-func (r *dialogRecord) all() []dialogSeen {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]dialogSeen(nil), r.seen...)
-}
-
-// only returns the single dialog that was expected, failing when none or several
-// arrived — "the confirm never appeared" is a different defect from "two did".
-func (r *dialogRecord) only(t *testing.T) dialogSeen {
-	t.Helper()
-	seen := r.all()
-	if len(seen) != 1 {
-		t.Fatalf("expected exactly one native dialog, saw %d: %+v", len(seen), seen)
+// boardDialog is the board's own confirm/prompt, waited for. Every caller wants
+// it visible before asserting on its text, and every caller used to write the
+// same four lines.
+func (s *session) boardDialog() playwright.Locator {
+	s.t.Helper()
+	d := s.page.Locator(boardDialogSelector)
+	if err := expect.Locator(d).ToBeVisible(); err != nil {
+		s.t.Fatalf("the board's own dialog never appeared — a native one would have been "+
+			"swallowed by a webview, which is the defect this replaced: %v", err)
 	}
-	return seen[0]
+	return d
+}
+
+// answer presses one of the dialog's two buttons by its label.
+func answer(t *testing.T, d playwright.Locator, label string) {
+	t.Helper()
+	if err := d.GetByRole("button", playwright.LocatorGetByRoleOptions{
+		Name: label, Exact: new(true),
+	}).Click(); err != nil {
+		t.Fatalf("pressing %q in the board's dialog: %v", label, err)
+	}
+	if err := expect.Locator(d).ToBeHidden(); err != nil {
+		t.Fatalf("%q left the dialog open: %v", label, err)
+	}
 }
 
 /* ---------- locating things ---------- */
@@ -401,6 +400,14 @@ func safeName(name string) string { return unsafeName.ReplaceAllString(name, "_"
 // the repo, because the temporary root is deleted when the process ends and an
 // artefact nobody can find is not an artefact.
 func (s *session) finish() {
+	// Before anything else, because it can turn a passing test into a failing
+	// one and everything below keys off s.t.Failed().
+	if seen := s.nativeDialogs(); len(seen) > 0 {
+		s.t.Errorf("the page raised %d native dialog(s), which a VS Code webview swallows "+
+			"silently — use askConfirm/askPrompt from views/dialog.js: %s",
+			len(seen), strings.Join(seen, "; "))
+	}
+
 	keep := s.t.Failed() || traceAlways()
 
 	var dirs []string

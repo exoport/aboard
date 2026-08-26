@@ -383,6 +383,51 @@ func openWrapper(t *testing.T) *session {
 	return s
 }
 
+// sandboxedWrapperHTML frames the board the way a host with a restrictive
+// sandbox does. `allow-modals` is deliberately ABSENT — that is the whole
+// experiment — and the three tokens present are the ones a VS Code webview
+// grants. `allow-forms` is there because the brief for this test named it and
+// because a real webview has it, NOT because the board needs it: views/dialog.js
+// has no <form> in it precisely so that a host granting less than this still
+// gets a working dialog.
+const sandboxedWrapperHTML = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>webview stand-in</title></head>
+<body style="margin:0">
+<iframe id="frame" sandbox="allow-scripts allow-same-origin allow-forms"
+        src="__SRC__" style="width:100%;height:900px;border:0"></iframe>
+</body></html>`
+
+// openSandboxedWrapper serves that page from the board's own origin and loads
+// it, with `query` handed to the framed board.
+func openSandboxedWrapper(t *testing.T, query string) *session {
+	t.Helper()
+
+	src := "/"
+	if query != "" {
+		src += "?" + strings.ReplaceAll(query, "&", "&amp;")
+	}
+	body := strings.Replace(sandboxedWrapperHTML, "__SRC__", src, 1)
+
+	s := openReady(t, boardURL, "", "#tabs .tab")
+	if err := s.page.Route("**/e2e-sandboxed.html", func(route playwright.Route) {
+		_ = route.Fulfill(playwright.RouteFulfillOptions{
+			Status:      new(200),
+			ContentType: new("text/html; charset=utf-8"),
+			Body:        body,
+		})
+	}); err != nil {
+		t.Fatalf("serving the sandboxed wrapper: %v", err)
+	}
+	if _, err := s.page.Goto(boardURL + "/e2e-sandboxed.html"); err != nil {
+		t.Fatalf("loading the sandboxed wrapper: %v", err)
+	}
+	if err := s.page.FrameLocator("#frame").Locator("#add-tab").
+		WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible}); err != nil {
+		t.Fatalf("the board never came up inside the sandboxed frame: %v", err)
+	}
+	return s
+}
+
 // pressInFrame sends a key to the BOARD inside the wrapper's iframe.
 //
 // It clicks first, and that is the whole point of the helper. A keystroke goes

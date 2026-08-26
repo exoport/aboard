@@ -30,7 +30,7 @@
     {
       "id": "reset",
       "label": "Reset answers",
-      "doc": "Clear every answer back to empty."
+      "doc": "Clear every answer back to its neutral default (a range to its own minimum, a select to its first option, everything else to empty/false), after a confirmation drawn in the page."
     }
   ],
   "gestures": [

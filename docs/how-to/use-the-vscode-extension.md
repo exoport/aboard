@@ -5,13 +5,23 @@ There are two ways to put a board inside VS Code, and they solve different probl
 - **The Simple Browser** needs nothing installed: paste the board's URL into a built-in webview and it docks as an editor tab. That is [How to run aboard inside VS Code](run-in-vscode.md), and it is what most people should use today.
 - **The extension** adds a sidebar: a tree of the board's tabs, with the board itself in a panel beside your code, and the handful of actions only a human is allowed to take. This page is about that.
 
-> **Status: unverified in a real VS Code.** The extension is written, unit-tested and
-> exercised against a live `aboard serve` at the HTTP level, but **nothing in it has ever
-> been loaded into a running editor** — no Extension Development Host, no `.vsix`, no
-> `code --install-extension`. The tree, the panel, the webview CSP, the port mapping and
-> every menu contribution are unproven in the only place that can prove them. Treat this
-> page as a description of what exists and how to build it, **not as a promise that it
-> works**. If you want a board in VS Code today, use the Simple Browser.
+> **Status: verified once, partially.** The human ran it in a real Extension Development
+> Host on **2026-08-26**. Observed working: activation, discovery of a board started
+> *after* the window was already open, the tree listing every tab in document order, the
+> panel rendering the board without its own tab strip, and a dot arriving live on an
+> agent's write. Everything else in the extension's `docs/handoff.md` §11 is still
+> unobserved — tab switching without a page reload, the panel surviving a drag to another
+> editor group, `html` tabs painting inside the webview, notify, a forced `409`, and
+> Remote SSH / Codespaces.
+>
+> **So: treat it as unverified for everything not in that paragraph.** One run, one
+> board, one machine. Three defects came out of those runs and all three were invisible
+> to a suite that had been green for days — two in the extension (malformed dot SVGs, a
+> stream that died on every string chunk) and one in *this* repository: the board called
+> `window.confirm`, which a webview swallows, so the removal banner's **Remove tab** did
+> nothing at all. That one is fixed here; see [why the board never pops up an OS
+> dialog](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog). If you want a board
+> in VS Code with nothing installed, the Simple Browser is still the shorter route.
 
 ## Where it lives
 
@@ -74,6 +84,14 @@ Two things, both of which the board's own shell already does. There is nothing t
 Neither is server state and neither lets a host make the board *do* anything. Both are
 per-viewer, which is why they are asked for in the URL rather than stored: two viewers
 must be able to disagree about chrome while agreeing about content.
+
+A third thing the panel needs, and gets for free: **the board's questions are its own.**
+Confirming a removal, renaming a tab and resetting a form are drawn in the page as
+`<dialog>` elements, never as `window.confirm`/`window.prompt` — which a webview
+suppresses outright. There is nothing for the extension to grant or to reimplement, and
+nothing that behaves differently inside the panel from a browser tab. The reasoning, and
+what it looked like when it was not true, is in [How to run aboard inside VS
+Code](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog).
 
 The full coupling between the two repositories is a **contract, not a shared file**: it
 is `docs/reference/http-api.md` in this repository, reduced to the parts a viewer uses —
