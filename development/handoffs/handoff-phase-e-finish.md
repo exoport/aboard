@@ -44,6 +44,11 @@ numbers are in the D2a report), run `make lint test docs-check xcompile-windows 
 `aboard init --example`, run `make smoke` ONCE per tool call and LOOK at the screenshots, then have
 an independent reviewer re-run the ladder. Commit the result.
 
+## After Phase E
+
+The queue starts with `handoff-json-hot-paths.md` (decided 2026-08-25: structural JSON fixes
+first, then json/v2, no per-tab resources), then `handoff-13-features.md`.
+
 ## Open judgement calls the agents made — the human may want to overrule
 
 - `boards` (bb372) was re-specified around an invented `~/.aboard/known-roots.json` registry written by

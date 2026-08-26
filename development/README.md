@@ -17,6 +17,13 @@ Two folders, split by **who the document is addressed to**:
   rationale — read that line first, because a superseded handoff still holds the
   reasoning and none of the instructions.
 
+**Order of the live handoffs**, decided with the human on 2026-08-25:
+[`handoffs/handoff-json-hot-paths.md`](handoffs/handoff-json-hot-paths.md) comes FIRST —
+before `handoff-13-features.md` and `handoff-board-for-vscode-panel.md`. Its own internal
+order is also decided (structural fixes, then the codec, and per-tab resources not at all
+unless a measurement reopens it). `handoff-phase-e-finish.md` is the resume point for the
+port itself and precedes all of them.
+
 `git log` is a real source here too. Commit messages in this repo carry the reasoning
 and the mistakes found on the way, so a decision you are about to re-derive is often
 already argued out in the commit that made it.
