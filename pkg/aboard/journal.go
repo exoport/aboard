@@ -357,6 +357,11 @@ type recordedTab struct {
 	Type      string
 	Note      string
 	StateFrom string
+	// Requests is the human's request list as it stood, encoded. Raw rather than
+	// typed because its one reader compares it against the same field decoded
+	// out of a caller's document, and a comparison of two JSON values is the
+	// honest shape for that — see ourTabIsUnchanged.
+	Requests json.RawMessage
 	// Whole is the recorded tab as it was written, for a restore that puts the
 	// tab back rather than only its state. Nil for a generation-1 record.
 	Whole json.RawMessage
@@ -381,11 +386,21 @@ func (e *JournalEntry) recorded(id string) (recordedTab, bool) {
 	if err := jsonv2.Unmarshal(raw, &t); err != nil {
 		return recordedTab{}, false
 	}
-	return recordedTab{
+	rec := recordedTab{
 		State: t.State, Fields: true,
 		Name: t.Name, Type: t.Type, Note: t.Note, StateFrom: t.StateFrom,
 		Whole: raw,
-	}, true
+	}
+	// Encoded back out rather than kept as the struct, so the merge compares it
+	// against a caller's `requests` with the same equality every other field
+	// uses. An absent list stays absent: nil marshals to `null`, which is what
+	// a document with no `requests` key decodes to.
+	if len(t.Requests) > 0 {
+		if asked, err := jsonv2.Marshal(t.Requests, writeOptions); err == nil {
+			rec.Requests = asked
+		}
+	}
+	return rec, true
 }
 
 // sameRemovalAsk compares two removal requests, either of which may be absent.

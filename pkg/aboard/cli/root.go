@@ -88,6 +88,7 @@ Start with:
 		newBoardsCmd(opts),
 		newInitCmd(opts),
 		newApplyCmd(opts),
+		newRequestsCmd(opts),
 		newWaitCmd(opts),
 		newPokeCmd(opts),
 		newJournalCmd(opts),

@@ -41,6 +41,7 @@ Subcommands:
 - `poke` — Release every session waiting on this board
 - `recipes` — List the recipes available here, or print one
 - `rendered` — Print what the browser reported it drew
+- `requests` — List the human's notes to an agent
 - `serve` — Run the board server for this project
 - `status` — Report this project's running board, if any, and the caps beacon
 - `uploads` — List the files under .aboard/uploads/ and the tabs that mention them
@@ -607,6 +608,104 @@ Global flags:
 | `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
 | `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
 
+## aboard requests
+
+List the human's notes to an agent
+
+```
+aboard requests [flags]
+```
+
+What the human has asked for, tab by tab, oldest first.
+
+Everything else on a board flows one way: an agent shows them something and
+reads back what they changed. A request is the other direction — they point at a
+tab and say "this is wrong, fix it" — so it needs a channel an agent can find
+without being told to look, because by definition it arrives while nobody is
+watching.
+
+Run this at the start of a turn, next to `aboard status` (which prints the
+count). Then say you did one:
+
+  aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+
+Only the human writes these. An agent write that creates, edits, reorders or
+deletes one has it restored by the server; adding a done stamp is the one change
+an agent may make, and the stamp is never cleared — the human deleting the whole
+note is how it goes away.
+
+Needs no running board: it falls back to the state file. Stamping one does need
+the board, for the same reason `aboard apply` does.
+
+Subcommands:
+
+- `done` — Say you acted on one of the human's requests
+
+Examples:
+
+```
+  aboard requests
+  aboard requests --tab bb14 --all
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--all` | bool | `false` | include the ones already stamped done |
+| `--output-format` | string | `human` | human, json or yaml |
+| `--tab` | string | `—` | only this tab's requests, by id or name |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
+## aboard requests done
+
+Say you acted on one of the human's requests
+
+```
+aboard requests done <request-id> [flags]
+```
+
+Stamp one request done: who did it, when, and optionally a line about what.
+
+The board strikes the note through and prints the tick beside your name, which
+is the only feedback the human gets that anything happened — so write the
+`--note`. "done" tells them nothing they could not have guessed; "redrew the
+arrow, it points at the worker now" is an answer.
+
+A thin `apply`: it reads the board, changes one field, and posts it back with
+compare-and-set. It does not merge a conflict — run it again instead, which is
+cheaper than any merge could be. Re-running one that is already stamped says so
+and writes nothing.
+
+--by human is refused: the stamp says which SESSION acted, and the human answers
+their own requests by deleting them.
+
+Examples:
+
+```
+  aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--by` | string | `agent-1` | which session did it; shown beside the tick |
+| `--note` | string | `—` | one line about what you did, shown with the tick |
+
+Global flags:
+
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `--cwd` | string | `—` | directory to resolve the project root from (default: the working directory) |
+| `--name` | string | `—` | board name, for a second isolated board in the same project (env ABOARD_NAME) |
+
 ## aboard serve
 
 Run the board server for this project
@@ -783,10 +882,14 @@ front rather than accepted and never fired:
   answer bb15          that tab changed AND a human made the change
   node bb58=done       that node reached that status
   rendered bb133       a browser MOUNTED that tab and posted a receipt
+  request              the human has a note waiting for an agent
+  request bb14         one on that tab
 
-The rendered form is the one that is not about a write: a mount changes nothing
-on the board, so it is released by the browser reporting one. Waiting on it is
-waiting for a HUMAN to have the tab open, and nothing here can cause that.
+Two of them are not about a write. The rendered form is released by the browser
+reporting a mount, so waiting on it is waiting for a HUMAN to have the tab open
+and nothing here can cause that. The request form is checked the moment you ask
+as well as on every write, because a note left an hour ago is already waiting and
+blocking on it would mean asking them to write it twice.
 
 While you are waiting the human's button says who is waiting, why, and for how
 long — so fill in --note. A waiter is an open connection, so the count cannot go
@@ -805,7 +908,7 @@ Flags:
 | Flag | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `--by` | string | `agent-1` | who is waiting; shown on the human's notify button |
-| `--for` | string | `poke` | what to wait for: poke \| change \| "tab <id>" \| "answer <id>" \| "node <id>=<status>" \| "rendered <id>" |
+| `--for` | string | `poke` | what to wait for: poke \| change \| "tab <id>" \| "answer <id>" \| "node <id>=<status>" \| "rendered <id>" \| "request [<tab>]" |
 | `--note` | string | `—` | why you are waiting; shown on the button beside your name |
 | `--timeout` | duration | `10m0s` | how long to block before giving up |
 

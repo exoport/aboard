@@ -20,10 +20,12 @@ cobra state and no reads of `os.Args`.
 
 ## Resuming after a context clear
 
-Three commands, in this order, before touching anything:
+Four commands, in this order, before touching anything:
 
 ```bash
-aboard status                # running? which URL? plus the caps beacon and skill staleness
+aboard status                # running? which URL? plus the caps beacon, the skill's
+                             #   staleness, and how many requests are waiting on you
+aboard requests              # what the HUMAN has asked for, oldest first, naming the tab
 aboard capabilities          # what this board can do: every type, state field, control,
                              #   colour name, route and command — no server needed
 aboard journal --limit 20    # who changed what recently, including other sessions
@@ -35,8 +37,10 @@ cheap per-type version. If `status` warns that the skill reference was generated
 different `capsHash`, the skill is describing a board that no longer exists: run
 `make caps`.
 
-Then read the board itself, and each tab's `note` — that is the human's statement of
-what the tab is FOR, and it carries intent the contents cannot.
+Then read the board itself, and each tab's `note` — the agent's brief statement of what
+the tab is FOR, which the human may edit; it carries intent the contents cannot. What
+they want DONE about a tab is a different field, `requests`, and `aboard requests` is how
+you find it.
 
 ### Where the project stands
 
@@ -82,7 +86,7 @@ plan-2 §10.
 | `cmd/aboard/`                     | Binary entry point. Thin: it resolves `Options` and calls `cli.Execute`, the only place a status leaves the process.                  |
 | `pkg/aboard/`                     | The engine (`package aboard`): server, routes, SSE, state document, guarantees, manifest. A library — see the constraints in `aboard.go`. |
 | `pkg/aboard/layout.go`            | **Root discovery and every path under `.aboard/`. The only file that joins a path** — no `filepath.Join` outside it.                  |
-| `pkg/aboard/tabs.go` · `ids.go`   | The four tab guarantees and the id allocator invariant.                                                                              |
+| `pkg/aboard/tabs.go` · `ids.go`   | The five tab guarantees and the id allocator invariant.                                                                              |
 | `pkg/aboard/caps.go`              | The board describes itself: `web/views/*.spec.json` → `aboard capabilities`, `GET /capabilities`, the generated skill reference, and `apply`'s write warnings. |
 | `pkg/aboard/commands.go`          | The **declared command table**: the CLI surface as data, feeding the manifest and asserted equal to the cobra tree.                   |
 | `pkg/aboard/recipes.go` + `recipes/builtin/` | Recipe discovery, frontmatter, precedence and template extraction; the built-in recipes, embedded.                         |
@@ -200,7 +204,8 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
 
 - **Tabs are data, not code.** A new renderer is three declarations, and all three are load-bearing — [why](docs/explanation/why-tabs-are-data.md).
 - **The board is a local, persistent, non-authoritative channel**, and `.aboard/` is gitignored — [why](docs/explanation/why-a-local-non-authoritative-channel.md).
-- **Four guarantees are server-enforced, not conventions**: no agent deletes a tab, clears a `touched` marker, un-acks a chat message, or clears another actor's `seen` — [why](docs/explanation/why-four-guarantees-are-server-enforced.md).
+- **Five guarantees are server-enforced, not conventions**: no agent deletes a tab, clears a `touched` marker, un-acks a chat message, clears another actor's `seen`, or writes the human's own `requests` — [why](docs/explanation/why-the-guarantees-are-server-enforced.md).
+- **A tab's `note` and the human's `requests` are two different fields, deliberately.** The `note` is the purpose strip — the AGENT's brief statement of what the tab is for, which the human may edit. `requests` is the other direction: their notes to an agent about that tab, added and deleted only by them, and an agent may only ADD a `done` stamp to one. They were one field and the merge was lossy both ways — a purpose rewritten into a to-do stops being a purpose, and a to-do in the purpose strip has nowhere to record that it was dealt with. Two consequences worth keeping in mind, because both were found the hard way: a request carries an ID, so it is the only thing outside a tab's `state` the id allocator has to walk (`ids.go`); and `aboard requests done` is a write whose ENTIRE content is a change to that list, so the 409 merge compares it — without that, a same-tab collision took the board's copy and reported "applied (merged)" having stamped nothing.
 - **Nothing in the UI may START an agent session.** The board may ask; a session may choose to wait — [why](docs/explanation/why-nothing-in-the-ui-starts-a-session.md).
 - **A diff renderer is rejected. Closed, not deferred** — [why](docs/explanation/why-no-diff-renderer.md).
 - **`aboard boards` is a `/proc` scan, Linux only, honest everywhere else — and there is still no registry.** The human dropped this feature on 2026-08-26 and REVERSED that the same day, with the design: scan the process table, no file. Both halves are load-bearing and neither is open. **The scan** (`pkg/aboard/boards_linux.go`) walks `/proc/[0-9]*`, matches on `cmdline` rather than `comm` — `comm` is 15 characters and, under `ape aboard serve`, is the HOST's name, so a name filter misses one of the two ways this project is meant to run — honours a `--cwd` found in the argv, `FindRoot`s from there, and then does exactly what `status` does for one project: read the root's `instance*.json`, keep the record whose `pid` matches, verify it over `/health`. One row per (root, name), sorted, with the FULL project path, because a reader of a machine-wide listing is by definition not standing in the project it names. **The registry stays rejected**: `~/.aboard/known-roots.json` would be new user-level state outside `.aboard/`, written on every serve and still only a hint, where a process either exists or does not and nothing has to be cleaned up when it dies. **`/proc` is Linux-only, and that is answered rather than argued with**: the scanner is behind `//go:build linux`, everywhere else the command still exists, is still declared, and exits 2 with one line naming the platform and pointing at `aboard status` inside each project. A command missing on two of three platforms is worse than one that is present and honest. Two things it deliberately does NOT do: drop a record whose process has gone (it is listed as "recorded but not answering" — a stale record is information), and hide how much of the machine it could see ("N processes inspected", and "N could not be inspected (permission)" for another user's board).
@@ -251,9 +256,9 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
   for as long as the board lives while the live file holds whole tabs. A restore from the
   wide record puts back the tab's CONTENT — name, type, note, stateFrom and key as well
   as state — and NEVER
-  `touched`, `pendingRemoval` or `seen`: re-raising a dismissed dot or re-opening an
-  answered removal request would be the one command whose job is to undo walking around
-  three of the four guarantees.
+  `touched`, `pendingRemoval`, `seen` or `requests`: re-raising a dismissed dot, re-opening
+  an answered removal request or putting back a note they deleted would be the one command
+  whose job is to undo walking around four of the five guarantees.
 - **The browser reports what it drew, into a sidecar.** After every mount — and, debounced,
   after a control is pressed — `aboard.html` posts the declared control ids on screen, any
   the renderer built that no spec declares, and any unknown-component marker, to
@@ -271,7 +276,7 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
   name and note, never its declared fields: an `html` widget's markup can name a file no
   spec knows about, and a declared-field scan would call that image an orphan and offer to
   delete something the human is looking at. `--prune` alone prints and refuses.
-- **Per-viewer UI state never goes in the state file** — selection, zoom, collapsed blocks, marks-hidden, chat drafts, mount receipts, and the chrome a host asks for when it frames the board (`?chrome=full|notabs|none`). Two viewers can look at one board in the same second and must disagree about all of it while agreeing about content, so it lives in the URL — [the shell's URL surface](docs/reference/http-api.md).
+- **Per-viewer UI state never goes in the state file** — selection, zoom, collapsed blocks, marks-hidden, chat drafts, mount receipts, each tab's scroll offset (`sessionStorage`, `aboard.scroll.<tab>`), and the chrome a host asks for when it frames the board (`?chrome=full|notabs|none`). Two viewers can look at one board in the same second and must disagree about all of it while agreeing about content, so it lives in the URL — [the shell's URL surface](docs/reference/http-api.md).
 - **The board draws its own questions.** `views/dialog.js` is the only confirm/prompt on the board — see the gotcha below for why a native one is not an option, and `docs/how-to/run-in-vscode.md` for the user-facing version. Its buttons go through plain `button()` rather than `controlsFor()`: a dialog's OK and Cancel are chrome belonging to no renderer, which is the case `views/controls.js` documents for the plain helper, and what an agent needs declared is the control that OPENED the dialog.
 - **The board can be FRAMED, and says so out loud.** Three things exist for a host that owns the tab strip — a VS Code extension is the first: `?chrome=notabs` suppresses the board's own strip for that viewer; the page posts `{__aboard: 'active', tab: '<id>'}` to its parent whenever the active tab changes, so a sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the board and not only clicks that started outside it; and every `localStorage`/`sessionStorage` access is wrapped, because a third-party frame can be refused storage outright and an unguarded read would take the whole page down rather than lose a remembered scroll position. None of the three is server state, and none of them is a hook a host can use to make the board DO anything — the rule that nothing in the UI starts a session holds across the frame boundary too.
 - **One resolved root.** Paths are joined in `layout.go` and nowhere else — enforced by `TestNothingOutsideLayoutJoinsAPath`, an AST walk, because the rule had four violations for as long as nothing checked it. The port is derived from the discovered root, so the URL is the same from any subdirectory.
@@ -311,6 +316,7 @@ session parked on `aboard wait`, has to survive a restart and a week away.
 - **Do not run `make e2e` twice in one shell call.** It is ~1 min, so two runs blow a two-minute tool timeout. It needs no server, so there is nothing to start in the foreground and nothing to kill — that class of accident is gone with `test/smoke.sh`.
 - **The browser suite cannot touch your board any more.** `make e2e` seeds a temp root, serves it in-process on a free port, and deletes it. The old `make smoke` had to be aimed at a real board with `PROJECT=`, WROTE to it, and poked the notify channel — releasing any session genuinely blocked on `aboard wait`. `test/shot.sh` still takes `PROJECT` and still needs a running server, because it reads the board and writes only pictures.
 - **A failing `$(...)` aborts a `set -e` script with no message at all.** `sh` is `dash` here, so `BASE=$(sed … missing-file)` ended the old shell suite instantly and `make` printed nothing but its own error line — it read as "the suite is broken", not "the file is missing". `test/shot.sh` is the one shell script left where this can still bite: every command substitution whose failure is survivable needs `|| true`. Same family as `$(cmd; echo $?)` reading empty.
+- **Playwright scrolls a STICKY element into view before clicking it, and that moves the page.** A sticky element's LAYOUT box stays where it was in the document while only its painted position follows the viewport, so `scrollIntoViewIfNeeded` drags the document back to the top of that box even though the element was on screen the whole time. The tab strip is sticky, so every `s.tab(id)` in the browser suite scrolls the page as a side effect. Invisible for every test that came before, and fatal for one about scroll: the offset being remembered on leaving a tab was the driver's 131 where the human had left 600. A person clicking a visible tab scrolls nothing, so the honest fix is to dispatch the click in the page (`switchTab` in `test/e2e/scroll_test.go`) rather than to change the board. Two lessons in one: the harness is part of the measurement, and a green scroll assertion may be green because the BROWSER restored the position rather than because the code did — which is why `history.scrollRestoration` is now `manual`.
 - **A headless screenshot needs `?nosse=1`.** The SSE stream never closes, so chromium never reaches network-idle and writes no file at all — exit 2, no message. `test/shot.sh` appends it; a hand-rolled chromium command does not.
 - **Headless chromium does not reliably paint iframe content**, so verify an `html` tab by shooting `/tab/<id>/html` directly. `--virtual-time-budget` also starves cross-process `postMessage`, which makes frame auto-sizing look broken when it is fine in a real browser.
 - **A browser check that cannot run must FAIL, not skip.** The retired shell suite had ten sections that printed `skip …` and let the run exit 0, so a third of the checks could be absent with nothing to say so. `test/e2e` has no skip path for a missing dependency: `TestMain` installs the driver and fails the run if it cannot, and a fixture that has gone missing is a `t.Fatal` naming what it needed. The one `t.Skip` in the suite names a genuine ambiguity (nowhere empty on the dag canvas to drop on), which is what a skip is for.

@@ -67,15 +67,24 @@ form is privileged, it is just the shorthand.
 
 ## Resuming after a context clear
 
-Three commands, in this order, before touching a tab:
+Four commands, in this order, before touching a tab:
 
 ```sh
-aboard status              # running? which URL? and the caps beacon
+aboard status              # running? which URL? the caps beacon, and how many of
+                           # the human's requests are still waiting on an agent
+aboard requests            # what they have ASKED FOR, oldest first, naming the tab
 aboard capabilities        # what this board can actually do — every type, every
                            # state field, every control in toolbar order, every
                            # colour name, every gesture, endpoint, command and flag
 aboard journal --limit 20  # who changed what recently, including other sessions
 ```
+
+**`aboard requests` comes second because it is the only one of the four that is
+addressed to you.** It is the human's notes on a tab — fix this, the arrow points
+the wrong way, drop the third column — and they were written while nobody was
+watching, which is the whole reason there is a command for them rather than a
+message. Read them before you decide what to do; an outstanding request beats
+whatever you were going to pick up. See [Answering their requests](#answering-their-requests).
 
 `aboard status` reports: running (use it), a stale record, or nothing (start it
 with `aboard serve`). It answers for THIS project only; `aboard boards` is the
@@ -614,15 +623,56 @@ reading, and tell the user you have asked.
 and the banner inside it, and only the user dismissing it takes it down. Do not
 try; the server carries it forward regardless.
 
+## Answering their requests
+
+`requests` is the one channel on this board that runs the other way: the human
+points at a tab and says what is wrong with it. Each entry has an id from the
+board allocator, so it can be named in a sentence and answered by name.
+
+```sh
+aboard requests                       # pending, oldest first, naming the tab
+aboard requests --tab bb14 --all      # one tab, done ones included
+aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+aboard wait --for request             # block until one exists or arrives
+aboard wait --for "request bb14"      # one tab's
+```
+
+Three things about this to hold on to:
+
+- **Write the `--note`.** The stamp is the only feedback the human gets that
+  anything happened — it strikes their sentence through on the board and prints
+  your name and the reply beside it. "done" tells them nothing they could not
+  have guessed; "redrew the arrow, it points at the worker now" is an answer.
+- **You may only stamp.** Creating, editing, reordering, deleting or un-stamping
+  a request is refused by the server and the previous list restored — guarantee 5,
+  the same enforcement `touched` gets. That includes the ordinary case that has
+  nothing to do with intent: if you read the whole document, edit a tab and write
+  it back without carrying `requests`, the server puts them back and logs it.
+  Do not try to "tidy" one away; deleting is theirs.
+- **`--for request` answers at once if one is already waiting.** Every other
+  predicate is about a write that has not happened; a note left an hour ago is a
+  fact about the document, and blocking on it would be asking them to write it
+  twice.
+
+A tab's `note` is a different field and does not work this way: it is your brief
+statement of what the tab is FOR, written when you open it, and the human may
+edit it. Purpose in the `note`, work in `requests` — a purpose rewritten into a
+to-do stops being a purpose, and a to-do in the purpose strip has nowhere to
+record that it was dealt with.
+
 ## Reading their edits
 
-Read `.aboard/aboard.json` and diff against what you last applied. Highest signal
-first:
+`aboard requests` is what they asked for in words. This is everything else — what
+they changed by hand. Read `.aboard/aboard.json` and diff against what you last
+applied. Highest signal first:
 
 - `nodes[].parent` changed — they restructured your hierarchy. Treat it as a
   correction to your model, not noise.
 - `form.fields[].value` — their answers.
 - `markup` regions and strokes, plus each mark's `note` — where they pointed.
+- a new `requests` entry on any tab — a direct ask, and the highest signal here.
+  `aboard requests` is the reliable way to find them; a diff is how you notice one
+  you have already stamped being deleted, which means they consider it settled.
 - any `note` field — often a direct message to you. Read them all.
 - `chat` messages with `by: "human"` — they interjected.
 - `lastEditedBy: "human"` — there are edits you have not read.
@@ -686,7 +736,8 @@ binary. Shadowing is allowed and always reported by `aboard recipes list`.
 - **Pen strokes serialise as one `"x,y x,y"` string**, not nested arrays. One
   scribble as arrays was 75% of the file's lines.
 - **Per-viewer UI state stays in the browser** — selection, zoom, collapsed
-  blocks, marks-hidden. Never write it into the state file.
+  blocks, marks-hidden, and each tab's scroll position. Never write it into the
+  state file.
 - **Look at a screenshot before claiming a visual change works.** `make shot`
   then read the image. Several real bugs here passed every DOM and colour
   assertion and were obvious in a picture.

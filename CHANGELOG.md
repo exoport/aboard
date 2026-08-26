@@ -6,6 +6,61 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **feat: the human can leave notes for an agent on a tab, and an agent ticks them off.**
+  A tab's `note` and "what the human wants done about it" were one field, and the merge
+  was lossy both ways: a purpose rewritten into a to-do stops being a purpose, and a
+  to-do living in the purpose strip has nowhere to record that it was dealt with. So the
+  strip above a tab is now the AGENT's brief statement of what the tab is for (the human
+  may still edit it), and a second strip under it — **notes for the agent** — carries
+  `tab.requests`: `{ id, at, by, text, done? }`, ids from the board's own allocator. They
+  add one with Enter, delete any with a ✕ and no confirmation (it is their own sentence),
+  and see it struck through with `✓ agent-1 · 14:02 · redrew the arrow` once a session
+  answers. A tab with outstanding notes carries a count on its button — the same
+  discipline as the unread dot, a numeral rather than a dot because unlike `touched`
+  there can be several.
+  **Guarantee 5, server-enforced** (`tabs.go`, and the explanation page is now
+  *why-the-guarantees-are-server-enforced*): an agent write may only ADD a `done` stamp
+  to a request that already exists, under its own name — creating, editing, reordering,
+  deleting or un-stamping one is undone and the previous list restored, exactly as
+  `touched` is. The case that matters is not malice: it is the read-modify-write that
+  hands the whole document back without a field nobody looked at, which is how `touched`
+  used to be lost. The `by` on a stamp is rewritten to whoever actually wrote it and a
+  missing `at` is stamped, so the attribution the human reads is never one nobody
+  checked. **`aboard requests`** lists what is pending, oldest first, naming the tab;
+  **`aboard requests done <id> --by agent-1 --note "…"`** is the stamp (a thin `apply`,
+  idempotent, refusing `--by human`); **`aboard status`** prints the count, because it is
+  the first command a resuming session runs and a request nobody discovers is a request
+  that was not made; and **`aboard wait --for "request [<tab>]"`** blocks until one
+  arrives — answering AT ONCE if one is already waiting, since a note left an hour ago is
+  a fact about the document rather than an event still to come. Either way that wait
+  answers `{"event": "request"}`, where every other predicate answers `change`: `change` is
+  true for the others because a write is the only thing that can satisfy one, and a request
+  can be satisfied by a write *or* by a note that was already there — so the field a caller
+  branches on must not depend on the human's timing. Two smaller things had to
+  move with it: the id allocator now counts a request's id, which is the only id outside a
+  tab's `state` and would otherwise have let `nextId` hand out an id that already named
+  one; and the 409 merge compares the request list, because `requests done` is a write
+  whose entire content is a change to it and the merge would otherwise have taken the
+  board's copy and reported "applied (merged)" having stamped nothing. `capsHash` moves
+  to `34af0bc9`.
+- **feat: the board remembers where you were on each tab.** Every tab shares one
+  scrolling document — views are shown and hidden, they do not scroll independently — so
+  leaving a long list half way down, glancing at another tab and coming back landed you
+  at the top with no record of where you had got to. Each tab's offset is now saved when
+  you leave it and while you scroll (debounced), and put back when you come back to it,
+  under `aboard.scroll.<tab>` in `sessionStorage`: **per viewer**, so it never goes near
+  the state file, and this sitting only, so it survives the board reloading its own code
+  and does not still point half way down a tab next week. A tab you have never opened
+  starts at the top rather than wherever the last one left the page. The restore waits
+  for the page to GROW rather than firing once: a scroll past the current bottom is
+  clamped silently, and a renderer that lays out asynchronously — a `diagram` waiting on
+  mermaid — is shorter at the moment it mounts than it is a moment later, which put a
+  reloaded 60-node graph back at 0 instead of 500. A `ResizeObserver` watches for the
+  actual event instead of guessing at a delay, and stops the moment the position is
+  reached, the human scrolls, or they switch tabs again. The browser's own
+  `history.scrollRestoration` is switched off, because it restores the DOCUMENT on
+  whichever tab comes up first — right only by coincidence, and wrong the moment a
+  `#tab=` link opens a different one.
 - **fix: the board never calls a native dialog, so its questions survive a webview.**
   A VS Code webview — and any `<iframe>` whose `sandbox` omits `allow-modals` —
   SUPPRESSES `window.alert`/`confirm`/`prompt`: `confirm()` returns `false`, `prompt()`

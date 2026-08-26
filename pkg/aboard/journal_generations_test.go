@@ -218,8 +218,9 @@ func TestARestoreFromASchema2RecordPutsTheNameBack(t *testing.T) {
 // A schema-2 record holds `touched`, `pendingRemoval` and `seen` because it holds
 // the whole tab — but putting them back would re-raise a notice the human
 // dismissed and re-open a removal request they already answered, which is three
-// of the four guarantees in tabs.go walked around by the one command whose job is
-// to undo.
+// of the five guarantees in tabs.go walked around by the one command whose job is
+// to undo. The fourth is `requests`, covered in requests_test.go beside the rest
+// of guarantee 5.
 func TestARestoreDoesNotResurrectTheMarkers(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)

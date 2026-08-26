@@ -87,11 +87,21 @@ independently of whatever tab or stack block holds it.
   "type": "diagram",          // picks the renderer
   "state": { /* type-specific, see below */ },
 
-  "note": "why this exists",  // OPTIONAL, the human's words: what the tab is FOR.
-                              // READ THIS FIRST — it carries intent the contents
-                              // cannot. Write one when you create a tab; the human
-                              // edits it from the strip, the tab's right-click
-                              // menu, or the New tab dialog.
+  "note": "why this exists",  // OPTIONAL: what the tab is FOR — YOUR brief statement
+                              // of its purpose, which the human may edit. READ THIS
+                              // FIRST; it carries intent the contents cannot. Write
+                              // one when you create a tab. They edit it from the
+                              // strip, the tab's right-click menu, or the New tab
+                              // dialog.
+
+  "requests": [               // the human's notes TO you about this tab. Theirs to
+                              // write; yours only to stamp. `aboard requests` lists
+    { "id": "bb199",          // them and `aboard requests done <id>` answers one.
+      "at": "2026-08-26T09:12:00Z",
+      "by": "human",
+      "text": "the arrow points the wrong way",
+      "done": { "by": "agent-1", "at": "…", "note": "flipped it" } }
+  ],
 
   "stateFrom": "bb1",         // OPTIONAL: render another tab's state with this
                               // type — a kanban and a DAG over one dataset
@@ -105,7 +115,7 @@ independently of whatever tab or stack block holds it.
 }
 ```
 
-Two fields you do not control:
+Three fields you do not control:
 
 - **`touched`** is stamped by the server on any tab an agent's write changed, and
   cleared only by the user dismissing it. Trying to remove it in a write is
@@ -113,6 +123,14 @@ Two fields you do not control:
 - **`pendingRemoval`** is how a tab goes away. An agent write that simply drops a
   tab has it restored with this set. You may set it deliberately, with a reason.
   Only the user's answer deletes or keeps.
+- **`requests`** are the user's notes to you, and the one thing on a tab that
+  flows their way. You may only ADD a `done` stamp to one that already exists;
+  creating, editing, reordering, deleting or un-stamping is refused and the list
+  restored, exactly as `touched` is — including the ordinary case where you read
+  the document, edit something else and hand it back without the field. The `by`
+  on a stamp is rewritten to whoever actually wrote it. Reach for the commands
+  rather than editing the array: `aboard requests`, then
+  `aboard requests done <id> --by agent-1 --note "what you did"`.
 
 ## state, per type
 

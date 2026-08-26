@@ -290,6 +290,17 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, was recordedTab) er
 	if !sameJSON(mustJSON(ours["state"]), was.State) {
 		return fmt.Errorf("%w: %s changed on the board while you were changing it — re-read the board, redo the edit, apply again", ErrCollision, id)
 	}
+	// The human's requests, compared like the state and for a sharper reason than
+	// the four fields below. `aboard requests done` is a write whose ENTIRE
+	// content is a change to this list; without this line the merge would find
+	// our state and our four fields unchanged, take the board's copy of the tab,
+	// and hand back "applied (merged)" having silently dropped the one thing the
+	// write was for. Only for a schema-2 record: an older entry does not carry
+	// the list, and a comparison against the live tab would call the human's own
+	// new note a collision.
+	if was.Fields && !sameJSON(mustJSON(ours[keyRequests]), was.Requests) {
+		return fmt.Errorf("%w: %s — its requests changed on the board while you were changing them too — re-read the board, redo the edit, apply again", ErrCollision, id)
+	}
 	for _, field := range []string{keyName, keyType, keyNote, keyStateFrom} {
 		if !was.Fields {
 			// Pre-schema-2 record: the best available comparison is against the

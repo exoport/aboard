@@ -132,10 +132,11 @@ absolute project root, and a client compares it.
 
 A human writes through the **browser**. An agent writes through **`aboard apply`**, which
 reads a whole document on stdin and `POST`s it to the running server rather than touching
-the file. The distinction is not cosmetic: four things — deleting a tab, clearing a change
-marker, un-acking a chat message, clearing another actor's read state — are refused from
-an agent, which is why `--by human` is refused from the CLI. See
-[why four guarantees are server-enforced](why-four-guarantees-are-server-enforced.md). That is the important part: `apply` posting means an agent's write goes into the
+the file. The distinction is not cosmetic: five things — deleting a tab, clearing a change
+marker, un-acking a chat message, clearing another actor's read state, writing the human's
+own `requests` — are refused from an agent, which is why `--by human` is refused from the
+CLI. See
+[why the guarantees are server-enforced](why-the-guarantees-are-server-enforced.md). That is the important part: `apply` posting means an agent's write goes into the
 same queue as the browser's, ordered by the same lock. A direct `Edit` of the state file
 has no compare-and-set at all, so a concurrent change from the browser or another session
 is destroyed with no error.

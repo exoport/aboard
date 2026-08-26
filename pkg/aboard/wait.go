@@ -174,8 +174,8 @@ func (h *waitHub) snapshot() ([]waiter, *pokeEvent) {
 
 /* ---------- predicates ---------- */
 
-// The vocabulary is deliberately tiny. Four forms cover what an agent actually
-// waits for, and each one is checkable against a single write:
+// The vocabulary is deliberately tiny. The forms below cover what an agent
+// actually waits for, and each one is checkable against a single write:
 //
 //	poke                the human pressed Notify (or another session -poked)
 //	change              any accepted write at all
@@ -183,6 +183,7 @@ func (h *waitHub) snapshot() ([]waiter, *pokeEvent) {
 //	answer bb15         that tab changed AND a human made the change
 //	node bb58=done      that node reached that status
 //	rendered bb133      a browser MOUNTED that tab and posted a receipt
+//	request [bb71]      the human has a note waiting for an agent (on that tab)
 //
 // An unknown form is refused at request time rather than accepted and never
 // fired: the caller learns immediately instead of after the timeout. That is the
@@ -195,8 +196,15 @@ func (h *waitHub) snapshot() ([]waiter, *pokeEvent) {
 // Worth stating rather than discovering: an agent waiting on `rendered` is
 // waiting for a HUMAN to have the tab open, and nothing on the board can cause
 // that — the same honesty the notify button has about a board nobody is watching.
+//
+// `request` is the second form that is not about a write, and it differs from
+// `rendered` in the direction that matters: a mount receipt can only ever ARRIVE,
+// but a request can already be sitting there when the session asks. So it is
+// checked once at registration as well as on every write — a session that blocked
+// on a note the human left an hour ago would be waiting for them to write it
+// twice.
 type predicate struct {
-	kind  string // "poke" | "change" | "tab" | "answer" | "node" | "rendered"
+	kind  string // "poke" | "change" | "tab" | "answer" | "node" | "rendered" | "request"
 	id    string
 	value string
 }
@@ -217,6 +225,19 @@ func parsePredicate(raw string) (predicate, error) {
 			return predicate{}, fmt.Errorf("%s needs one id, e.g. %q", fields[0], fields[0]+" bb71")
 		}
 		return predicate{kind: fields[0], id: fields[1]}, nil
+	case predRequest:
+		// The one predicate whose argument is optional, because both questions are
+		// real: "has the human asked for anything at all" is what a session waiting
+		// for work wants, and "has anything landed on the tab I just changed" is
+		// what a session that has just shown them something wants.
+		if len(fields) > 2 {
+			return predicate{}, fmt.Errorf("%s takes at most one tab id, e.g. %q", predRequest, predRequest+" bb14")
+		}
+		p := predicate{kind: predRequest}
+		if len(fields) == 2 {
+			p.id = fields[1]
+		}
+		return p, nil
 	case predNode:
 		if len(fields) != 2 || !strings.Contains(fields[1], "=") {
 			return predicate{}, errors.New(`node needs id=status, e.g. "node bb58=done"`)
@@ -224,7 +245,7 @@ func parsePredicate(raw string) (predicate, error) {
 		parts := strings.SplitN(fields[1], "=", 2)
 		return predicate{kind: predNode, id: parts[0], value: parts[1]}, nil
 	default:
-		return predicate{}, fmt.Errorf("unknown predicate %q — try poke, change, tab <id>, answer <id>, node <id>=<status>, rendered <id>", fields[0])
+		return predicate{}, fmt.Errorf("unknown predicate %q — try poke, change, tab <id>, answer <id>, node <id>=<status>, rendered <id>, request [<tab>]", fields[0])
 	}
 }
 
@@ -246,6 +267,11 @@ func (p predicate) matches(doc []byte, entry JournalEntry) bool {
 		return isHuman(entry.By) && containsString(entry.Tabs, p.id)
 	case predNode:
 		return nodeHasStatus(doc, p.id, p.value)
+	case predRequest:
+		// The document as written, not the entry: a request the human added three
+		// writes ago is still waiting, and a waiter that only fired on the write
+		// that CREATED one would sleep through every note left before it asked.
+		return hasPendingRequest(doc, p.id)
 	}
 	return false
 }
@@ -289,6 +315,57 @@ func nodeHasStatus(doc []byte, id, status string) bool {
 	return found
 }
 
+// hasPendingRequest reports whether the human has a note waiting on this board,
+// or on one tab of it.
+//
+// It reads the document rather than the parsed tabs for the same reason
+// nodeHasStatus does: this runs on the publish side of a write, outside the write
+// lock, with the bytes that were written and nothing else.
+func hasPendingRequest(doc []byte, tab string) bool {
+	var parsed requestDoc
+	if json.Unmarshal(doc, &parsed) != nil {
+		return false
+	}
+	for _, t := range parsed.Tabs {
+		if tab != "" && t.ID != tab {
+			continue
+		}
+		for _, ask := range t.Requests {
+			if ask.Done == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// pendingRequestNow answers the request predicate against the state file as it
+// stands, rather than against the read cache.
+//
+// `cachedState` is right for a GET — bytes one poll interval stale are corrected
+// by the next SSE frame — and wrong here, because there is no next frame to
+// correct anything: a waiter answered from a stale copy blocks until some other
+// write happens to come along, on a board where the note it was waiting for is
+// already sitting on disk.
+func (s *server) pendingRequestNow(tab string) bool {
+	raw, _, err := readStable(s.stateFile)
+	if err != nil {
+		return false
+	}
+	return hasPendingRequest(raw, tab)
+}
+
+// requestAlreadyWaiting is the sentence a session gets back when the note was
+// there before it asked. A sentence and not the bare tab id: this is printed as
+// the `note` of the event, beside a name and a timestamp, and "bb14" there reads
+// as a value nobody finished writing.
+func requestAlreadyWaiting(tab string) string {
+	if tab == "" {
+		return "a request was already waiting"
+	}
+	return "a request was already waiting on " + tab
+}
+
 // predRendered is the predicate kind, the event name a released waiter prints,
 // and the word in the CLI flag's help — one constant so those cannot drift, the
 // same reason eventPoke is one.
@@ -300,10 +377,11 @@ const predRendered = "rendered"
 // kind that is spelled two ways is a wait that blocks on something that will
 // never fire.
 const (
-	predChange = "change"
-	predTab    = "tab"
-	predAnswer = "answer"
-	predNode   = "node"
+	predChange  = "change"
+	predTab     = "tab"
+	predAnswer  = "answer"
+	predNode    = "node"
+	predRequest = "request"
 
 	// eventTimeout is what a waiter prints when it gave up rather than being
 	// released. `aboard wait` turns it into ExitTimeout, so a script can tell the
@@ -367,12 +445,30 @@ func (h *waitHub) releaseMatching(doc []byte, entry JournalEntry) int {
 	released := 0
 	for _, w := range targets {
 		select {
-		case w.ch <- ev:
+		case w.ch <- eventFor(w, ev):
 			released++
 		default:
 		}
 	}
 	return released
+}
+
+// eventFor names what a released waiter actually got.
+//
+// `change` for almost everything, and that is not a compromise: `tab`, `answer`
+// and `node` can ONLY ever be satisfied by an accepted write, so the word is true
+// every time one of them fires. `request` is the exception, because it is about a
+// STATE of the document rather than an event in it — it can be satisfied by a
+// write, and equally by a note that was already there when the session asked, and
+// those two arrive through different code paths. A caller that branched on
+// `event` would get "request" or "change" for the same wait depending on the
+// human's timing, which is the kind of surface nobody debugs twice. So the
+// predicate names it, exactly as `rendered` does for the same reason.
+func eventFor(w *waiter, ev pokeEvent) pokeEvent {
+	if w.pred.kind == predRequest {
+		ev.Event = predRequest
+	}
+	return ev
 }
 
 /* ---------- endpoints ---------- */
@@ -420,11 +516,36 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wt := s.waits.add(by, forWhat, note, pred, timeout)
-	s.broadcastWaiters()
 	defer func() {
 		s.waits.remove(wt.ID)
 		s.broadcastWaiters()
 	}()
+
+	// A request may ALREADY be waiting, and that is the difference between this
+	// predicate and every other one. The rest are about a write that has not
+	// happened yet; a note the human left before the session asked is a fact
+	// about the document, and blocking on it would mean waiting for them to write
+	// the same note a second time.
+	//
+	// Checked AFTER the waiter is registered and BEFORE the button is told about
+	// it, and that order is the whole point. Checking first left a window — the
+	// read, then the add — in which a write could commit, find nobody registered,
+	// and leave this session asleep on a note that was already on the board. It
+	// is microseconds wide and it is exactly the failure this predicate exists to
+	// rule out. Registered first, any such write releases us through the channel;
+	// answered before the broadcast, the notify button never claims a session is
+	// listening when it is not, and the deferred remove takes the waiter away
+	// again on the way out.
+	if pred.kind == predRequest && s.pendingRequestNow(pred.id) {
+		s.writeJSON(w, http.StatusOK, pokeEvent{
+			Event: predRequest,
+			At:    time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
+			By:    actorHuman,
+			Note:  requestAlreadyWaiting(pred.id),
+		})
+		return
+	}
+	s.broadcastWaiters()
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()

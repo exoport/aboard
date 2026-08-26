@@ -41,6 +41,7 @@ const (
 	keyType      = "type"
 	keyNote      = "note"
 	keyStateFrom = "stateFrom"
+	keyRequests  = "requests"
 	keyBy        = "by"
 	keyAt        = "at"
 	keyReason    = "reason"

@@ -12,7 +12,7 @@ writers they had succeeded.
 ## The failure this fixes
 
 `POST /aboard.json` reads the current document, compares the caller's `__base` against
-the live revision, reconciles the tab list against the four guarantees, and renames a
+the live revision, reconciles the tab list against the guarantees, and renames a
 new file into place. Four steps, and until this change no lock spanned them.
 
 So two overlapping posts each read the same document, each compared against the same

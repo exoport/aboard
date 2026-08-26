@@ -353,6 +353,25 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 
 .tab-dot--removal { background: var(--danger); box-shadow: none; }
 
+/* Notes the human left on that tab that nobody has answered. A numeral, not a
+   dot: the unread dot answers a yes/no ("an agent changed this"), and this
+   answers "how many things are still outstanding here", which a dot cannot. It
+   carries --mark for the same reason the strip does — this is the human's
+   direction, not the agent's. */
+.tab-asks-count {
+  flex: 0 0 auto;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--mark);
+  color: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
 /* Notify button: a session blocked on `aboard wait` holds an open connection,
    so a lit dot means something is genuinely listening. Nobody waiting, nothing
    to press — disabled is the honest state, not a hopeful one. */
@@ -440,9 +459,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .notices { display: flex; flex-direction: column; gap: 8px; }
 .notices:not(:empty) { margin-bottom: 12px; }
 
-/* What a tab is FOR: the human's intent, in their words, above the view. Quiet
-   by default — it is context, not a notice — and only present when it has been
-   written. */
+/* What a tab is FOR, above the view: the agent's brief statement of the tab's
+   purpose, which the human may edit. Quiet by default — it is context, not a
+   notice — and only present when it has been written. What they want DONE about
+   the tab is the strip below, .tab-asks. */
 .tab-note {
   display: flex;
   align-items: baseline;
@@ -468,6 +488,72 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .tab-note-text { color: var(--text); flex: 1 1 auto; }
 .tab-note .icon-btn { flex: 0 0 auto; }
 .tab-note-input { width: 100%; min-height: 3.4em; font-size: 0.86rem; }
+
+/* What the human wants DONE about the tab, as opposed to what it is for. Same
+   family as the note strip so the two read as a pair, and the accent is --mark
+   rather than --agent because the direction is the other way round: --agent is
+   the colour of everything an agent says on this board. */
+.tab-asks {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-top: 6px;
+  padding: 6px 11px;
+  border-left: 2px solid var(--mark);
+  background: var(--sunken);
+  border-radius: 0 3px 3px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.ask-label { flex: 0 0 auto; color: var(--mark); }
+.ask-body { flex: 1 1 auto; min-width: 0; }
+
+.ask-list { list-style: none; margin: 0 0 4px; padding: 0; }
+.ask-list[hidden] { display: none; }
+
+.ask {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 2px 0;
+}
+
+.ask-text { color: var(--text); flex: 1 1 auto; overflow-wrap: anywhere; }
+
+/* Struck through AND faded, because either alone is ambiguous at this size: a
+   strike-through on one line of small type is easy to miss, and a fade on its
+   own reads as "less important" rather than "already dealt with". */
+.ask[data-done="yes"] .ask-text {
+  text-decoration: line-through;
+  color: var(--dim);
+}
+
+.ask-meta {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.ask[data-done="yes"] .ask-meta { color: var(--accent); }
+
+.ask-drop { flex: 0 0 auto; padding: 0 6px; }
+
+.ask-add { display: flex; align-items: center; gap: 9px; }
+.ask-add .icon-btn { flex: 0 0 auto; }
+
+#tab-asks-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.83rem;
+}
+#tab-asks-input:focus { outline: 1px solid var(--focus); border-color: var(--focus); }
 
 /* Help panel: generated from the renderer registry, so it cannot go stale. */
 .help-dialog { max-width: 720px; }

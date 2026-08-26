@@ -136,15 +136,26 @@ func (d *stateDoc) rootMax() int {
 	return highest
 }
 
-// idHigh is the largest numeric id this tab uses: its own, and every "id" inside
-// its state. The other tab fields cannot carry one — `touched`, `pendingRemoval`
-// and `seen` hold actors and timestamps — so the walk is the state blob, which is
-// also the only part a write can put a new object into.
+// idHigh is the largest numeric id this tab uses: its own, every "id" inside its
+// state, and every request on it.
+//
+// `requests` is the one tab field outside `state` that carries an id, and it had
+// to be added here the day it landed. The rest — `touched`, `pendingRemoval`,
+// `seen` — hold actors and timestamps, which is why this used to be "the state
+// blob and nothing else". Leaving a request out would not have failed anything
+// loudly: `nextId` would simply have stopped short of the id the human's last
+// note took, and the next object allocated ANYWHERE on the board would have been
+// handed an id that already names something.
 func (t *docTab) idHigh() int {
 	if t.maxID >= 0 {
 		return t.maxID
 	}
 	highest := idCounter(t.ID)
+	for i := range t.Requests {
+		if n := idCounter(t.Requests[i].ID); n > highest {
+			highest = n
+		}
+	}
 	if len(t.State) > 0 {
 		idWalks.Add(1)
 		var v any

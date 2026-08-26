@@ -105,8 +105,8 @@ func TestHumanWriteIsTakenAsIs(t *testing.T) {
 	}
 }
 
-// A note is human-authored intent — what the tab is FOR, in their words — and an
-// agent can overwrite it in a normal write. It was in neither comparison: no dot
+// A note is the statement of what the tab is FOR, which the human may have
+// written or edited, and an agent can overwrite it in a normal write. It was in neither comparison: no dot
 // on the tab, and nothing in the journal, so the sentence could be replaced with
 // no trace at all.
 func TestNoteOnlyEditIsMarkedAndJournaled(t *testing.T) {

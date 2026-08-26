@@ -260,12 +260,7 @@ func (h TabHistory) Human() string {
 // the `aboard apply` on the other side of the pipe writes whichever board IT was
 // told about — so a half-qualified pipeline takes the right document and puts it
 // on the wrong board.
-func (h TabHistory) nameFlag() string {
-	if h.Board == "" {
-		return ""
-	}
-	return " --name " + h.Board
-}
+func (h TabHistory) nameFlag() string { return nameFlagFor(h.Board) }
 
 // EndsAt is the sentence about where the record stops. Its own method because
 // the JSON form carries the facts and the human form has to say them out loud,
@@ -344,11 +339,13 @@ func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Wr
 // record holds the entire tab, markers included, and putting those back would
 // undo things that were never this command's to undo: `touched` is the human's
 // dot and only their dismiss clears it, `pendingRemoval` is a request they have
-// already answered, and `seen` is every actor's read state including other
-// sessions'. Restoring them would re-raise a dismissed notice and re-open a
-// settled removal — three of the four guarantees in tabs.go, walked around by
-// the one command whose job is to undo. So: name, type, note, stateFrom, key and
-// state come back; the markers stay as the live board has them.
+// already answered, `seen` is every actor's read state including other sessions',
+// and `requests` is the human's own list of what they still want done — putting
+// an old copy back would re-raise a note they deleted and un-do one they had
+// already been told was handled. Restoring any of them would walk around four of
+// the five guarantees in tabs.go, using the one command whose job is to undo. So:
+// name, type, note, stateFrom, key and state come back; the markers and the
+// requests stay as the live board has them.
 //
 // A generation-1 record carries only a state, and then only the state moves —
 // which is exactly what this command did for every version before the record

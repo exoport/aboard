@@ -102,6 +102,19 @@ selection, zoom and collapsed blocks out of the document is the same rule.
 | `?nosse=1`      | Do not open the event stream. For headless screenshots, which otherwise never reach network-idle. |
 | `?probe=1`      | A test seam: exposes the shell's document plumbing on `window.__aboardProbe` for the browser suite. Nothing is exposed without it. |
 
+Two more pieces of per-viewer state live in the browser rather than in the URL, because
+nobody would want to type them: which tab you were last on (`localStorage`,
+`aboard.tab`), and where you were on each tab (`sessionStorage`, `aboard.scroll.<tab>`).
+Every tab shares one scrolling document, so without the second one, leaving a long list
+half way down and glancing at another tab lost your place. `sessionStorage` rather than
+`localStorage` because the lifetime that matters is this sitting: it has to survive the
+board [reloading its own code](../how-to/run-in-vscode.md#when-the-page-reloads-itself),
+and it should not still be pointing half way down a tab next week. The board also sets
+`history.scrollRestoration = 'manual'`: the browser's own restoration puts back the
+DOCUMENT's offset on whichever tab comes up first, which is right only by coincidence.
+Every access is wrapped, because a third-party frame can be refused storage outright and
+the refusal is a thrown `SecurityError`, not a null.
+
 ### `?chrome=`
 
 Stamped once as `document.body.dataset.chrome`; the rules are CSS keyed off that
@@ -272,10 +285,12 @@ schema version by definition), `rev` (the previous revision plus one), `nextId`
 (reconciled so it never regresses or falls behind an id in use), `updatedAt`, and
 `lastEditedBy`.
 
-**What the server enforces on the tab list:** the four guarantees — a dropped tab is
+**What the server enforces on the tab list:** the five guarantees — a dropped tab is
 restored as a removal request, a `touched` marker cannot be cleared by an agent, chat
-acknowledgements are carried forward, and an actor may stamp only its own `seen` key.
-See [why four guarantees are server-enforced](../explanation/why-four-guarantees-are-server-enforced.md).
+acknowledgements are carried forward, an actor may stamp only its own `seen` key, and the
+human's `requests` survive an agent write untouched except for a `done` stamp added to one
+that already exists.
+See [why the guarantees are server-enforced](../explanation/why-the-guarantees-are-server-enforced.md).
 
 Success is `200`, and carries the revision this write produced — which is the base for
 the caller's next one:
@@ -371,7 +386,7 @@ A long poll that blocks.
 
 | query      | default | meaning                                                                                    |
 | ---------- | ------- | -------------------------------------------------------------------------------------------- |
-| `for`      | `poke`  | `poke` · `change` · `tab <id>` · `answer <id>` (that tab changed AND a human did it) · `node <id>=<status>` · `rendered <id>` (a browser mounted that tab and posted a receipt — released by `POST /rendered`, not by a write). |
+| `for`      | `poke`  | `poke` · `change` · `tab <id>` · `answer <id>` (that tab changed AND a human did it) · `node <id>=<status>` · `rendered <id>` (a browser mounted that tab and posted a receipt — released by `POST /rendered`, not by a write) · `request [<tab>]` (the human has a note waiting for an agent). |
 | `timeout`  | server default | Whole seconds, capped by the server maximum.                                        |
 | `by`       | `agent` | Who is waiting; shown on the human's notify button.                                        |
 | `note`     | —       | Why, in up to 140 characters; shown beside the name.                                       |
@@ -380,6 +395,18 @@ Returns `200` with `{"event": "poke", …}` when released or `{"event": "timeout
 gave up. An unrecognised predicate is `400` up front, rather than blocking on something
 that can never fire. A waiter is an open connection, so the count cannot go stale: if the
 caller hangs up, the waiter disappears.
+
+`request` is the one predicate that can be satisfied **before it is asked**, and it is
+checked once at registration as well as on every write: a note the human left an hour ago
+is a fact about the document rather than an event still to come, and blocking on it would
+be asking them to write the same note twice. When one is already pending the request
+returns at once and the waiter is dropped again before the notify button hears about it —
+so the button never claims a session is listening when none is.
+
+Either way it answers `{"event": "request"}`. Every other predicate reports `change`,
+which is true for them because a write is the only thing that can satisfy one; a request
+can be satisfied by a write *or* by a note that was already there, so the field a caller
+branches on would otherwise depend on the human's timing.
 
 ## `POST /poke`
 

@@ -61,8 +61,12 @@ const (
 	flagTypeDuration = "duration"
 )
 
-// meaningPrinted is what ExitOK means for a command whose whole job is to print.
-const meaningPrinted = "printed"
+// meaningPrinted is what ExitOK means for a command whose whole job is to print,
+// and meaningBadFormat what ExitUsage means for one that takes --output-format.
+const (
+	meaningPrinted   = "printed"
+	meaningBadFormat = "an unknown output format"
+)
 
 // Flag names and one default that the table below repeats. Unexported, unlike
 // the two above: a name that drifts is caught STRUCTURALLY by TestFlagParity —
@@ -72,6 +76,7 @@ const meaningPrinted = "printed"
 // not. The cobra side keeps its literal next to the variable it binds.
 const (
 	flagNameBy           = "by"
+	flagNameNote         = "note"
 	flagNameOutputFormat = "output-format"
 
 	// defFalse is how pflag renders a bool flag's default, which is what the
@@ -206,12 +211,46 @@ func Commands() []Command {
 			Exits: commonExits(),
 		},
 		{
+			// Beside `apply`, and before `wait`, because it is the other half of
+			// the same loop: `apply` is what an agent says to the human, this is
+			// what the human said back. A resuming session reads it before it
+			// writes anything.
+			Name: "requests",
+			Doc:  "list the human's notes to an agent — what they have asked for, oldest first",
+			Flags: []Flag{
+				{Name: "all", Type: flagTypeBool, Def: defFalse, Doc: "include the ones already stamped done"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
+				{Name: "tab", Type: flagTypeString, Doc: "only this tab's requests, by id or name"},
+			},
+			Exits: []Exit{
+				{Code: ExitOK, Meaning: "printed; nothing pending is still an answer"},
+				{Code: ExitFailed, Meaning: "the board document could not be read"},
+				{Code: ExitUsage, Meaning: meaningBadFormat},
+			},
+			Subcommands: []Command{
+				{
+					Name: "done",
+					Args: "<request-id>",
+					Doc:  "say you acted on one of the human's requests: strikes it through on the board",
+					Flags: []Flag{
+						{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "which session did it; shown beside the tick"},
+						{Name: flagNameNote, Type: flagTypeString, Doc: "one line about what you did, shown with the tick"},
+					},
+					Exits: []Exit{
+						{Code: ExitOK, Meaning: "stamped, or it was already stamped"},
+						{Code: ExitFailed, Meaning: "no board running, no such request, or the write was refused"},
+						{Code: ExitUsage, Meaning: "a missing or extra argument"},
+					},
+				},
+			},
+		},
+		{
 			Name: "wait",
 			Doc:  "block until the board is poked or until a predicate matches",
 			Flags: []Flag{
 				{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "who is waiting; shown on the human's notify button"},
-				{Name: "for", Type: flagTypeString, Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>"`},
-				{Name: "note", Type: flagTypeString, Doc: "why you are waiting; shown on the button beside your name"},
+				{Name: "for", Type: flagTypeString, Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>" | "request [<tab>]"`},
+				{Name: flagNameNote, Type: flagTypeString, Doc: "why you are waiting; shown on the button beside your name"},
 				{Name: "timeout", Type: flagTypeDuration, Def: "10m0s", Doc: "how long to block before giving up"},
 			},
 			Exits: append(commonExits(), Exit{Code: ExitTimeout, Meaning: "the timeout ran out; nobody poked"}),
@@ -221,7 +260,7 @@ func Commands() []Command {
 			Doc:  "release every session waiting on this board, as the human's notify button does",
 			Flags: []Flag{
 				{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "who is releasing them"},
-				{Name: "note", Type: flagTypeString, Doc: "a message for the waiting sessions"},
+				{Name: flagNameNote, Type: flagTypeString, Doc: "a message for the waiting sessions"},
 			},
 			Exits: commonExits(),
 		},
@@ -304,7 +343,7 @@ func Commands() []Command {
 			Exits: []Exit{
 				{Code: ExitOK, Meaning: meaningPrinted},
 				{Code: ExitFailed, Meaning: "no such recipe, or the recipe has no template"},
-				{Code: ExitUsage, Meaning: "an unknown output format"},
+				{Code: ExitUsage, Meaning: meaningBadFormat},
 			},
 			Subcommands: []Command{
 				{
@@ -316,7 +355,7 @@ func Commands() []Command {
 					Exits: []Exit{
 						{Code: ExitOK, Meaning: meaningPrinted},
 						{Code: ExitFailed, Meaning: "the recipe directories could not be read"},
-						{Code: ExitUsage, Meaning: "an unknown output format"},
+						{Code: ExitUsage, Meaning: meaningBadFormat},
 					},
 				},
 				{

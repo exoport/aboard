@@ -49,7 +49,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [How aboard runs](explanation/how-aboard-runs.md) — the moving parts in one pass: one binary, the port derived from the path, the instance record, the two ways in, the watcher, the journal as the undo
 - [Why a local, non-authoritative channel](explanation/why-a-local-non-authoritative-channel.md) — what the board is FOR, the three tiers, and how a conclusion gets promoted
 - [Why tabs are data](explanation/why-tabs-are-data.md) — a tab is a name, a type and its own state, and what that buys
-- [Why four guarantees are server-enforced](explanation/why-four-guarantees-are-server-enforced.md) — the things an agent must not be able to do, even by accident
+- [Why the guarantees are server-enforced](explanation/why-the-guarantees-are-server-enforced.md) — the five things an agent must not be able to do, even by accident
 - [Why nothing in the UI starts a session](explanation/why-nothing-in-the-ui-starts-a-session.md) — the board may ask; a session may choose to listen
 - [Why there is no diff renderer](explanation/why-no-diff-renderer.md) — closed, not deferred, and the reason kept so nobody re-derives it
 - [Why html tabs are sandboxed](explanation/why-html-tabs-are-sandboxed.md) — `connect-src 'none'`, an opaque origin, and the `frame-ancestors` story

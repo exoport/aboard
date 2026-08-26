@@ -39,6 +39,8 @@ aboard boards                              # every board running on this machine
 aboard init --example --gitignore          # create .aboard/, seed it, ignore it
 aboard serve                               # run the server for this project
 aboard apply --by "agent-1" < next.json    # compare-and-set write (the only safe write)
+aboard requests                            # what the human has asked for, oldest first, naming the tab
+aboard requests done bb199 --by agent-1 --note "redrew the arrow"   # say you acted on one
 aboard wait --by "agent-1" --timeout 10m   # block until the human presses Notify (exit 0), or give up (exit 3)
 aboard poke --by "agent-1" --note "go"     # release every waiting session, as the button does
 aboard watch                               # every change as JSON lines, until interrupted
@@ -54,8 +56,8 @@ make caps | e2e | shot | build | test | lint | status
 
 Every command takes `--cwd DIR` on the root, to resolve the project from
 somewhere other than the working directory, and `--name N` (env `ABOARD_NAME`) to
-address a second, isolated board. `status`, `boards`, `journal`, `recipes list`
-and `version` take `--output-format human|json|yaml`. `boards` is the one command
+address a second, isolated board. `status`, `boards`, `journal`, `requests`,
+`recipes list` and `version` take `--output-format human|json|yaml`. `boards` is the one command
 that needs no project at all — it asks the process table, so it answers from a
 directory that has never held a board, and it is also the one command that cannot
 answer everywhere: `/proc` is Linux-only, so on macOS and Windows it exits 2 with
@@ -537,8 +539,14 @@ repaints the button.
 - exit **3** — timed out. Nobody came. Say so rather than pretending you waited.
 - `--for` narrows it: `poke`, `change`, `tab <id>`, `answer <id>` (that tab
   changed AND a human did it), `node <id>=<status>`, `rendered <id>` (a browser
-  mounted that tab). An unknown predicate is refused immediately rather than
-  blocking on something that will never fire.
+  mounted that tab), `request [<tab>]` (the human has a note waiting for an
+  agent). An unknown predicate is refused immediately rather than blocking on
+  something that will never fire.
+- `request` is the one form that can be satisfied before you ask, and it answers
+  at once when it is: a note left an hour ago is a fact about the document rather
+  than an event still to come, and blocking on it would be asking the human to
+  write the same note twice. It prints `{"event": "request"}` either way, where
+  every other form prints `change`.
 
 Tell the user you are waiting, and say what you are waiting for — a lit button
 with no explanation is a mystery. `aboard poke` is the same gesture from the
@@ -562,6 +570,11 @@ was aimed at.
 - **An agent cannot clear another actor's `seen` stamp.** `tab.seen` is per-actor
   read state (`{"human":"…","agent-2":"…"}`); a write may set its own key and
   nobody else's.
+- **An agent cannot write the human's `requests`.** Those are their notes to you
+  about a tab. You may only ADD a `done` stamp to one that exists; creating,
+  editing, reordering, deleting or un-stamping is undone and the previous list
+  restored — including the ordinary read-modify-write that hands the document back
+  without the field. The `by` on a stamp is rewritten to whoever actually wrote it.
 - **`nextId` never regresses** and always stays above every id in use.
 - **One server per project**, on a port derived from the discovered project root.
 - **Live reload.** Your write pings every open board over SSE.

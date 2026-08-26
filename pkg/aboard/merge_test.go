@@ -570,3 +570,92 @@ func narrowTheJournal(t *testing.T, root Root) {
 		t.Fatal(err)
 	}
 }
+
+// A `done` stamp is a write whose ENTIRE content is a change to the human's
+// request list, so it is the one write the merge could lose completely: state
+// unchanged, name unchanged, note unchanged — every field the classifier looked
+// at agreeing — and the board's copy of the tab silently winning. `aboard
+// requests done` would then have printed "applied (merged)" having stamped
+// nothing at all, which is worse than refusing, because the agent has told the
+// human it answered them.
+func TestAStampCollidingWithTheHumansOwnEditIsRefused(t *testing.T) {
+	root, srv := boardWithARequest(t)
+
+	// The agent reads the board and stamps the note done.
+	mine := readBoard(t, root)
+	stampFirstRequest(t, mine, "agent-1")
+
+	// The human, meanwhile, edits the same tab — anything at all, as long as it
+	// lands on bb1 and makes the journal record it.
+	writeInProcess(t, srv, "bb1", "the human typed while we were stamping", actorHuman)
+
+	_, _, err := applyDoc(t, root, mine, "agent-1")
+	if err == nil {
+		t.Fatal("the stamp was merged away silently; a same-tab collision must refuse")
+	}
+	if !strings.Contains(err.Error(), "requests") || !strings.Contains(err.Error(), "bb1") {
+		t.Errorf("the refusal must name the tab AND say it was the requests, got %q", err)
+	}
+	if stamped := firstRequestStamp(t, root); stamped != nil {
+		t.Errorf("the board carries a stamp from a refused write: %+v", stamped)
+	}
+}
+
+// boardWithARequest is liveBoard plus one of the human's notes on bb1, written
+// as the human so guarantee 5 lets it through.
+func boardWithARequest(t *testing.T) (Root, *server) {
+	t.Helper()
+	root, srv, _ := liveBoard(t)
+
+	doc := readBoard(t, root)
+	list, _ := doc["tabs"].([]any)
+	for _, raw := range list {
+		tab, ok := raw.(map[string]any)
+		if !ok || tab["id"] != "bb1" {
+			continue
+		}
+		tab["requests"] = []any{map[string]any{
+			"id": "bb8", "at": "2026-08-26T09:00:00Z", "by": actorHuman, "text": "fix the arrow",
+		}}
+	}
+	doc["__by"] = actorHuman
+	doc["__origin"] = "test"
+	doc["__base"] = revToken(t, doc["rev"])
+	body, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	srv.postState(rec, httptest.NewRequest(http.MethodPost, "/aboard.json", bytes.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("seeding the request answered %d: %s", rec.Code, rec.Body.String())
+	}
+	return root, srv
+}
+
+func stampFirstRequest(t *testing.T, doc map[string]any, by string) {
+	t.Helper()
+	if _, _, err := stampRequest(doc, "bb8", by, "flipped it"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func firstRequestStamp(t *testing.T, root Root) map[string]any {
+	t.Helper()
+	list, _ := readBoard(t, root)["tabs"].([]any)
+	for _, raw := range list {
+		tab, ok := raw.(map[string]any)
+		if !ok || tab["id"] != "bb1" {
+			continue
+		}
+		asks, _ := tab["requests"].([]any)
+		if len(asks) == 0 {
+			t.Fatal("the human's request is gone from the board")
+		}
+		ask, _ := asks[0].(map[string]any)
+		done, _ := ask["done"].(map[string]any)
+		return done
+	}
+	t.Fatal("no tab bb1 on the board")
+	return nil
+}

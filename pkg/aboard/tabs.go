@@ -15,7 +15,7 @@ import (
 // agent open a board for whatever it needs to show — a plan, a chart, a
 // question, a conversation with another agent — instead of choosing from five.
 //
-// Three guarantees are enforced here rather than left to convention, because an
+// Five guarantees are enforced here rather than left to convention, because an
 // agent that forgets them would destroy the user's work:
 //
 //  1. An agent cannot delete a tab. A write that drops one has the tab restored
@@ -30,6 +30,11 @@ import (
 //  3. An agent cannot un-read a chat message. Once a session has acked a message
 //     the human's edit/delete window closes, so dropping the ack would reopen a
 //     window on something already acted on. Acks are carried forward.
+//  5. An agent cannot write the human's requests. A `requests` entry is the
+//     human asking for something to be fixed on this tab; an agent may only ADD
+//     a `done` stamp to one that already exists, under its own name. Creating,
+//     editing, reordering, deleting or un-doing one is refused — the entry is
+//     restored exactly as it was, like `touched`.
 
 type tab struct {
 	ID   string `json:"id"`
@@ -53,12 +58,24 @@ type tab struct {
 	// a kanban and a DAG over one set of nodes, for instance.
 	StateFrom string `json:"stateFrom,omitempty"`
 
-	// Note is what this tab is FOR, in the human's words: the intent an agent
-	// cannot infer from the contents. A kanban of eight cards does not say whether
-	// it is a wish list or a commitment; a markup tab does not say what the human
-	// was actually looking for. Free text, theirs to write, ours to read before
-	// acting on the tab.
+	// Note is what this tab is FOR: the agent's brief statement of the tab's
+	// purpose, which the human may edit. The intent an agent cannot infer from
+	// the contents — a kanban of eight cards does not say whether it is a wish
+	// list or a commitment; a markup tab does not say what was actually being
+	// looked for. One sentence, written when the tab is opened, read before
+	// acting on it.
+	//
+	// It is NOT where the human asks for something. That is `requests` below,
+	// and the two used to be one field: a purpose that gets rewritten into a
+	// to-do loses the purpose, and a to-do that lives in the purpose strip has
+	// nowhere to record that it was done.
 	Note string `json:"note,omitempty"`
+
+	// Requests are the human's notes TO an agent about this tab: fix this, the
+	// arrow points the wrong way, drop the third column. They flow the opposite
+	// way from everything else on a tab, which is why they are the human's alone
+	// to write — see guarantee 5 above and reconcileRequests below.
+	Requests []requestAsk `json:"requests,omitempty"`
 
 	Touched        *touchMark  `json:"touched,omitempty"`
 	PendingRemoval *removalAsk `json:"pendingRemoval,omitempty"`
@@ -82,6 +99,39 @@ type removalAsk struct {
 	By     string `json:"by"`
 	At     string `json:"at"`
 	Reason string `json:"reason,omitempty"`
+}
+
+// requestAsk is one thing the human asked an agent to do about this tab.
+//
+// The id comes from the board's own allocator, so it can be written in a
+// sentence and passed to `aboard requests done <id>` — the same property every
+// other object on the board has, and the reason these are not an array of bare
+// strings.
+//
+// `by` is recorded even though it is always "human" today. It costs one field
+// and it is the difference between a record that says who asked and a record
+// that assumes; the board already has two actors on it and has been wrong about
+// that assumption once (an absent `__by` used to mean "human").
+type requestAsk struct {
+	ID   string     `json:"id"`
+	At   string     `json:"at"`
+	By   string     `json:"by"`
+	Text string     `json:"text"`
+	Done *doneStamp `json:"done,omitempty"`
+}
+
+// doneStamp is an agent saying it acted on a request: who, when, and optionally
+// one line about what it did.
+//
+// It is the only part of a request an agent may write, and it is never cleared —
+// the human deleting the whole request is how one goes away. That asymmetry is
+// the point: "has this been dealt with" is a fact about the agent, and "do I
+// still want this" is a fact about the human, so each owns the half it can
+// answer.
+type doneStamp struct {
+	By   string `json:"by"`
+	At   string `json:"at"`
+	Note string `json:"note,omitempty"`
 }
 
 type board struct {
@@ -171,19 +221,7 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 
 		if !existed {
 			if !human {
-				// A brand new tab: mark it so the human sees it arrived.
-				if t.Touched == nil {
-					t.Touched = &touchMark{By: by, At: now, Note: "new tab"}
-				} else {
-					t.Touched.By, t.Touched.At = by, now
-				}
-				// Guarantee 4 applies to a tab being CREATED as much as to one
-				// being changed, and this branch skipped it entirely: a new tab
-				// could arrive carrying `seen: {"human": "…"}`, so the dot the
-				// human relies on to notice it was pre-extinguished by the write
-				// that made it. There is no previous map by definition, which is
-				// exactly why the filter has to run rather than be short-circuited.
-				t.Seen = mergeSeen(nil, t.Seen, by)
+				stampNewTab(&t, by, now, logger)
 			}
 			t.changed = true
 			out = append(out, t)
@@ -224,6 +262,13 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 			// That is the worst shape a guarantee can have — documented, believed,
 			// and absent.
 			t.Seen = mergeSeen(prev.Seen, t.Seen, by)
+
+			// Guarantee 5: the human's requests are theirs. An agent write may
+			// add a `done` stamp to one that exists and may do nothing else to
+			// the list — and, as with `touched`, the commonest way to break this
+			// is not malice but a read-modify-write that drops a field it never
+			// looked at.
+			t.Requests = reconcileRequests(prev.Requests, t.Requests, by, now, t.Name, t.ID, logger)
 		}
 
 		same := sameState(prev, &t)
@@ -248,15 +293,22 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 		}
 
 		// `note` is in the comparison for the same reason it is in the journal:
-		// it is human-authored intent — what this tab is FOR, in their words — and
-		// an agent rewriting it is exactly the kind of change the dot exists to
-		// announce. When the two comparisons disagreed, a note-only write was
+		// it is the statement of what this tab is FOR, the human may have written
+		// or rewritten it, and an agent replacing it is exactly the kind of change
+		// the dot exists to announce. When the two comparisons disagreed, a note-only write was
 		// journaled and left no marker, so the human's own sentence could be
 		// replaced with nothing on screen to say so.
+		//
+		// `requests` is in it for a related reason and a sharper one: an agent
+		// stamping a request done is the ONLY feedback the human gets that their
+		// note was read, so it has to raise the dot and it has to reach the
+		// journal. Without it here, the one write the human is waiting on would
+		// be the one write that left no trace.
 		meta := prev.Name == t.Name &&
 			prev.Type == t.Type &&
 			prev.StateFrom == t.StateFrom &&
-			prev.Note == t.Note
+			prev.Note == t.Note &&
+			sameRequests(prev.Requests, t.Requests)
 
 		if !human && (!same || !meta) {
 			note := ""
@@ -274,7 +326,13 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 
 		// Nothing that could hold an id moved, so the largest one is the largest
 		// one it had. This is what stops the id allocator walking the board.
-		if same {
+		//
+		// `requests` is in the condition because a request carries an ID. It is
+		// the only tab field outside `state` that does, and a carry-forward that
+		// ignored it would leave `nextId` behind the request the human just
+		// added — so the next object allocated anywhere on the board would be
+		// handed an id that already names something.
+		if same && sameRequests(prev.Requests, t.Requests) {
 			t.maxID = prev.idHigh()
 		}
 		out = append(out, t)
@@ -306,6 +364,40 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 	}
 
 	return &reconcilePlan{tabs: out}
+}
+
+// stampNewTab applies the guarantees to a tab an AGENT is creating.
+//
+// Its own function because CREATION is a separate hole in each of them, and one
+// that a comparison cannot close: there is no previous tab to carry anything
+// forward from, so every check here has to be written out rather than falling
+// out of the diff. Both guarantees below were missing at first for exactly that
+// reason.
+func stampNewTab(t *docTab, by, now string, logger *log.Logger) {
+	// Mark it so the human sees it arrived.
+	if t.Touched == nil {
+		t.Touched = &touchMark{By: by, At: now, Note: "new tab"}
+	} else {
+		t.Touched.By, t.Touched.At = by, now
+	}
+
+	// Guarantee 4 applies to a tab being CREATED as much as to one being changed,
+	// and this branch skipped it entirely: a new tab could arrive carrying
+	// `seen: {"human": "…"}`, so the dot the human relies on to notice it was
+	// pre-extinguished by the write that made it. There is no previous map by
+	// definition, which is exactly why the filter has to run rather than be
+	// short-circuited.
+	t.Seen = mergeSeen(nil, t.Seen, by)
+
+	// Guarantee 5, on the creation path: a request is the human asking for
+	// something, so a tab that arrives already carrying one is an agent putting
+	// words in their mouth. There is no previous list to restore from, so the
+	// only correct answer is none at all.
+	if len(t.Requests) > 0 {
+		logger.Printf("tab %q (%s): %s tried to create %d request(s) — dropped; a request is the human's to write",
+			t.Name, t.ID, by, len(t.Requests))
+		t.Requests = nil
+	}
 }
 
 func insertAt(list []docTab, t docTab, at int) []docTab {
@@ -401,6 +493,107 @@ func restoreAcks(v any, acks map[string]map[string]any) bool {
 		}
 	}
 	return changed
+}
+
+// reconcileRequests applies guarantee 5 to one tab: the human's list survives an
+// agent's write exactly as it was, except that a request with no `done` may gain
+// one.
+//
+// Written as a walk over the PREVIOUS list rather than over the incoming one,
+// and that is what makes each of the four refusals fall out of one loop instead
+// of four checks:
+//
+//	deleted   → not in the incoming list, so the previous entry is appended anyway
+//	edited    → the previous entry's own fields are what gets appended, always
+//	reordered → the output order is the previous order, always
+//	un-done   → `done` is only ever read from the incoming copy when there was none
+//
+// Anything the incoming list has that the previous one does not is an agent
+// CREATING a request, which is the one case that cannot be repaired by carrying
+// something forward: there is nothing to carry. It is dropped and logged.
+//
+// The `by` on a stamp is the WRITER's, whatever the document claimed, for the
+// same reason mergeSeen only lets an actor move its own key: an attribution
+// nobody checked is worse than none, and the human reads this one to know which
+// session dealt with their note. `at` is stamped when it is missing and believed
+// when it is there — an agent doing the work at 14:02 and writing at 14:06 is
+// entitled to say so, and nothing rests on the difference.
+func reconcileRequests(prev, next []requestAsk, by, now, tabName, tabID string, logger *log.Logger) []requestAsk {
+	if len(prev) == 0 && len(next) == 0 {
+		return next
+	}
+
+	incoming := make(map[string]*requestAsk, len(next))
+	for i := range next {
+		// First occurrence wins, so a document repeating an id cannot use the
+		// second copy to overwrite what the first one said.
+		if _, seen := incoming[next[i].ID]; !seen {
+			incoming[next[i].ID] = &next[i]
+		}
+	}
+
+	out := make([]requestAsk, 0, len(prev))
+	restored := 0
+	for i := range prev {
+		keep := prev[i]
+		got, sent := incoming[keep.ID]
+		switch {
+		case !sent:
+			restored++
+		case keep.Done == nil && got.Done != nil:
+			stamp := *got.Done
+			stamp.By = by
+			if stamp.At == "" {
+				stamp.At = now
+			}
+			keep.Done = &stamp
+		}
+		// Matched, whatever the write did with it. What is left in the map after
+		// this walk is exactly the ids the previous list did not have, which is
+		// the definition of an agent inventing one.
+		delete(incoming, keep.ID)
+		out = append(out, keep)
+	}
+	if restored > 0 {
+		logger.Printf("tab %q (%s): %s dropped or altered %d request(s) — restored; only the human writes these",
+			tabName, tabID, by, restored)
+	}
+	if len(incoming) > 0 {
+		logger.Printf("tab %q (%s): %s tried to create %d request(s) — dropped; a request is the human's to write",
+			tabName, tabID, by, len(incoming))
+	}
+
+	if len(out) == 0 {
+		// nil rather than an empty slice, so a tab that never had one keeps no
+		// `requests` key at all: `omitempty` reads the length, and a document
+		// that grew `"requests": []` on every write would be a diff nobody made.
+		return nil
+	}
+	return out
+}
+
+// sameRequests is equality for the whole list, order included — the order is the
+// order the human wrote them in and an agent may not change it either.
+func sameRequests(a, b []requestAsk) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID || a[i].At != b[i].At || a[i].By != b[i].By || a[i].Text != b[i].Text {
+			return false
+		}
+		if !sameDoneStamp(a[i].Done, b[i].Done) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameDoneStamp(a, b *doneStamp) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // mergeSeen keeps every actor's read stamp except the writer's own, which the

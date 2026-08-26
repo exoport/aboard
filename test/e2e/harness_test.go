@@ -388,6 +388,16 @@ func apply(t *testing.T, d doc) {
 // the document is stored.
 func applyLabelled(t *testing.T, d doc, label string) {
 	t.Helper()
+	postAs(t, d, agentActor, label)
+}
+
+// postAs is applyLabelled with the actor named. It exists for exactly one
+// caller: a fixture that has to seed something only the HUMAN may write — a
+// `requests` entry, which guarantee 5 refuses from an agent. Everything else in
+// this suite plays the other session and goes through apply(), because a test
+// that borrowed the human's powers would be testing powers it does not have.
+func postAs(t *testing.T, d doc, by, label string) {
+	t.Helper()
 
 	payload := doc{}
 	maps.Copy(payload, d)
@@ -402,8 +412,8 @@ func applyLabelled(t *testing.T, d doc, label string) {
 	// message about a stale base. It reads as a formatting nicety and it is a
 	// correctness difference from the client this helper claims to imitate.
 	payload["__base"] = revisionToken(t, d["rev"])
-	payload["__by"] = agentActor
-	payload["__origin"] = "e2e-" + agentActor
+	payload["__by"] = by
+	payload["__origin"] = "e2e-" + by
 	if label != "" {
 		payload["__label"] = label
 	}
@@ -425,7 +435,7 @@ func applyLabelled(t *testing.T, d doc, label string) {
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		msg, _ := io.ReadAll(res.Body)
-		t.Fatalf("apply as %q: status %d: %s", agentActor, res.StatusCode, strings.TrimSpace(string(msg)))
+		t.Fatalf("apply as %q: status %d: %s", by, res.StatusCode, strings.TrimSpace(string(msg)))
 	}
 }
 

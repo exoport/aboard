@@ -67,6 +67,32 @@
     <button type="button" class="icon-btn" id="tab-note-edit">Edit</button>
   </div>
 
+  <!-- The other direction. The strip above is what the tab is FOR, written by
+       the agent that opened it; this one is what the HUMAN wants done about it.
+       They were one field once and the merge was lossy both ways: a purpose
+       rewritten into a to-do stops being a purpose, and a to-do living in the
+       purpose strip has nowhere to record that it was dealt with.
+
+       Deliberately NOT a <form>. A submit button needs `allow-forms`, and a
+       sandbox that omits it swallows the submit exactly the way a webview
+       swallows window.confirm — silently, with the gesture looking broken. The
+       Enter key is bound on the input instead. -->
+  <div class="tab-asks" id="tab-asks" hidden>
+    <!-- The label is a left gutter rather than a row of its own, so this strip
+         reads as the pair of the one above it and still costs a single line on a
+         tab with no notes on it. -->
+    <span class="tab-note-label ask-label">notes for the agent</span>
+    <div class="ask-body">
+      <ul class="ask-list" id="tab-asks-list"></ul>
+      <div class="ask-add">
+        <input type="text" id="tab-asks-input" maxlength="400"
+          aria-label="Leave a note for the agent about this tab"
+          placeholder="Ask an agent to fix or change something on this tab. Enter adds it.">
+        <button type="button" class="icon-btn" id="tab-asks-add">Add</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /.board-head -->
 
 <div id="views"></div>
@@ -675,8 +701,11 @@ async function showVersion() {
 // A tab's contents say what is on it; they do not say why it exists. "Is this a
 // wish list or a commitment?" is not answerable from eight kanban cards, and an
 // agent that guesses wrong acts on the wrong thing. So a tab carries an optional
-// note in the human's words — set when they create it, editable any time, and the
-// first thing an agent should read before touching the tab.
+// note — the agent's brief statement of what the tab is for, which the human may
+// edit — and it is the first thing to read before touching the tab.
+//
+// What the human WANTS DONE about the tab is a different field and a different
+// strip: see `requests` below.
 
 const $tabNote = document.getElementById('tab-note');
 const $tabNoteText = document.getElementById('tab-note-text');
@@ -719,6 +748,126 @@ function restoreNoteStrip() {
 
 const $tabNoteLabel = $tabNote.querySelector('.tab-note-label');
 $tabNoteEdit.addEventListener('click', editTabNote);
+
+/* ---------- what the human wants done about it ---------- */
+
+// The one channel that runs the other way. Everything else on this board is an
+// agent showing the human something and reading back what they changed; a
+// request is them pointing at a tab and saying "this is wrong".
+//
+// It is DATA on the tab (`requests: [{ id, at, by, text, done? }]`) rather than
+// a message somewhere, for the reason every other durable thing here is: it has
+// to survive a restart and a week away, and it has to be findable by a session
+// that was not running when it was written — `aboard requests`, `aboard status`,
+// and `aboard wait --for request`.
+//
+// The asymmetry is enforced by the server (guarantee 5, tabs.go): the human
+// creates, edits and deletes; an agent may only add a `done` stamp. So the ✕
+// here needs no confirmation — it is their own note, and nothing an agent did to
+// it is theirs to lose. It is also why nothing in this file has to defend
+// against an agent's copy of the list: the server already restored it.
+
+const $tabAsks = document.getElementById('tab-asks');
+const $tabAsksList = document.getElementById('tab-asks-list');
+const $tabAsksInput = document.getElementById('tab-asks-input');
+
+const asksOf = (tab) => (tab && Array.isArray(tab.requests) ? tab.requests : []);
+
+// A time a human reads, from a stamp a machine wrote. Local, short, and it falls
+// back to the raw string rather than printing "Invalid Date" over a value that
+// is at least a value.
+function shortTime(at) {
+  if (!at) return '';
+  const when = new Date(at);
+  return Number.isFinite(when.getTime()) ? when.toLocaleString() : String(at);
+}
+
+function askRow(tab, ask) {
+  const li = document.createElement('li');
+  li.className = 'ask';
+  li.dataset.ask = ask.id;
+  li.dataset.done = ask.done ? 'yes' : 'no';
+
+  const text = document.createElement('span');
+  text.className = 'ask-text';
+  text.textContent = ask.text || '';
+  li.append(text);
+
+  const meta = document.createElement('span');
+  meta.className = 'ask-meta';
+  if (ask.done) {
+    // Who acted, when, and what they say they did. The one-line reply is the
+    // half worth having: "done" tells the human nothing they could not have
+    // guessed from the strike-through.
+    meta.textContent = ['✓ ' + (ask.done.by || 'an agent'), shortTime(ask.done.at), ask.done.note]
+      .filter(Boolean).join(' · ');
+  } else {
+    meta.textContent = shortTime(ask.at);
+  }
+  li.append(meta);
+
+  // No confirmation, deliberately: it is the human's own note and deleting one
+  // is how a request goes away — including a done one, which is the only way a
+  // stamp is ever cleared. A dialog here would be a question about their own
+  // sentence.
+  const drop = button('✕', ask.done ? 'Remove this note' : 'Remove this note; nobody has acted on it yet',
+    { ariaLabel: 'Remove this note' });
+  drop.classList.add('ask-drop');
+  drop.addEventListener('click', () => removeAsk(tab.id, ask.id));
+  li.append(drop);
+  return li;
+}
+
+function renderTabAsks() {
+  const tab = tabById(activeId);
+  $tabAsks.hidden = !tab;
+  if (!tab) return;
+  const asks = asksOf(tab);
+  $tabAsksList.replaceChildren(...asks.map((ask) => askRow(tab, ask)));
+  $tabAsksList.hidden = asks.length === 0;
+}
+
+async function addAsk() {
+  const tab = tabById(activeId);
+  if (!tab) return;
+  const text = $tabAsksInput.value.trim();
+  if (!text) return;
+  const list = Array.isArray(tab.requests) ? tab.requests : (tab.requests = []);
+  list.push({
+    id: nextId(),
+    at: new Date().toISOString(),
+    by: 'human',
+    text: text.slice(0, 400),
+  });
+  $tabAsksInput.value = '';
+  renderTabAsks();
+  buildTabs();
+  const ok = await save({ immediate: true });
+  stampMeta(ok
+    ? `asked — ${waiting.length ? 'a session is listening' : 'nobody is waiting; an agent will find it with `aboard requests`'}`
+    : 'could not record that');
+}
+
+async function removeAsk(tabId, askId) {
+  const tab = tabById(tabId);
+  if (!tab) return;
+  tab.requests = asksOf(tab).filter((ask) => ask.id !== askId);
+  // The KEY goes when the last one does. `requests: []` and no `requests` at all
+  // mean the same thing to every reader, and the server writes the second — so
+  // leaving the first behind would make our copy of the tab differ from the
+  // board's by a value nobody set, which is what the 409 merge compares.
+  if (!tab.requests.length) delete tab.requests;
+  renderTabAsks();
+  buildTabs();
+  await save({ immediate: true });
+}
+
+document.getElementById('tab-asks-add').addEventListener('click', addAsk);
+$tabAsksInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  addAsk();
+});
 
 /* ---------- help, and keys for the things you repeat ---------- */
 
@@ -844,7 +993,8 @@ function openHelp() {
     ['notify', 'wakes a session blocked on aboard wait — disabled when nothing is waiting'],
     ['read-only', 'that tab is maintained by an agent; nothing there is yours to rearrange'],
     ['heartbeat', 'when an agent maintains a tab, how long ago it last said anything'],
-    ['this tab is for', "the tab's note: why it exists, in your words. Editable, and an agent reads it"],
+    ['this tab is for', "the tab's purpose, written by the agent that opened it. Yours to edit, and an agent reads it"],
+    ['notes for the agent', 'ask for something to be fixed here. A session picks it up and ticks it off; ✕ removes yours'],
     ['reload', 'the page reloads itself when its own code changes — no need to reload webviews'],
     ['version', 'which binary is serving — the commit it was built from, +dirty if uncommitted'],
   ], true));
@@ -911,6 +1061,11 @@ function swapStylesheet(version) {
 }
 
 function reloadWhenIdle() {
+  // Where you were, before the page throws itself away. The debounced listener
+  // has normally recorded it, but a reload landing inside that 150 ms is exactly
+  // the case a self-reloading page produces — the human scrolls, a rebuild lands,
+  // and the position is gone.
+  rememberScroll(activeId);
   const el = document.activeElement;
   const typing = el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable);
   if (!typing) { location.reload(); return; }
@@ -1085,6 +1240,22 @@ function buildTabs() {
       btn.append(ask);
     }
 
+    // How many of the human's notes on this tab nobody has answered yet. Same
+    // discipline as the unread dot and a different glyph on purpose: the dot
+    // says "an agent changed this, look", and this says "you asked for
+    // something here and it is still outstanding". A count rather than a dot
+    // because unlike `touched` there can be several, and three notes waiting is
+    // a different fact from one.
+    const pending = asksOf(tab).filter((ask) => !ask.done).length;
+    if (pending) {
+      const chip = document.createElement('span');
+      chip.className = 'tab-asks-count';
+      chip.textContent = String(pending);
+      chip.title = `${pending} note${pending === 1 ? '' : 's'} for the agent, not yet answered`;
+      chip.setAttribute('aria-label', 'notes for the agent');
+      btn.append(chip);
+    }
+
     // Right-click a tab: its address, and the ways its content can leave the
     // board. Copy leads, download follows — a webview may refuse a download, and
     // an affordance that silently does nothing is worse than none.
@@ -1101,6 +1272,8 @@ function buildTabs() {
         'separator',
         { label: tab.note ? 'Edit what this tab is for' : 'Say what this tab is for',
           hint: 'note', run: () => { activate(tab.id); editTabNote(); } },
+        { label: 'Leave a note for the agent',
+          hint: 'request', run: () => { activate(tab.id); $tabAsksInput.focus(); } },
         'separator',
         md && { label: 'Copy as markdown', hint: `${md.split('\n').length} lines`,
           run: (ev) => copyText(md, ev) },
@@ -1640,6 +1813,144 @@ function lastTab() {
   try { return localStorage.getItem('aboard.tab'); } catch { return null; }
 }
 
+/* ---------- where you were on each tab ---------- */
+
+// Every tab shares one scrolling document — `.view` elements are shown and
+// hidden, they do not scroll independently — so switching tabs used to carry
+// your position with you: leave a long checklist half way down, glance at
+// another tab, come back to the top of the page with no idea where you had got
+// to. On a board that is mostly long lists that is the difference between
+// reading and re-finding.
+//
+// PER VIEWER, so it never goes near aboard.json: two people can look at one
+// board in the same second and must disagree about scroll while agreeing about
+// content — the same rule that keeps selection, zoom and collapsed blocks out of
+// the document. sessionStorage rather than localStorage because the lifetime
+// that matters is this sitting: it has to survive the page reloading itself when
+// the code changes, and it should not still be pointing half way down a tab a
+// week later.
+//
+// Both accessors are wrapped, like every other storage call here. Inside a
+// webview the board is a third-party frame where storage can be refused
+// outright, and a refusal is a thrown SecurityError rather than a null — thrown
+// from inside activate() it would take tab switching down with it, to save a
+// remembered scroll position.
+const scrollMemory = new Map();   // tab id -> [x, y]
+
+// The tab the memory was last applied to. NOT activeId, and the difference is
+// the whole of the first-load case: repaint() sets activeId from the URL or from
+// the remembered tab BEFORE it calls activate(), so a check against activeId
+// reads "we are already here" on the one activation that most needs restoring —
+// the first one after a reload. It was covered up by the browser's own scroll
+// restoration, which put the document back and made the test pass for a reason
+// that had nothing to do with this code.
+let shownTab = null;
+
+const scroller = () => document.scrollingElement || document.documentElement;
+
+// The browser's own scroll restoration is switched off, because it restores the
+// DOCUMENT and this board has one document and fifteen tabs. It puts back
+// whatever offset the page had when it was unloaded, on whichever tab comes up
+// first — which is right only by coincidence, and wrong the moment a #tab= link
+// opens a different one. We know where every tab was; it does not.
+try { history.scrollRestoration = 'manual'; } catch {}
+
+function rememberScroll(id) {
+  if (!id) return;
+  const el = scroller();
+  const pos = [el.scrollLeft, el.scrollTop];
+  scrollMemory.set(id, pos);
+  try { sessionStorage.setItem('aboard.scroll.' + id, pos.join(',')); } catch {}
+}
+
+function readScroll(id) {
+  if (scrollMemory.has(id)) return scrollMemory.get(id);
+  try {
+    const raw = sessionStorage.getItem('aboard.scroll.' + id);
+    if (raw) {
+      const pos = raw.split(',').map(Number);
+      if (pos.length === 2 && pos.every(Number.isFinite)) {
+        scrollMemory.set(id, pos);
+        return pos;
+      }
+    }
+  } catch {
+    // Private windows, blocked site data, a frame refused storage: fall through
+    // to the top of the tab, which is where it used to always land anyway.
+  }
+  return null;
+}
+
+// A tab nobody has visited starts at the TOP, rather than wherever the previous
+// tab happened to leave the page. Without that half the fix is missing: you
+// would still arrive at a fresh tab scrolled into the middle of it.
+//
+// It waits for the page to GROW, and that is the whole difficulty here. A scroll
+// past the current bottom is clamped silently, and at the moment a renderer
+// mounts the page is routinely shorter than it is about to be — a `diagram` hands
+// its source to the mermaid bundle and the SVG appears when it appears. Restoring
+// once, on mount, put a reloaded 60-node graph back at 0 instead of 500, which
+// looks exactly like the feature not existing.
+//
+// A delay was the obvious fix and it is the wrong one: any number picked here is
+// a guess about how long somebody else's renderer takes, and four frames was
+// already too few for that graph. A ResizeObserver watches for the actual event
+// instead — the document getting taller — so a renderer that takes one frame
+// costs one frame and one that takes half a second is still put back.
+//
+// Three things stop it, and between them it cannot fight the person using it:
+// the position is REACHED (the ordinary case, one apply and done); the offset
+// moved to something we did not put there, which is somebody scrolling; or they
+// switched tabs again. The deadline is a backstop for a page that never does grow
+// tall enough — a tab whose content genuinely shrank since they last read it —
+// where the honest answer is to leave them wherever it ended up rather than
+// keep an observer alive for the life of the page.
+const RESTORE_DEADLINE = 2000;
+
+function restoreScroll(id) {
+  const pos = readScroll(id) || [0, 0];
+  const el = scroller();
+  let applied = -1;
+  let stop = null;
+
+  const finish = () => {
+    if (!stop) return;
+    stop();
+    stop = null;
+  };
+
+  const apply = () => {
+    if (activeId !== id) { finish(); return; }               // switched again
+    if (applied >= 0 && el.scrollTop !== applied) { finish(); return; }   // they scrolled
+    el.scrollLeft = pos[0];
+    el.scrollTop = pos[1];
+    applied = el.scrollTop;
+    if (applied === pos[1]) finish();
+  };
+
+  apply();
+  if (applied === pos[1]) return;   // tall enough already: nothing to watch for
+
+  const growth = new ResizeObserver(apply);
+  growth.observe(document.documentElement);
+  const deadline = setTimeout(finish, RESTORE_DEADLINE);
+  stop = () => { growth.disconnect(); clearTimeout(deadline); };
+}
+
+let scrollTimer = null;
+addEventListener('scroll', () => {
+  clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(() => rememberScroll(activeId), 150);
+}, { passive: true });
+
+// The page going away for any reason other than its own reload: the human
+// pressing F5, closing the panel, following a link. reloadWhenIdle covers the
+// reload the BOARD starts, which is the one this feature was written for and
+// also the only one anybody remembered — but the 150 ms debounce above is just
+// as open to a reload somebody else started, and losing the position to it would
+// look exactly like the feature being flaky rather than absent.
+addEventListener('pagehide', () => rememberScroll(activeId));
+
 // A host that embeds the board keeps its own tab list, and the board switches
 // tabs on its own — [ and ], 1-9, and whichever tab it picks on load. A sidebar
 // that can only ever SEND navigation drifts the moment the human presses ], and
@@ -1674,10 +1985,17 @@ function announceActive(id) {
 }
 
 function activate(id) {
-  // The note belongs to the tab you are looking at, so it repaints on every
-  // switch — not only on a document reload.
-  setTimeout(renderTabNote, 0);
-  if (!tabById(id)) return;
+  // The two head strips belong to the tab you are looking at, so they repaint on
+  // every switch — not only on a document reload. Including the case where there
+  // is nothing to activate at all, which is how they empty when the last tab
+  // goes.
+  if (!tabById(id)) { renderTabNote(); renderTabAsks(); return; }
+  // Where you were on the tab you are LEAVING, captured before activeId moves.
+  // The debounced scroll listener has usually recorded it already; this covers
+  // the switch that lands inside the debounce, which is most of them when a
+  // human scrolls and then immediately clicks another tab.
+  const leaving = shownTab;
+  if (leaving && leaving !== id) rememberScroll(leaving);
   activeId = id;
   rememberTab(id);
   announceActive(id);
@@ -1702,6 +2020,29 @@ function activate(id) {
   const tab = tabById(id);
   const entry = mounted.get(id);
   if (tab && entry) postReceipt(entry.root, tab, { mount: fresh });
+
+  // AFTER the renderer has mounted, because the page has to be tall enough to
+  // hold the offset before it can be given one — a scroll past the current
+  // bottom is silently clamped, and on a tab that mounts to nothing that clamp
+  // is zero.
+  //
+  // Only when the tab actually CHANGED. repaint() re-activates the current tab
+  // at the end of every pass, and a pass runs on every foreign write arriving
+  // over SSE, so restoring unconditionally would yank the page back under a
+  // human who was reading it while an agent wrote to some other tab.
+  // BEFORE the scroll is put back, and the order is load-bearing. Both strips
+  // sit above the view and both change height between tabs — one has a note and
+  // the next has none, one has three requests and the next has none — so
+  // restoring the offset first and then redrawing the header lands the human a
+  // couple of lines off what they were reading, or clamped, on a page only just
+  // tall enough.
+  renderTabNote();
+  renderTabAsks();
+
+  if (leaving !== id) {
+    shownTab = id;
+    restoreScroll(id);
+  }
 }
 
 /* ---------- new tab ---------- */
@@ -1858,6 +2199,7 @@ function repaint({ announce = false } = {}) {
 
   buildTabs();
   renderTabNote();
+  renderTabAsks();
   for (const [id, entry] of mounted) {
     entry.handle?.refresh?.();
     renderNotices(tabById(id));

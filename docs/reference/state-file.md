@@ -93,9 +93,18 @@ still carries a generated `id`.
   "type": "diagram",          // picks the renderer
   "state": { /* type-specific */ },
 
-  "note": "why this exists",  // OPTIONAL: what the tab is FOR, in the human's words.
-                              // Read it before acting on the tab — it carries intent the
-                              // contents cannot.
+  "note": "why this exists",  // OPTIONAL: what the tab is FOR — the agent's brief
+                              // statement of the tab's purpose, which the human may
+                              // edit. Read it before acting on the tab; it carries
+                              // intent the contents cannot.
+
+  "requests": [               // OPTIONAL: the human's notes TO an agent about this tab.
+    { "id": "bb199",          // from the board allocator, like everything else
+      "at": "2026-08-26T09:12:00Z",
+      "by": "human",
+      "text": "the arrow points the wrong way",
+      "done": { "by": "agent-1", "at": "…", "note": "flipped it" } }
+  ],
 
   "stateFrom": "bb1",         // OPTIONAL: render another tab's state with this type —
                               // a kanban and a dag over one dataset
@@ -106,14 +115,21 @@ still carries a generated `id`.
 }
 ```
 
-Four fields are not fully yours, and the server enforces that rather than trusting a
+Five fields are not fully yours, and the server enforces that rather than trusting a
 convention — see
-[why four guarantees are server-enforced](../explanation/why-four-guarantees-are-server-enforced.md):
+[why the guarantees are server-enforced](../explanation/why-the-guarantees-are-server-enforced.md):
 
 - **`touched`** is stamped on any tab an agent's write changed, and cleared only by the human dismissing it. An attempt to remove it in a write is ignored and the previous marker carried forward. It drives the dot on the tab.
 - **`pendingRemoval`** is how a tab goes away. A write that simply drops a tab has it restored with this set; you may also set it deliberately, with a reason worth reading. Only the human's answer deletes or keeps.
 - **`seen`** is per-actor read state. An actor may stamp its own key and nobody else's.
 - **Chat acknowledgements** inside a `chat` tab's state are carried forward; a write cannot un-ack a message.
+- **`requests`** are the human's notes to an agent, and the one thing on a tab that flows their way. An agent write may only *add* a `done` stamp to a request that already exists; anything else it does to the list — dropping it, editing the text, reordering, inventing one, clearing or replacing a stamp — is undone and the previous list restored, exactly as `touched` is. The `by` on a stamp is rewritten to the actual writer, and a missing `at` is stamped, so an attribution the human reads is never one nobody checked. Only their deleting the whole request makes it go away, which is also the only way a `done` is ever cleared.
+
+  Read them from a terminal rather than by grepping the document: `aboard requests` lists
+  what is pending, oldest first, naming the tab; `aboard status` prints the count; and
+  `aboard requests done <id> --by agent-1 --note "…"` is the stamp. `aboard wait --for
+  request` blocks until one exists or arrives — and answers at once if one is already
+  waiting, because a note left an hour ago is not an event still to come.
 
 ## Per-type state
 

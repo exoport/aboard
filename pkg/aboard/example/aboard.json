@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "nextId": 199,
+  "nextId": 201,
   "updatedAt": "2026-08-25T00:00:00.000Z",
   "lastEditedBy": "fixture",
   "tabs": [
@@ -118,7 +118,26 @@
       "state": {
         "source": "graph LR\n    A[\"changed by agent\"] --> B[\"see the dot\"]"
       },
-      "note": "What a diagram is for: a shape that is the agent’s to assert. 23 mermaid types, coloured from the board tokens."
+      "note": "What a diagram is for: a shape that is the agent’s to assert. 23 mermaid types, coloured from the board tokens.",
+      "requests": [
+        {
+          "id": "bb199",
+          "at": "2026-08-26T09:12:00Z",
+          "by": "human",
+          "text": "Label the two boxes so it is obvious which one the dot is about.",
+          "done": {
+            "by": "agent-1",
+            "at": "2026-08-26T09:20:00Z",
+            "note": "\"changed by agent\" and \"see the dot\""
+          }
+        },
+        {
+          "id": "bb200",
+          "at": "2026-08-26T09:24:00Z",
+          "by": "human",
+          "text": "Try this one top-down (graph TD) and see whether it reads better."
+        }
+      ]
     },
     {
       "id": "bb15",

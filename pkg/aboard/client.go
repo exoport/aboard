@@ -375,6 +375,13 @@ type StatusReport struct {
 	// reader knows where to look once it is.
 	WouldUsePort int `json:"wouldUsePort,omitempty" yaml:"wouldUsePort,omitempty"`
 
+	// Requests is how many of the human's notes are still waiting on an agent.
+	// It is on `status` and not only on `aboard requests` because status is the
+	// FIRST command a resuming session runs, and a request nobody discovers is a
+	// request that was not made. Zero is omitted: a line saying "0 requests" on
+	// every board would be one more thing to read past.
+	Requests int `json:"requests,omitempty" yaml:"requests,omitempty"`
+
 	CapsHash string `json:"capsHash" yaml:"capsHash"`
 	// Skill is SkillCurrent, SkillStale or SkillAbsent. Absent is not drift: a
 	// project that never copied the skill has nothing to be out of date.
@@ -389,6 +396,7 @@ func Status(ctx context.Context, root Root, name string, assets fs.FS) StatusRep
 		Name:         name,
 		InstanceFile: root.InstanceFile(name),
 		Skill:        SkillAbsent,
+		Requests:     PendingRequests(root, name),
 	}
 	if m, err := buildManifest(assets); err == nil {
 		rep.CapsHash = m.Hash
@@ -451,6 +459,15 @@ func (r StatusReport) Human() string {
 		if r.App != "" && r.App != HostStandalone {
 			fmt.Fprintf(&b, "  served  %s\n", r.App)
 		}
+	}
+	// What the human has asked for, before the caps beacon, because it is the one
+	// line here that is about THEM rather than about the machinery. It prints
+	// whether or not a board is running: a note left last week survives a restart
+	// and a week away, and the session most likely to have missed it is the one
+	// that finds no board running.
+	if r.Requests > 0 {
+		fmt.Fprintf(&b, "  asked   %d request%s waiting — `aboard requests%s`\n",
+			r.Requests, plural(r.Requests), nameFlagFor(r.Name))
 	}
 	// The skill is an open page that loaded a document: same problem the browser
 	// has after a rebuild, so it gets the same treatment — a signature, and a
