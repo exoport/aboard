@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–3 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–4 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -96,7 +96,7 @@ drift gate for the recipe index in `make caps`; the four false doc claims fixed;
 lows triaged (fixed, refuted with a line in the review file, or queued).
 **Done when** the review file has a disposition beside every finding and `make ci-local` is green.
 
-### 4. The end-to-end browser suite  ☐
+### 4. The end-to-end browser suite  ☑ `c3db7a7`
 
 Source: `development/handoffs/handoff-e2e-browser-suite.md`. Scope, in this order: the harness
 (`test/e2e/`, `//go:build e2e`, playwright-go pinned, engine in-process on a temp root, the

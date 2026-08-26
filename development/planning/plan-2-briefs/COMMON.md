@@ -28,19 +28,19 @@ make caps                      # ONLY when a views/*.spec.json or the command ta
 ./aboard capabilities --check  # must exit 0 after make caps
 make docs-cli                  # when the cobra tree changed (docs/reference/cli.md is generated)
 make docs-check                # always, if you touched docs/ or README.md
-PROJECT=<scratch> make smoke   # the browser suite: ONE run per tool call, timeout 180000,
-                               # output to a file, read the whole file. PROJECT is REQUIRED:
-                               # a scratch project seeded with `aboard init --example --gitignore`
-                               # whose server you started DETACHED (setsid nohup … &) from that
-                               # directory. The suite WRITES to the board it is aimed at.
-                               # (make e2e replaces it once plan-2 item 4 lands.)
+make e2e                       # the browser suite (playwright-go, //go:build e2e): ONE run per
+                               # tool call, timeout 600000, output to a file, read the whole
+                               # file. It starts its own engine on a temp board — start NO
+                               # server and do not set PROJECT. E2E_RUN='<regexp>' for a subset
+                               # (the coverage gate then logs that it was skipped);
+                               # `go test -tags e2e -shuffle=on ./test/e2e` now and then.
 ```
 
-- `make smoke` and `make e2e` take ~1 min. **Never run two in one tool call**, and never start
-  the server in the foreground of a call that could time out: a killed call takes the
-  backgrounded server with it.
-- `test/` and `web/` are **embedded in the binary** — rebuild before running any browser check
-  or you test the previous copy, silently.
+- `make e2e` takes ~35 s plus the build. **Never run two in one tool call.** A server you start
+  by hand for manual probing (a scratch project + `aboard serve`) must be DETACHED
+  (`setsid nohup … &`), never in the foreground of a call that could time out.
+- `web/` is **embedded in the binary** — `make e2e` depends on `build`, but a hand-started
+  server must be rebuilt AND restarted after a web edit or you test the previous copy, silently.
 - `make caps` builds twice on purpose; do not "optimise" it.
 - A screenshot you took must be LOOKED at (Read the PNG). `test/shot.sh` writes under
   `.aboard/run/shots/` of the project it is pointed at.
