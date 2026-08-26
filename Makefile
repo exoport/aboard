@@ -74,6 +74,28 @@ lint: $(GOLANGCI_LINT) ## Run golangci-lint (pinned via bingo).
 fmt: $(GOFUMPT)    ## Format Go source with gofumpt (pinned via bingo).
 	$(GOFUMPT) -l -w .
 
+# The formatting GATE, as opposed to `fmt` which fixes it. It exists so that
+# nothing has to call a tool from $PATH to check formatting: a $PATH gofumpt and
+# the bingo pin are two different binaries, they were two different versions, and
+# they disagreed about this tree — which is how a hook and a ladder can both be
+# green while the CI that runs the pin is not. Every gate now goes through make,
+# and make goes through .bingo.
+#
+# The tool's EXIT STATUS is checked as well as its output, and that is not
+# belt-and-braces: `-l` prints nothing when gofumpt cannot parse a file, so a
+# recipe that only tests `-n "$$out"` prints "fmt-check ok" and exits 0 over a
+# tree that was never formatted-checked at all. Measured — a file with a syntax
+# error passed this gate. It is the same trap COMMON.md records for
+# `$$(cmd; echo $$?)`, and a green gate that checked nothing is the exact failure
+# this whole item exists to remove. stderr is folded into the capture so the
+# parse error is what the reader sees.
+.PHONY: fmt-check
+fmt-check: $(GOFUMPT) ## Fail with the file list if anything needs gofumpt (the pinned one).
+	@out=$$($(GOFUMPT) -l . 2>&1); status=$$?; \
+		if [ $$status -ne 0 ]; then echo "gofumpt failed (exit $$status):"; echo "$$out"; exit $$status; fi; \
+		if [ -n "$$out" ]; then echo "gofumpt needed:"; echo "$$out"; exit 1; fi; \
+		echo "fmt-check ok"
+
 # The zero-dependency gate, carried over from the split's Makefile. `lint` is
 # the real one, but it needs bingo to have fetched golangci-lint; this one runs
 # in a bare checkout with nothing but the Go toolchain, which is what a first
@@ -214,7 +236,7 @@ status: build      ## What is running for this project, on which port, and is th
 	./$(BIN) status
 
 .PHONY: ci-local
-ci-local: test lint govulncheck docs-check xcompile-windows snapshot ## Run every gate CI + release would run (Linux + Windows cross-compile + snapshot).
+ci-local: test fmt-check lint govulncheck docs-check xcompile-windows snapshot ## Run every gate CI + release would run (Linux + Windows cross-compile + snapshot).
 	@echo
 	@echo "Local CI gates green. Safe to push + tag."
 	@echo "Catches: Linux test failures, lint, vuln, doc links, Windows compile-time portability bugs, release-config regressions."

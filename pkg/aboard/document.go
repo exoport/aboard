@@ -183,7 +183,7 @@ func decodeDocument(raw []byte) (*stateDoc, error) {
 		if err := jsonv2.Unmarshal(key, &name); err != nil {
 			return nil, errNotAnObject
 		}
-		if name == "tabs" {
+		if name == keyTabs {
 			// The SHAPE question first, and separately, because the two failures
 			// deserve different sentences. `"tabs": {}` is "this is not a board";
 			// a parse error inside the array is a duplicate name, a bad escape or
@@ -231,7 +231,7 @@ func (d *stateDoc) finish() {
 		d.byID[d.tabs[i].ID] = i
 	}
 	d.rev = revisionFromFields(d.fields)
-	d.nextID, _ = rawInt(d.fields["nextId"])
+	d.nextID, _ = rawInt(d.fields[keyNextID])
 }
 
 // marshalIndent writes the document back out in the shape it arrived in: the
@@ -250,7 +250,7 @@ func (d *stateDoc) marshalIndent() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	obj["tabs"] = tabs
+	obj[keyTabs] = tabs
 	return jsonv2.Marshal(obj, writeOptions, jsontext.WithIndent("  "))
 }
 

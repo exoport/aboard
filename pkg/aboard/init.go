@@ -224,12 +224,12 @@ func initialDocument(example bool) (document []byte, tabs int, err error) {
 
 	if !example {
 		doc := map[string]any{
-			"version":      SchemaVersion,
-			"nextId":       1,
-			"tabs":         []any{},
-			"rev":          0,
-			"updatedAt":    stamp,
-			"lastEditedBy": initActor,
+			keyVersion:      SchemaVersion,
+			keyNextID:       1,
+			keyTabs:         []any{},
+			keyRev:          0,
+			keyUpdatedAt:    stamp,
+			keyLastEditedBy: initActor,
 		}
 		body, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
@@ -247,16 +247,16 @@ func initialDocument(example bool) (document []byte, tabs int, err error) {
 		return nil, 0, fmt.Errorf("the embedded example board is not valid json: %w", err)
 	}
 
-	seeded, _ := doc["tabs"].([]any)
-	doc["version"] = SchemaVersion
-	doc["rev"] = 0
-	doc["updatedAt"] = stamp
-	doc["lastEditedBy"] = initActor
+	seeded, _ := doc[keyTabs].([]any)
+	doc[keyVersion] = SchemaVersion
+	doc[keyRev] = 0
+	doc[keyUpdatedAt] = stamp
+	doc[keyLastEditedBy] = initActor
 	// Recomputed rather than copied. The counter is the ONLY correct id
 	// allocator, and a fixture whose counter had fallen behind its own contents
 	// would hand out an id that already names something — silently re-pointing
 	// every reference to the older object.
-	doc["nextId"] = nextIDFor(doc)
+	doc[keyNextID] = nextIDFor(doc)
 
 	body, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -290,7 +290,7 @@ func nextIDFor(doc map[string]any) int {
 	walk(doc)
 
 	next := highest + 1
-	if declared, ok := doc["nextId"].(float64); ok && int(declared) > next {
+	if declared, ok := doc[keyNextID].(float64); ok && int(declared) > next {
 		next = int(declared)
 	}
 	return next

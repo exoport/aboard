@@ -69,7 +69,7 @@ unconditionally; --force writes it anyway and says so on stderr.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&opts.By, "by", "agent-1", "actor recorded in lastEditedBy and on every tab this write touched")
+	cmd.Flags().StringVar(&opts.By, "by", aboard.DefaultActor, "actor recorded in lastEditedBy and on every tab this write touched")
 	cmd.Flags().StringVar(&opts.Label, "label", "", "why this write is happening; recorded on the journal entry, not in the board")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "write without compare-and-set, overwriting anything since you read the document")
 	cmd.Flags().BoolVar(&opts.Check, "check", false, "run the write warnings and stop: nothing is posted, and no board need be running")

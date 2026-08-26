@@ -68,6 +68,14 @@ func TestRootPaths(t *testing.T) {
 	root := Root(filepath.FromSlash("/p"))
 	j := func(parts ...string) string { return filepath.Join(append([]string{"/p"}, parts...)...) }
 
+	// LogFile answers a question as well as building a path, so it does not fit
+	// the table's shape: an id that could escape the logs directory gets no path
+	// at all. TestLogFileRefusesAnIDThatCannotBeAFilename covers the refusal.
+	logFile, okLogFile := root.LogFile("bb42")
+	if !okLogFile {
+		t.Fatal(`LogFile("bb42") refused a plain tab id`)
+	}
+
 	cases := []struct {
 		name string
 		got  string
@@ -83,7 +91,7 @@ func TestRootPaths(t *testing.T) {
 		{"InstanceFile named", root.InstanceFile("review"), j(".aboard", "run", "instance.review.json")},
 		{"JournalFile", root.JournalFile(), j(".aboard", "run", "journal.jsonl")},
 		{"LogsDir", root.LogsDir(), j(".aboard", "run", "logs")},
-		{"LogFile", root.LogFile("bb42"), j(".aboard", "run", "logs", "bb42.log")},
+		{"LogFile", logFile, j(".aboard", "run", "logs", "bb42.log")},
 		{"ShotsDir", root.ShotsDir(), j(".aboard", "run", "shots")},
 		{"E2EDir", root.E2EDir(), j(".aboard", "run", "e2e")},
 		{"E2ECase", root.E2ECase("TestBridge"), j(".aboard", "run", "e2e", "TestBridge")},
@@ -233,5 +241,39 @@ func TestFindRootResolvesSymlinks(t *testing.T) {
 	}
 	if viaSub != direct {
 		t.Errorf("a subdirectory under the link resolved to %q, want %q", viaSub, direct)
+	}
+}
+
+// A tab id becomes a filename, so LogFile validates it rather than trusting a
+// comment that the caller already did. Before the validation moved into
+// layout.go this test could not be written at all: LogFile returned one value
+// and joined whatever it was given, so `../../evil` produced a path outside the
+// project and the only thing standing between that and a write was a check in a
+// different file that gosec — correctly — did not believe in.
+func TestLogFileRefusesAnIDThatCannotBeAFilename(t *testing.T) {
+	root := Root("/tmp/project")
+	for _, bad := range []string{
+		"",
+		"..",
+		"../../etc/passwd",
+		"a/b",
+		`a\b`,
+		"bb42.log",
+		"bb 42",
+		strings.Repeat("b", 65),
+	} {
+		if path, ok := root.LogFile(bad); ok {
+			t.Errorf("LogFile(%q) = %q, true — wanted a refusal", bad, path)
+		}
+	}
+	for _, good := range []string{"bb42", "bb126", "a", "A_b-1", strings.Repeat("b", 64)} {
+		path, ok := root.LogFile(good)
+		if !ok {
+			t.Errorf("LogFile(%q) refused a plain tab id", good)
+			continue
+		}
+		if got := filepath.Dir(path); got != root.LogsDir() {
+			t.Errorf("LogFile(%q) landed in %q, not the logs directory %q", good, got, root.LogsDir())
+		}
 	}
 }

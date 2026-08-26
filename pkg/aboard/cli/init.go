@@ -74,7 +74,7 @@ over a conversation that was never theirs.`,
 	}
 	cmd.Flags().BoolVar(&example, "example", false, "seed the board with the example tabs compiled into this binary")
 	cmd.Flags().BoolVar(&gitignore, "gitignore", false, "append "+aboard.GitignoreLine+" to the project's .gitignore if it is not already ignored")
-	cmd.Flags().String("output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().String("output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }
 

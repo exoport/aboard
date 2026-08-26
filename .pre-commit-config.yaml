@@ -1,8 +1,36 @@
+# The gates are make targets, and make goes through .bingo. Nothing here calls a
+# tool from $PATH any more.
+#
+# What this replaced: a `golangci-lint-mod` hook from a third-party repo, which
+# ran whatever golangci-lint the machine happened to have installed. The `.bingo`
+# suffix in its rev is about the FILE LIST — it prunes .bingo/ from what the hook
+# is handed — and never had anything to do with which binary ran. So the hook, the
+# ladder and CI could each be a different version of the linter, and during
+# plan-2 §10 two of them disagreed about this tree: one green, one with a hundred
+# findings, and no way to tell from a passing commit which one you had.
+#
+# `language: system` runs the command as-is, so `make lint` resolves
+# $(GOLANGCI_LINT) to the version-stamped path under $GOBIN and rebuilds it if the
+# pin moved. pass_filenames is off because both targets take the whole module —
+# handing them a file list would silently lint less than the gate claims to.
+# require_serial keeps two Go toolchain builds out of each other's cache.
 repos:
-  - repo: https://github.com/diegosz/pre-commit-golang
-    rev: v1.0.0-rc.1.bingo
+  - repo: local
     hooks:
-      - id: golangci-lint-mod
+      - id: make-lint
+        name: make lint (golangci-lint, bingo-pinned)
+        entry: make lint
+        language: system
+        pass_filenames: false
+        files: '(\.go$)|(\bgo\.mod$)'
+        require_serial: true
+      - id: make-fmt-check
+        name: make fmt-check (gofumpt, bingo-pinned)
+        entry: make fmt-check
+        language: system
+        pass_filenames: false
+        files: '(\.go$)|(\bgo\.mod$)'
+        require_serial: true
   - repo: https://github.com/diegosz/pre-commit-wip
     rev: v0.0.3
     hooks:

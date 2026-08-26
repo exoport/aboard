@@ -61,7 +61,7 @@ cannot be bypassed by an agent that forgot to record something.`,
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", defaultJournalLimit, "how many entries to print")
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }
 

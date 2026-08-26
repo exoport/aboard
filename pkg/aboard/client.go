@@ -108,7 +108,7 @@ func Apply(ctx context.Context, root Root, name string, options ApplyOptions, as
 		}
 		return fmt.Errorf("stdin is not valid json: %w", err)
 	}
-	if _, ok := doc["tabs"].([]any); !ok {
+	if _, ok := doc[keyTabs].([]any); !ok {
 		return errors.New("stdin json has no tabs array")
 	}
 
@@ -308,7 +308,7 @@ func postDocument(ctx context.Context, url string, doc map[string]any, base, by,
 	if marshalErr != nil {
 		return 0, "", marshalErr
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url+"/aboard.json", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url+routeState, bytes.NewReader(payload))
 	if err != nil {
 		return 0, "", err
 	}
@@ -329,7 +329,7 @@ func postDocument(ctx context.Context, url string, doc map[string]any, base, by,
 // therefore has no `rev` to send — and the server refuses a timestamp base the
 // moment the live document has a `rev` of its own.
 func applyBase(doc map[string]any) string {
-	switch rev := doc["rev"].(type) {
+	switch rev := doc[keyRev].(type) {
 	case float64:
 		return strconv.Itoa(int(rev))
 	case string:
@@ -337,7 +337,7 @@ func applyBase(doc map[string]any) string {
 			return strings.TrimSpace(rev)
 		}
 	}
-	if stamp, ok := doc["updatedAt"].(string); ok {
+	if stamp, ok := doc[keyUpdatedAt].(string); ok {
 		return stamp
 	}
 	return ""

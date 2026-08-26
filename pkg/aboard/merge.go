@@ -64,8 +64,8 @@ var errUnmergeable = errors.New("this conflict cannot be merged")
 // write. A caller's copies of them are ignored on the merge, because the fresh
 // document's are the true ones by definition (see commitState).
 var serverManagedFields = map[string]bool{
-	"tabs": true, "rev": true, "nextId": true,
-	"version": true, "updatedAt": true, "lastEditedBy": true,
+	keyTabs: true, keyRev: true, keyNextID: true,
+	keyVersion: true, keyUpdatedAt: true, keyLastEditedBy: true,
 }
 
 // mergeResult is what a successful merge produced, for the sentence the caller
@@ -123,7 +123,7 @@ func mergeOnConflict(ctx context.Context, inst Instance, ours map[string]any, ba
 
 	merged := map[string]any{}
 	maps.Copy(merged, fresh)
-	merged["tabs"] = tabs
+	merged[keyTabs] = tabs
 
 	return mergeResult{doc: merged, base: freshRevToken(fresh), kept: kept}, nil
 }
@@ -271,7 +271,7 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, atBase json.RawMess
 	if !sameJSON(mustJSON(ours["state"]), atBase) {
 		return fmt.Errorf("%w: %s changed on the board while you were changing it — re-read the board, redo the edit, apply again", ErrCollision, id)
 	}
-	for _, field := range []string{"name", "type", "note", "stateFrom"} {
+	for _, field := range []string{keyName, keyType, keyNote, keyStateFrom} {
 		if !sameJSON(mustJSON(ours[field]), mustJSON(live[field])) {
 			return fmt.Errorf("%w: %s — its %s differs from the board's and the journal does not record which side changed it; re-read the board, redo the edit, apply again",
 				ErrCollision, id, field)
@@ -283,7 +283,7 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, atBase json.RawMess
 /* ---------- small readers ---------- */
 
 func tabList(doc map[string]any) []any {
-	list, _ := doc["tabs"].([]any)
+	list, _ := doc[keyTabs].([]any)
 	return list
 }
 
@@ -310,7 +310,7 @@ func sortedRootKeys(doc map[string]any) []string {
 // treats as an unconditional write — and that is right here, because a board
 // with no rev has nothing to compare against.
 func freshRevToken(doc map[string]any) string {
-	switch rev := doc["rev"].(type) {
+	switch rev := doc[keyRev].(type) {
 	case float64:
 		return strconv.Itoa(int(rev))
 	case string:

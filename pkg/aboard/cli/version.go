@@ -50,7 +50,7 @@ build that reports "dev" says so plainly instead of looking finished.`,
 			return renderOutput(stdout(opts), outputFormat, rep, rep.human)
 		},
 	}
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }
 

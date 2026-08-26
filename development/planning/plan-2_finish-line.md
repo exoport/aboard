@@ -43,7 +43,8 @@ history now; a board may still be running there on 46624 — never write to it.
   does not). Agents never commit; the orchestrator does, in the repo's message style (the claim
   as subject, the reasoning and the mistakes as body, `Co-Authored-By: Claude Fable 5
   <noreply@anthropic.com>`).
-- **The ladder, every time**: `go build/vet ./... && gofumpt -l . && go test -race ./...`;
+- **The ladder, every time**: `go build/vet ./... && go test -race ./...`; `make fmt-check`
+  (the pinned gofumpt — never a bare `gofumpt -l .`, see item 10);
   `make lint` at zero; `make caps` when a spec or command changes (builds twice; `aboard
   capabilities --check` = 0; `capsHash` moves are stated in the commit); `make docs-cli` when the
   tree changes; `make docs-check`; `make smoke` (until item 4 retires it) then `make e2e`, once per
@@ -53,8 +54,9 @@ history now; a board may still be running there on 46624 — never write to it.
   and the http-api/cli references. A CLI command written in a doc is executed once.
 - **Judgement calls are recorded, not silently taken**: in the commit body and, if they need the
   human, in §10 of this file.
-- **Never**: push (no remote exists until §10), touch the spike, run two smoke/e2e runs in one
-  tool call, or restart a healthy server.
+- **Never**: push (a remote exists on both repos, but nothing has been pushed to either and
+  pushing waits for the human — §10), touch the spike, run two smoke/e2e runs in one tool call,
+  or restart a healthy server.
 
 ## The order
 
@@ -193,11 +195,15 @@ Chromium, which flaked once and would again.
 - **`bb372` `boards`**: the proposed `~/.aboard/known-roots.json` registry written by `aboard serve`
   and verified against `/health`. Alternatives: a scan of a configured list of project roots; or
   drop the feature. Decision needed before item 6's last feature.
-- **Remote, first tag, first release**: `git@github.diegos_exo:exoport/aboard.git` (or wherever),
-  the org's Actions OIDC/`id-token: write` permission for keyless cosign, `v0.1.0`. The release
-  pipeline is untested against a real tag until this happens; `make snapshot` is the local proof.
+- **Remote, first tag, first release**: `origin` exists on BOTH repos already
+  (`git@github.diegos_exo:exoport/aboard.git` and `…/aboard_vscode.git`) and **nothing has been
+  pushed to either**. What is still the human's: pushing at all — which waits on their own manual
+  test of both repos and their review of this section — the org's Actions OIDC/`id-token: write`
+  permission for keyless cosign, and `v0.1.0`. The release pipeline is untested against a real tag
+  until that happens; `make snapshot` is the local proof.
 - **Go 1.27 for the `json/v2` item** — only if `apex_process_ape` moves too (one toolchain for the
-  `ape aboard` mount).
+  `ape aboard` mount). It now gates a second thing: **goreleaser v2.18.0 requires Go 1.27**, so
+  the pin stops at v2.17.1 until this is answered (item 10, 2026-08-26).
 - **The `ape aboard` mount itself** — out of scope for this plan by the human's word ("in the
   future"); when it comes it is a plan in the ape repo: `require github.com/exoport/aboard` at a
   real tag, `root.AddCommand(cli.NewRootCmd(cli.Options{Host: aboard.HostApe}))`, and the two latent

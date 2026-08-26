@@ -49,6 +49,6 @@ prints every tab that has a receipt.`,
 				func() string { return aboard.RenderedHuman(tab, list) })
 		},
 	}
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }

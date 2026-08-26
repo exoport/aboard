@@ -33,6 +33,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -106,8 +107,10 @@ func historyFrom(entries []JournalEntry, tab string, limit int) TabHistory {
 		out.Oldest = entries[0].At
 	}
 	n := 0
-	for i := len(entries) - 1; i >= 0; i-- {
-		e := entries[i]
+	// Ranged by INDEX rather than by value: a JournalEntry is 128 bytes and this
+	// walks up to historyScan of them (gocritic rangeValCopy).
+	for i := range slices.Backward(entries) {
+		e := &entries[i]
 		state, ok := e.Before[tab]
 		if !ok {
 			// The tab changed in this write but held no state before it — a tab
@@ -135,8 +138,8 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	tab := strings.TrimSpace(r.URL.Query().Get("tab"))
 	if tab == "" {
 		s.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error":  "tab is required",
-			"reason": "GET /history?tab=<id> — history is per tab, and a whole-board history is what /journal already is",
+			wireError:  "tab is required",
+			wireReason: "GET /history?tab=<id> — history is per tab, and a whole-board history is what /journal already is",
 		})
 		return
 	}
@@ -294,7 +297,7 @@ func currentDocument(ctx context.Context, root Root, name string) ([]byte, error
 
 // fetchDocument is GET /aboard.json, as bytes.
 func fetchDocument(ctx context.Context, base string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/aboard.json", http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+routeState, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

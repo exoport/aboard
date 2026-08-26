@@ -198,9 +198,38 @@ func (r Root) JournalFile() string { return filepath.Join(r.RunDir(), "journal.j
 // LogsDir holds the sidecar log files, one per tab.
 func (r Root) LogsDir() string { return filepath.Join(r.RunDir(), "logs") }
 
-// LogFile is one tab's log. The caller must have validated the tab id against
-// logTabRe first — this becomes a filename.
-func (r Root) LogFile(tab string) string { return filepath.Join(r.LogsDir(), tab+".log") }
+// logTabRe is what a tab id may contain when it is about to become a filename.
+// It lives here, beside the join it guards, rather than beside the handler that
+// used to own it: this file is the only one allowed to build a path, so it is
+// the only place where "is this safe to join" is answerable by reading one
+// function. Validated rather than sanitised — anything unexpected is refused.
+var logTabRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// LogFile is one tab's log, and the second return says whether the id was one a
+// path may be built from at all. It used to take the validation on trust from a
+// comment ("the caller must have checked logTabRe first"), and a comment is not
+// something a reader — or a taint analyser — can check: gosec read the handler,
+// saw a query parameter reach filepath.Join, and reported a path traversal on
+// all three uses of the result. It was wrong about the outcome and right about
+// the shape, because nothing in the joining function established the guarantee.
+//
+// filepath.Base is belt to the regexp's braces. The pattern already excludes a
+// separator and "..", so Base cannot change an accepted string; it is here so
+// the construction is safe by INSPECTION rather than by cross-reference.
+func (r Root) LogFile(tab string) (string, bool) {
+	if !logTabRe.MatchString(tab) {
+		return "", false
+	}
+	return filepath.Join(r.LogsDir(), filepath.Base(tab+".log")), true
+}
+
+// validTabFileID reports whether a tab id may become a filename or a key in a
+// sidecar record. It sits beside LogFile because two other callers (the mount
+// receipts, `aboard log`) need the same answer WITHOUT a path, and both are in
+// this package — so it stays unexported. LogFile's second return is the exported
+// way to ask, and this engine is a library mounted inside another CLI: every
+// exported name is surface a host can come to depend on.
+func validTabFileID(tab string) bool { return logTabRe.MatchString(tab) }
 
 // RenderedFile is the mount-receipt sidecar: what the BROWSER reports it drew,
 // per tab. Under run/ with the journal and the logs, never in the state

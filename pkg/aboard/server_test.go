@@ -163,6 +163,38 @@ func TestAnUnmatchedGETIsRefusedOrNotFoundAccordingToTheAllowList(t *testing.T) 
 	}
 }
 
+// Every static asset is served as the type its extension says and pinned there.
+// The argument that `w.Write(body)` in writeAsset is not an XSS sink rests on two
+// things: the request picks WHICH embedded asset and never its bytes, and the type
+// it is served as is the one the server derived. The second half is only true while
+// the browser is not free to sniff, so it is asserted rather than assumed — a
+// header that quietly stopped being set would take the argument with it and nothing
+// else would look different.
+func TestEveryStaticAssetIsServedNosniffAsItsDeclaredType(t *testing.T) {
+	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv.assets = web.FS
+
+	for path, wantType := range map[string]string{
+		"/":            "text/html",
+		"/aboard.html": "text/html",
+		"/app.css":     "text/css",
+		"/views/ui.js": "text/javascript",
+	} {
+		rec := httptest.NewRecorder()
+		srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost"+path, http.NoBody))
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s = %d", path, rec.Code)
+			continue
+		}
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("GET %s: X-Content-Type-Options = %q, want nosniff", path, got)
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, wantType) {
+			t.Errorf("GET %s: Content-Type = %q, want %s", path, got, wantType)
+		}
+	}
+}
+
 // The first SSE frame carries the UI signature, and it is what makes a restart
 // self-healing: the stream drops, the browser reconnects on its own, the
 // signature does not match what the page loaded, the page reloads. If it stops

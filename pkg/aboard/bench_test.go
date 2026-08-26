@@ -230,10 +230,10 @@ func BenchmarkGetState(b *testing.B) {
 // — at 5 ticks a second, a whole-file sha256 there is sustained disk and CPU for
 // nothing at all.
 func BenchmarkWatcherTick(b *testing.B) {
-	cases := []struct {
+	cases := make([]struct {
 		name string
 		doc  []byte
-	}{}
+	}, 0, len(benchSizes)+1)
 	for _, n := range benchSizes {
 		cases = append(cases, struct {
 			name string

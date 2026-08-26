@@ -31,7 +31,7 @@ prints the same table; the browser suite asserts that every declared path answer
 | POST   | `/upload`           | An image pasted or dropped by the human.                                  |
 | GET    | `/uploads`          | List the uploads.                                                         |
 | GET    | `/uploads/<file>`   | Serve one, from disk.                                                     |
-| GET    | *anything else*     | Static asset from the embedded web tree (`ETag`, so a reload revalidates). |
+| GET    | *anything else*     | Static asset from the embedded web tree (`ETag`, so a reload revalidates; `X-Content-Type-Options: nosniff`). |
 
 What an unmatched request actually gets, in the order the server decides it:
 
@@ -44,7 +44,9 @@ What an unmatched request actually gets, in the order the server decides it:
    that is not `app.css`, `aboard.html`, or under `assets/`, `views/`, `lib/` or
    `test/`. The last table row serves the embedded tree, and it serves only those; a
    name outside them is refused rather than looked up, so the refusal says nothing
-   about what the tree does or does not contain.
+   about what the tree does or does not contain. Every asset that IS served carries
+   `X-Content-Type-Options: nosniff`, so the `Content-Type` the server derived from the
+   extension is the type the browser uses — an asset cannot be sniffed into a document.
 4. **`404`** for a `GET` of a path that is inside the allow-list and holds no file —
    `/views/nosuchview.js`.
 

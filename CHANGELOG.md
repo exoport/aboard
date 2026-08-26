@@ -6,6 +6,18 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **chore: the make targets are the gate, and the pinned tools moved.** A `$PATH` copy
+  of a tool and the `.bingo` pin are two different programs, and this repo ran both: the
+  pinned linter reported 0 where the pre-commit hook's `$PATH` copy reported 11, and the
+  pinned formatter rewrote a file the `$PATH` copy called clean — two gates that could
+  each be green while the other was red over a tree that never changed. `bingo get`
+  moved golangci-lint to v2.13.1, gofumpt to v0.11.0, govulncheck to v1.7.0 and
+  goreleaser to v2.17.1; the pre-commit hooks and CI now run `make lint` and the new
+  `make fmt-check` instead of calling a tool themselves, and the ladder's rung is
+  `make fmt-check`. The newer linter's ~110 findings are fixed in code — the repeated
+  wire keys are named in `pkg/aboard/wire.go` — with one config line, `exhaustruct_v5`
+  added beside the `exhaustruct` this repo already disabled. `Root.LogFile` now validates
+  the tab id itself rather than taking it on trust from the caller.
 - **fix: the write path is serialised, and a `409` means nothing of yours landed.**
   Two overlapping POSTs both passed compare-and-set and both wrote, so one edit was
   destroyed with a `200` and the journal recorded the lost write as though it had

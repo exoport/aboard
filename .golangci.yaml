@@ -14,6 +14,13 @@ linters:
     - embeddedstructfieldcheck
     - err113
     - exhaustruct
+    # exhaustruct_v5 is v2.13's successor to exhaustruct, which the line above
+    # already disables — the same shape as the wsl/wsl_v5 pair below. Both names
+    # are live while the old one is deprecated, so both must be named or the
+    # rename silently re-enables a linter this repo decided against: nearly
+    # every composite literal here is a cobra.Command or an Options struct where
+    # the unset fields ARE the meaning.
+    - exhaustruct_v5
     - forbidigo
     - funcorder
     - funlen

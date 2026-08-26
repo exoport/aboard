@@ -69,7 +69,7 @@ with the reason, and a recipe needing a newer board schema says so.`,
 				func() string { return aboard.RecipeListHuman(found) })
 		},
 	}
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }
 

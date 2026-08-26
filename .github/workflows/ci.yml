@@ -66,8 +66,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Both gates are make targets, so CI, the pre-commit hook and a developer's
+      # ladder run the SAME bingo-pinned binaries. Nothing in this file may call
+      # a tool from $PATH: a runner's ambient golangci-lint is not the one this
+      # repo pins, and the difference is invisible until the two disagree.
       - name: Run golangci-lint
         run: make lint
+
+      # Belt to golangci's own gofmt/gofumpt formatters: those cover the paths
+      # golangci is configured to look at, this covers the module. It is the
+      # same target the hook runs.
+      - name: Check formatting
+        run: make fmt-check
 
   vuln:
     name: Vulnerability scan

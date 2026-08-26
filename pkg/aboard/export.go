@@ -245,11 +245,11 @@ func writeDecision(b *strings.Builder, d map[string]any) {
 		verdict += " (reversed)"
 	}
 	fmt.Fprintf(b, "- **%s** — %s", str(d, "title"), verdict)
-	if at := str(d, "at"); at != "" {
+	if at := str(d, keyAt); at != "" {
 		fmt.Fprintf(b, ", %s", at[:min(isoDateLen, len(at))])
 	}
 	b.WriteString("\n")
-	if reason := str(d, "reason"); reason != "" {
+	if reason := str(d, keyReason); reason != "" {
 		late := ""
 		if str(d, "reasonAddedAt") != "" {
 			late = " _(reason added after the fact)_"
@@ -282,7 +282,7 @@ func dagMarkdown(st map[string]any) string {
 				fmt.Fprintf(&b, " — _%s_", status)
 			}
 			b.WriteString("\n")
-			if note := str(n, "note"); note != "" {
+			if note := str(n, keyNote); note != "" {
 				fmt.Fprintf(&b, "%s  %s\n", pad, note)
 			}
 			walk(str(n, "id"), depth+1)
@@ -308,7 +308,7 @@ func kanbanMarkdown(st map[string]any) string {
 		fmt.Fprintf(&b, "## %s (%d)\n\n", col, len(items))
 		for _, n := range items {
 			fmt.Fprintf(&b, "- **%s**\n", str(n, "title"))
-			if note := str(n, "note"); note != "" {
+			if note := str(n, keyNote); note != "" {
 				fmt.Fprintf(&b, "  %s\n", note)
 			}
 		}
@@ -376,7 +376,7 @@ func voteMarkdown(st map[string]any) string {
 			fmt.Fprintf(&b, " — %s", strings.Join(scores, ", "))
 		}
 		b.WriteString("\n")
-		if note := str(o, "note"); note != "" {
+		if note := str(o, keyNote); note != "" {
 			fmt.Fprintf(&b, "  %s\n", note)
 		}
 		// The comments are the reasoning, which is the point of exporting a
@@ -431,8 +431,8 @@ func chatMarkdown(st map[string]any) string {
 	}
 	var b strings.Builder
 	for _, m := range msgs {
-		fmt.Fprintf(&b, "**%s**", str(m, "by"))
-		if at := str(m, "at"); at != "" {
+		fmt.Fprintf(&b, "**%s**", str(m, keyBy))
+		if at := str(m, keyAt); at != "" {
 			fmt.Fprintf(&b, " · %s", at)
 		}
 		fmt.Fprintf(&b, "\n\n%s\n\n", str(m, "text"))
@@ -465,7 +465,7 @@ func markupMarkdown(st map[string]any) string {
 // resolves in all three places.
 func writeMark(b *strings.Builder, m map[string]any, where string) {
 	fmt.Fprintf(b, "- `%s` %s", str(m, "id"), where)
-	if note := str(m, "note"); note != "" {
+	if note := str(m, keyNote); note != "" {
 		fmt.Fprintf(b, " — %s", note)
 	}
 	b.WriteString("\n")
@@ -487,11 +487,11 @@ func stackMarkdown(st map[string]any) string {
 	var b strings.Builder
 	for _, blk := range blocks {
 		inner, _ := blk["state"].(map[string]any)
-		text := typeMarkdown(str(blk, "type"), inner)
+		text := typeMarkdown(str(blk, keyType), inner)
 		if text == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "## %s\n\n%s\n", firstNonEmpty(str(blk, "title"), str(blk, "type")), text)
+		fmt.Fprintf(&b, "## %s\n\n%s\n", firstNonEmpty(str(blk, "title"), str(blk, keyType)), text)
 	}
 	return b.String()
 }
@@ -563,14 +563,16 @@ func tabCSV(st map[string]any) (string, error) {
 
 	if cols := mapsOf(st["columns"]); len(cols) > 0 {
 		if rows := mapsOf(st["rows"]); len(rows) > 0 {
-			head := []string{"id"}
+			head := make([]string, 0, 1+len(cols))
+			head = append(head, "id")
 			for _, c := range cols {
 				head = append(head, firstNonEmpty(str(c, "label"), str(c, "id")))
 			}
 			var b strings.Builder
 			fmt.Fprintf(&b, "%s\n", strings.Join(head, ","))
 			for _, r := range rows {
-				line := []string{cell(r["id"])}
+				line := make([]string, 0, 1+len(cols))
+				line = append(line, cell(r["id"]))
 				for _, c := range cols {
 					line = append(line, cell(r[str(c, "id")]))
 				}
@@ -586,7 +588,7 @@ func tabCSV(st map[string]any) (string, error) {
 		for _, n := range nodes {
 			fmt.Fprintf(&b, "%s,%s,%s,%s,%s,%s\n",
 				cell(n["id"]), cell(n["title"]), cell(n["status"]),
-				cell(n["parent"]), cell(n["order"]), cell(n["note"]))
+				cell(n["parent"]), cell(n["order"]), cell(n[keyNote]))
 		}
 		return b.String(), nil
 	}
@@ -658,7 +660,7 @@ func writeUINode(b *strings.Builder, spec typeSpec, node any, data map[string]an
 		return
 	}
 
-	typeName, _ := obj["type"].(string)
+	typeName, _ := obj[keyType].(string)
 	component, known := spec.Components[typeName]
 	if !known {
 		// The same thing the renderer shows: a marker naming what could not be

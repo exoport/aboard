@@ -333,16 +333,15 @@ func attr(t *testing.T, l playwright.Locator, name string) string {
 // is written by one line of dag.js, and a parser would be more code than the
 // thing it parses.
 func scaleOf(transform string) float64 {
-	i := strings.Index(transform, "scale(")
-	if i < 0 {
+	_, rest, found := strings.Cut(transform, "scale(")
+	if !found {
 		return 0
 	}
-	rest := transform[i+len("scale("):]
-	j := strings.Index(rest, ")")
-	if j < 0 {
+	inner, _, closed := strings.Cut(rest, ")")
+	if !closed {
 		return 0
 	}
-	k, err := strconv.ParseFloat(strings.TrimSpace(rest[:j]), 64)
+	k, err := strconv.ParseFloat(strings.TrimSpace(inner), 64)
 	if err != nil {
 		return 0
 	}

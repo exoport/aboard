@@ -54,14 +54,17 @@ tag, Go 1.27, the `ape aboard` mount and the `aboard <cmd>` strings that go with
 installing the extension, the example board's prose, the notify confirmation's repaint,
 the journal record `apply`'s merge would need widening to survive a foreign rename, and
 a pointer to the judgement calls in `handoff-phase-e-finish.md` that stand until
-overruled. `development/README.md` carries a separate list — five findings that are real,
+overruled. `development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
-count, `BUILD_DATE`, the pinned-versus-`$PATH` divergence — in golangci-lint AND in
-gofumpt — and `make install INSTALL_DIR`), each with what it would take, so nobody
-re-measures them.
+count, `BUILD_DATE` and `make install INSTALL_DIR`), each with what it would take, so
+nobody re-measures them. A fifth, the pinned-versus-`$PATH` divergence, is RESOLVED:
+see "the make targets are the gate" below.
 
 If you are resuming and looking for the next task, **there is not one queued — ask the
-human.** No remote exists yet, so nothing here has ever been pushed.
+human.** A remote exists (`git@github.diegos_exo:exoport/aboard.git`, and
+`…/aboard_vscode.git` for the extension) and **nothing has ever been pushed to either**.
+Pushing waits for the human: their own manual test of both repos, and their review of
+plan-2 §10.
 
 ### Directory map
 
@@ -99,8 +102,9 @@ make status        # what is running for this project, and is the skill stale
 make test          # go test -race ./...
 make test-cover    # with coverage profile
 make check         # vet + gofmt — the gate that needs no tools fetched
-make lint          # golangci-lint (pinned via bingo)
-make fmt           # gofumpt (pinned via bingo)
+make lint          # golangci-lint (pinned via bingo) — the gate
+make fmt           # gofumpt (pinned via bingo) — rewrites
+make fmt-check     # gofumpt (pinned via bingo) — reports, and fails; the gate
 make caps          # regenerate the controls module, skill reference and recipe index
 make docs-cli      # regenerate docs/reference/cli.md from the cobra tree
 make docs-check    # docs/ links resolve and every doc is reachable from docs/README.md
@@ -120,22 +124,31 @@ Tooling is pinned via [bingo](https://github.com/bwplotka/bingo) — `.bingo/Var
 plus a per-tool `.mod`. Upgrade with `bingo get <module>@<version>` and commit the
 regenerated files.
 
-**A pinned tool and the same tool on `$PATH` are two different tools, and this repo
-runs both.** `make lint` and `make fmt` take the bingo pin; the `golangci-lint-mod`
-pre-commit hook and a bare `gofumpt -l .` take `$PATH`, which is normally a different
-version. Measured 2026-08-26: `make lint` (pinned v2.6.0) reports **0** where
-`make pre-commit` (PATH v2.11.1) reports **11**, and `gofumpt -l .` (PATH v0.9.2)
-reports the tree clean where `make fmt` (pinned v0.10.0) rewrites
-`pkg/aboard/history_test.go`. Read either as "a different version of the tool says
-this", never as "the tree regressed" — and check which copy you just ran before
-believing a number. `development/README.md` carries the open decision about which of
-the two should move; nothing in CI or `make ci-local` depends on the unpinned copy.
+**RESOLVED 2026-08-26 — the make targets are the gate, and nothing calls a tool from
+`$PATH`.** A pinned tool and the same tool on `$PATH` are two different tools, and this
+repo used to run both: `make lint`/`make fmt` took the bingo pin while the
+`golangci-lint-mod` pre-commit hook and the ladder's bare `gofumpt -l .` took whatever
+the machine had. They disagreed — the pinned linter reported 0 where the hook's copy
+reported 11, and the pinned formatter rewrote a file the `$PATH` copy called clean — so
+a commit could pass one gate and fail another with nothing in the tree having changed.
+
+Now: `bingo get` moves a pin, `make` is the only thing that runs a tool, and the hook
+and CI run make. `.pre-commit-config.yaml` is two `local` hooks (`make lint`,
+`make fmt-check`); `.github/workflows/ci.yml` runs the same two plus `make govulncheck`;
+the ladder rung is **`make fmt-check`**, never `gofumpt -l .`. `make check` stays the
+zero-dependency gate (`go vet` + stdlib `gofmt`) for a bare checkout that has fetched
+nothing. One pin moves with a second file: `goreleaser`'s version is written into
+`.github/workflows/release.yml` as well, and the comment on that line says so.
+
+Pinned versions live in `.bingo/*.mod`: golangci-lint **v2.13.1**, gofumpt **v0.11.0**,
+govulncheck **v1.7.0**, goreleaser **v2.17.1** (v2.18.0 wants Go 1.27, which is gated on
+the human — plan-2 §10).
 
 ### Commits
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
 - The subject is the claim; the body is the reasoning and the mistakes found on the way.
-- Pre-commit hooks must pass before a commit lands — with the divergence above in mind: `make pre-commit` currently reports findings `make lint` does not, from an unpinned analyzer, and which of the two gates moves is an open decision in `development/README.md`.
+- Pre-commit hooks must pass before a commit lands. They are `make lint` and `make fmt-check`, so the hook and the ladder are the same two commands running the same two pinned binaries — `make pre-commit` and a local ladder cannot disagree any more.
 
 ## Two hard rules
 

@@ -177,7 +177,11 @@ func seedLog(root aboard.Root) error {
 	}
 	// 0o644, like everything else the board writes: see the file-mode note in
 	// init.go.
-	return os.WriteFile(root.LogFile("bb126"), []byte(b.String()), 0o644)
+	logFile, ok := root.LogFile("bb126")
+	if !ok {
+		return errors.New(`the fixture log tab id "bb126" is not one a path can be built from`)
+	}
+	return os.WriteFile(logFile, []byte(b.String()), 0o644)
 }
 
 // seededTabs is the set of tab ids the board STARTED with — the example plus the

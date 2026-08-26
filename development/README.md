@@ -45,8 +45,9 @@ If you are resuming and looking for the next task, there is not one queued — a
 ## Small things queued, with the reason they were not done
 
 Real findings, judged out of proportion to fix when they were found — three from the
-2026-08-25 review, two measured on 2026-08-26 while closing the books and reviewing it.
-None of them is
+2026-08-25 review, two measured on 2026-08-26 while closing the books and reviewing it. One
+of the five — the pinned-versus-`$PATH` divergence, third in the list below — is now
+RESOLVED, and is kept for its measurement rather than as work. None of the rest is
 gated on the human (that is §10); each is a call for whoever next has a reason to be in
 that code. Each says what it would take, so nobody has to re-measure.
 Everything else in that review is dispositioned in
@@ -69,45 +70,64 @@ Everything else in that review is dispositioned in
   a cap on the count would be an arbitrary number. Worth doing with an
   uploads-style accounting pass (plan-2 item 6, `bb369`), which already has to
   count and prune files under `.aboard/`.
-- **A pinned tool and the same tool on `$PATH` are two different tools, and this
-  repo runs both — measured on the linter AND on the formatter.** One decision
-  covers them, which is why they are one entry.
+- **RESOLVED 2026-08-26 (plan-2 item 10) — a pinned tool and the same tool on
+  `$PATH` are two different tools, and this repo ran both.** Kept because the
+  measurement is the argument, and because the shape recurs.
 
-  *The linter.* `make lint` runs the bingo-pinned `golangci-lint v2.6.0` and reports
-  **0 issues**; the `golangci-lint-mod` pre-commit hook runs whatever
-  `golangci-lint` is on `$PATH` — v2.11.1 on the machine this was measured on —
-  and reports **11**, listed here so nobody runs it twice: `gosec` `G703`
-  (path traversal via taint analysis) at `logs.go:73,74,76` — the sidecar log
-  path, which is deliberate and already validated by `logTabRe`; `gosec` `G705`
-  (XSS via taint analysis) at `server.go:1758`, a `w.Write(body)` on a body the
-  server marshalled itself; `modernize/stringscut` at `caps.go:598` and
-  `test/e2e/dag_test.go:336,341`; and `prealloc` at `bench_test.go:233`,
-  `export.go:566,573` and `htmltab_palette_test.go:21`. Same `.golangci.yaml`; a
-  newer analyzer set. It matters because `CLAUDE.md` says the pre-commit hooks
-  must pass before a commit lands, so as written no commit can land here —
-  measured 2026-08-26. Nine of the eleven are in code plan-2 never touched; the
-  two in `dag_test.go` are item 4's own, and they are the cheap ones. Not fixed
-  while closing the books, because the fix is a
-  DECISION and not an edit: either move the bingo pin to the version the hook
-  will pick up anyway (and then answer the four taint findings on their merits —
-  three of them are the deliberate sidecar-log path and one is a body the server
-  built itself), or make the hook use the pin so the two gates cannot drift
-  again. The second is the smaller change and the first is the honest one. Worth
-  doing before the first tag, since `make ci-local` says "safe to push + tag" on
-  the strength of the pinned run alone.
+  *What it was.* `make lint` ran the bingo-pinned `golangci-lint v2.6.0` and
+  reported **0 issues**; the `golangci-lint-mod` pre-commit hook ran whatever
+  `golangci-lint` was on `$PATH` — v2.11.1 on the machine this was measured on —
+  and reported **11**. Same `.golangci.yaml`; a newer analyzer set. The formatter
+  had the mirror-image version of it: `make fmt` (pinned `gofumpt v0.10.0`)
+  rewrote `pkg/aboard/history_test.go` while the `v0.9.2` on `$PATH` — which is
+  what the ladder rung `gofumpt -l .` actually invoked — called the whole tree
+  clean. So the committed tree was clean under the ladder and dirty under the
+  documented formatter, and `CLAUDE.md` said the pre-commit hooks must pass before
+  a commit lands, which as written meant no commit could land here.
 
-  *The formatter, found while reviewing this item and the reason the entry is
-  plural.* `make fmt` runs the bingo-pinned `gofumpt v0.10.0` and **rewrites
-  `pkg/aboard/history_test.go`** (it splits `journalWith(t, root,` onto its own
-  line), while the `gofumpt v0.9.2` on `$PATH` — which is what the ladder rung
-  `gofumpt -l .` actually invokes — reports the whole tree clean. So the committed
-  tree is clean under the ladder and dirty under the documented formatter, and a
-  developer who runs `make fmt` gets a diff in a file they did not touch. This one
-  WRITES rather than reports, which makes it the more likely of the two to end up
-  in somebody's commit by accident. Nothing gates on it: CI and `make ci-local`
-  run `make lint`, and `make check` is `gofmt`, not `gofumpt`. The reformat was
-  reverted rather than committed — that is the conservative option, not the
-  answer.
+  *The decision, and it was the human's.* "We must use the make so we use the
+  bingo go tooling, we must update the tools" — both halves, not either. The pins
+  moved (golangci-lint **v2.13.1**, gofumpt **v0.11.0**, govulncheck **v1.7.0**,
+  goreleaser **v2.17.1**), and the bingo pin reached through `make` became
+  authoritative everywhere: `.pre-commit-config.yaml` is two `local` hooks running
+  `make lint` and `make fmt-check`, `ci.yml` runs the same targets, and the ladder
+  rung is `make fmt-check` rather than a bare `gofumpt -l .`. `make check` — `go
+  vet` plus the stdlib `gofmt` — stays as the gate a bare checkout can run with
+  nothing fetched, which is a different job and the only place a tool outside
+  `.bingo` is still used on purpose.
+
+  *What the newer linter then found, and what happened to it.* ~110 findings, all
+  fixed in code except one config line. The one config change: `exhaustruct_v5`
+  added to the disable list beside `exhaustruct`, which was already disabled — a
+  linter renaming itself must not be a way to re-enable it, the same shape as the
+  `wsl`/`wsl_v5` pair. In code: the two `gosec` taint findings, four `modernize`,
+  four `prealloc`, and every `goconst` — the repeated wire keys are now named
+  constants in `pkg/aboard/wire.go`, one block per vocabulary, with `key*` (the
+  board document) and `wire*` (the HTTP API) deliberately kept apart even where
+  they spell a word the same way.
+
+  *The one thing that did NOT get fixed on its merits.* `gosec` G703 on the three
+  sidecar-log file operations. The validation moved into `layout.go` — `Root.LogFile`
+  now refuses any id that is not `^[A-Za-z0-9_-]{1,64}$` instead of taking it on
+  trust from a comment, with a test — and gosec still reports it, because its taint
+  analysis only consults sanitizers inside the function holding the sink
+  (`taint.valueReachableFromParams` never looks at them across a call). The note
+  above `logPath` in `logs.go` records that, names the call-site "fix" that silences
+  it and is a bug, and the three `//nolint:gosec` lines point at the note.
+
+  *And one the new gate nearly repeated.* `make fmt-check` first shipped as
+  `out=$(gofumpt -l .); [ -n "$out" ] && fail` — which is green whenever gofumpt
+  itself fails, because `-l` lists no files when it cannot parse one. Measured: a
+  file with a syntax error in it passed the gate, printed "fmt-check ok" and exited
+  0. The recipe now checks the exit status as well as the output, and
+  `TestFmtCheckFailsWhenGofumptItselfFails` lifts the recipe out of the Makefile and
+  runs it against a stub for each of the three answers the tool can give.
+
+  *The shape worth remembering.* Two copies of a tool is not a tidiness problem: it
+  is two gates that can each be green while the other is red, over a tree that never
+  changed. The fix is not "pick the newer one", it is "have one" — and then check
+  that the one you have can actually go red.
+
 - **`make install INSTALL_DIR=<dir>` fails if the directory does not exist** —
   `install -m 755 aboard $(INSTALL_DIR)/aboard` (`Makefile:56`; not `cp`, which
   matters because the one-flag fix is `install -D`, not a separate `mkdir -p`).

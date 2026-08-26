@@ -187,19 +187,19 @@ func capIDs(in []string) []string {
 func (s *server) handleRendered(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxReceiptBody))
 	if err != nil {
-		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "receipt too large"})
+		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{wireError: "receipt too large"})
 		return
 	}
 	var in Receipt
 	if len(body) == 0 || json.Unmarshal(body, &in) != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a mount receipt"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "expected a mount receipt"})
 		return
 	}
 	// The tab id becomes a KEY in a file a terminal prints, and it is the string
 	// a `rendered <id>` predicate is compared against. Validated with the same
 	// expression a sidecar log's filename is, so one rule covers both.
-	if !logTabRe.MatchString(in.Tab) {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
+	if !validTabFileID(in.Tab) {
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: msgTabPlainID})
 		return
 	}
 	got := s.receipts.record(in)
@@ -212,7 +212,7 @@ func (s *server) handleRendered(w http.ResponseWriter, r *http.Request) {
 		s.opts.Log().Printf("released %d waiting session(s): %s rendered", released, in.Tab)
 		s.broadcastWaiters()
 	}
-	s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "mounts": got.Mounts})
+	s.writeJSON(w, http.StatusOK, map[string]any{wireOK: true, "mounts": got.Mounts})
 }
 
 /* ---------- CLI ---------- */

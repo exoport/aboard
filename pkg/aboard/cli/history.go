@@ -80,6 +80,6 @@ Reads from the running board when there is one and from
 	}
 	cmd.Flags().IntVar(&at, "at", 0, "print the document that restores version N instead of listing (1 is the most recent)")
 	cmd.Flags().IntVar(&limit, "limit", defaultHistoryLimit, "how many versions to list")
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }

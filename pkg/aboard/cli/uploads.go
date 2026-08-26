@@ -80,6 +80,6 @@ Reads the state file directly, so it needs no server.`,
 	}
 	cmd.Flags().BoolVar(&prune, "prune", false, "show which unreferenced files would be deleted")
 	cmd.Flags().BoolVar(&yes, "yes", false, "with --prune, actually delete them")
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }

@@ -18,8 +18,9 @@ import (
 var tokenDecl = regexp.MustCompile(`(?:^|[;{\s])(--[a-z0-9-]+)\s*:`)
 
 func tokenNames(css string) []string {
-	out := []string{}
-	for _, hit := range tokenDecl.FindAllStringSubmatch(css, -1) {
+	hits := tokenDecl.FindAllStringSubmatch(css, -1)
+	out := make([]string, 0, len(hits))
+	for _, hit := range hits {
 		out = append(out, hit[1])
 	}
 	sort.Strings(out)

@@ -62,7 +62,7 @@ Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 			return codeErr(code, nil)
 		},
 	}
-	cmd.Flags().StringVar(&by, "by", "agent-1", "who is waiting; shown on the human's notify button")
+	cmd.Flags().StringVar(&by, "by", aboard.DefaultActor, "who is waiting; shown on the human's notify button")
 	cmd.Flags().StringVar(&forWhat, "for", "poke", `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>"`)
 	cmd.Flags().StringVar(&note, "note", "", "why you are waiting; shown on the button beside your name")
 	cmd.Flags().DurationVar(&timeout, "timeout", aboard.WaitDefault, "how long to block before giving up")
@@ -93,7 +93,7 @@ command says so rather than pretending otherwise.`,
 			return aboard.Poke(cmd.Context(), root, name, by, note, stdout(opts))
 		},
 	}
-	cmd.Flags().StringVar(&by, "by", "agent-1", "who is releasing them")
+	cmd.Flags().StringVar(&by, "by", aboard.DefaultActor, "who is releasing them")
 	cmd.Flags().StringVar(&note, "note", "", "a message for the waiting sessions")
 	return cmd
 }

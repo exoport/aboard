@@ -188,24 +188,24 @@ const SchemaVersion = 3
 // the implementation — this is the description of it, and the smoke test asserts
 // every path listed answers.
 var declaredRoutes = []routeSpec{
-	{"GET", "/aboard.json", "current state"},
-	{"POST", "/aboard.json", "write, compare-and-set (__base is the document's rev; __origin, __by, __label). same-origin only"},
-	{"GET", "/events", "SSE: state changes, waiter count, and the UI signature"},
-	{"GET", "/health", "who owns this port, and which binary is serving"},
-	{"GET", "/capabilities", "this manifest"},
-	{"GET", "/tab/<id>/html", "one html tab as a standalone sandboxed document"},
-	{"GET", "/wait", "long poll: block until poked or until a predicate matches"},
-	{"POST", "/poke", "release every waiting session"},
-	{"GET", "/waiters", "who is waiting right now"},
-	{"GET", "/journal", "recent accepted writes, with the previous state of each changed tab"},
-	{"GET", "/history", "one tab's recorded prior states, newest first (?tab=<id>&limit=N)"},
-	{"GET", "/watch", "those writes as JSON lines, as they happen"},
-	{"POST", "/rendered", "a mount receipt from the browser: control ids drawn, pressed, and any unknown-component markers"},
-	{"POST", "/log", "append output to a tab's sidecar log"},
-	{"GET", "/log", "the tail of one"},
-	{"POST", "/upload", "an image pasted or dropped by the human"},
-	{"GET", "/uploads", "list them: url, bytes and mtime"},
-	{"GET", "/uploads/<file>", "serve one, from disk"},
+	{http.MethodGet, routeState, "current state"},
+	{http.MethodPost, routeState, "write, compare-and-set (__base is the document's rev; __origin, __by, __label). same-origin only"},
+	{http.MethodGet, "/events", "SSE: state changes, waiter count, and the UI signature"},
+	{http.MethodGet, "/health", "who owns this port, and which binary is serving"},
+	{http.MethodGet, "/capabilities", "this manifest"},
+	{http.MethodGet, "/tab/<id>/html", "one html tab as a standalone sandboxed document"},
+	{http.MethodGet, "/wait", "long poll: block until poked or until a predicate matches"},
+	{http.MethodPost, "/poke", "release every waiting session"},
+	{http.MethodGet, "/waiters", "who is waiting right now"},
+	{http.MethodGet, "/journal", "recent accepted writes, with the previous state of each changed tab"},
+	{http.MethodGet, "/history", "one tab's recorded prior states, newest first (?tab=<id>&limit=N)"},
+	{http.MethodGet, "/watch", "those writes as JSON lines, as they happen"},
+	{http.MethodPost, "/rendered", "a mount receipt from the browser: control ids drawn, pressed, and any unknown-component markers"},
+	{http.MethodPost, routeLog, "append output to a tab's sidecar log"},
+	{http.MethodGet, routeLog, "the tail of one"},
+	{http.MethodPost, "/upload", "an image pasted or dropped by the human"},
+	{http.MethodGet, "/uploads", "list them: url, bytes and mtime"},
+	{http.MethodGet, "/uploads/<file>", "serve one, from disk"},
 }
 
 // loadSpecs reads every views/*.spec.json out of the embedded assets. Embedded,
@@ -595,8 +595,8 @@ func stampedHash(root Root) string {
 		return ""
 	}
 	for _, line := range strings.Split(string(body), "\n")[:6] {
-		if i := strings.Index(line, "capsHash:"); i >= 0 {
-			return strings.TrimSpace(strings.Fields(line[i+len("capsHash:"):])[0])
+		if _, after, found := strings.Cut(line, "capsHash:"); found {
+			return strings.TrimSpace(strings.Fields(after)[0])
 		}
 	}
 	return ""
@@ -605,7 +605,7 @@ func stampedHash(root Root) string {
 func (s *server) handleCapabilities(w http.ResponseWriter, _ *http.Request) {
 	m, err := buildManifest(s.assets)
 	if err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot build the manifest"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot build the manifest"})
 		return
 	}
 	s.writeJSON(w, http.StatusOK, m)
@@ -823,13 +823,13 @@ func checkTabState(byType map[string]typeSpec, where, typeName string, state map
 			blockWhere := where + "/" + id
 			for _, key := range sortedKeys(block) {
 				switch key {
-				case "id", "type", "title", "state":
+				case "id", keyType, "title", "state":
 				default:
 					out = append(out, fmt.Sprintf("%s (stack block): %s is not a block field — a block is { id, type, title, state }",
 						blockWhere, key))
 				}
 			}
-			blockType, _ := block["type"].(string)
+			blockType, _ := block[keyType].(string)
 			blockState, _ := block["state"].(map[string]any)
 			out = append(out, checkTabState(byType, blockWhere, blockType, blockState, depth+1)...)
 		}
@@ -859,7 +859,7 @@ func checkUITree(spec typeSpec, where string, node any, data map[string]any, nod
 	}
 
 	out := []string{}
-	typeName, _ := obj["type"].(string)
+	typeName, _ := obj[keyType].(string)
 	component, known := spec.Components[typeName]
 	if !known {
 		return append(out, fmt.Sprintf("%s (ui): %s.type = %q is not in the catalog — it will render as a dashed marker. %s",

@@ -207,22 +207,22 @@ func parsePredicate(raw string) (predicate, error) {
 		return predicate{kind: eventPoke}, nil
 	}
 	switch fields[0] {
-	case eventPoke, "change":
+	case eventPoke, predChange:
 		if len(fields) > 1 {
 			return predicate{}, fmt.Errorf("%q takes no argument", fields[0])
 		}
 		return predicate{kind: fields[0]}, nil
-	case "tab", "answer", predRendered:
+	case predTab, predAnswer, predRendered:
 		if len(fields) != 2 {
 			return predicate{}, fmt.Errorf("%s needs one id, e.g. %q", fields[0], fields[0]+" bb71")
 		}
 		return predicate{kind: fields[0], id: fields[1]}, nil
-	case "node":
+	case predNode:
 		if len(fields) != 2 || !strings.Contains(fields[1], "=") {
 			return predicate{}, errors.New(`node needs id=status, e.g. "node bb58=done"`)
 		}
 		parts := strings.SplitN(fields[1], "=", 2)
-		return predicate{kind: "node", id: parts[0], value: parts[1]}, nil
+		return predicate{kind: predNode, id: parts[0], value: parts[1]}, nil
 	default:
 		return predicate{}, fmt.Errorf("unknown predicate %q — try poke, change, tab <id>, answer <id>, node <id>=<status>, rendered <id>", fields[0])
 	}
@@ -236,15 +236,15 @@ func (p predicate) matches(doc []byte, entry JournalEntry) bool {
 		// Neither is a write. A poke is released by the button; a mount receipt is
 		// released by the browser posting one (releaseRendered).
 		return false
-	case "change":
+	case predChange:
 		return len(entry.Tabs) > 0
-	case "tab":
+	case predTab:
 		return containsString(entry.Tabs, p.id)
-	case "answer":
+	case predAnswer:
 		// A human answering is the case worth waiting on; an agent rewriting the
 		// same tab is not an answer to anything.
 		return isHuman(entry.By) && containsString(entry.Tabs, p.id)
-	case "node":
+	case predNode:
 		return nodeHasStatus(doc, p.id, p.value)
 	}
 	return false
@@ -294,6 +294,23 @@ func nodeHasStatus(doc []byte, id, status string) bool {
 // same reason eventPoke is one.
 const predRendered = "rendered"
 
+// The rest of the predicate vocabulary, and the one event name that is not a
+// predicate. Named for the same reason as eventPoke and predRendered above: each
+// word is parsed in one place, matched in another and printed in a third, and a
+// kind that is spelled two ways is a wait that blocks on something that will
+// never fire.
+const (
+	predChange = "change"
+	predTab    = "tab"
+	predAnswer = "answer"
+	predNode   = "node"
+
+	// eventTimeout is what a waiter prints when it gave up rather than being
+	// released. `aboard wait` turns it into ExitTimeout, so a script can tell the
+	// two apart without parsing prose.
+	eventTimeout = "timeout"
+)
+
 // releaseRendered wakes every session waiting for a particular tab to be drawn.
 //
 // Separate from releaseMatching because the trigger is separate: a receipt is
@@ -332,7 +349,7 @@ func (h *waitHub) releaseRendered(tab string) int {
 // concerns it without polling for it.
 func (h *waitHub) releaseMatching(doc []byte, entry JournalEntry) int {
 	ev := pokeEvent{
-		Event: "change",
+		Event: predChange,
 		At:    entry.At,
 		By:    entry.By,
 		Note:  joinOr(entry.Tabs, ""),
@@ -370,8 +387,8 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	pred, err := parsePredicate(forWhat)
 	if err != nil {
 		s.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": err.Error(),
-			"got":   forWhat,
+			wireError: err.Error(),
+			"got":     forWhat,
 		})
 		return
 	}
@@ -380,7 +397,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	if raw := q.Get("timeout"); raw != "" {
 		secs, err := strconv.Atoi(raw)
 		if err != nil || secs <= 0 {
-			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "timeout must be whole seconds"})
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "timeout must be whole seconds"})
 			return
 		}
 		timeout = time.Duration(secs) * time.Second
@@ -389,7 +406,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 		timeout = waitMax
 	}
 
-	by := q.Get("by")
+	by := q.Get(wireBy)
 	if by == "" {
 		by = "agent"
 	}
@@ -397,7 +414,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	// Why this session is waiting, so the button can say more than a name. A
 	// waiting agent should always fill this in: "waiting on form 15" is a
 	// reason to press the button, a bare label is a mystery.
-	note := q.Get("note")
+	note := q.Get(wireNote)
 	if len(note) > maxNoteLen {
 		note = note[:140]
 	}
@@ -416,7 +433,7 @@ func (s *server) handleWait(w http.ResponseWriter, r *http.Request) {
 	case ev := <-wt.ch:
 		s.writeJSON(w, http.StatusOK, ev)
 	case <-timer.C:
-		s.writeJSON(w, http.StatusOK, pokeEvent{Event: "timeout"})
+		s.writeJSON(w, http.StatusOK, pokeEvent{Event: eventTimeout})
 	case <-r.Context().Done():
 		// The caller hung up. Nothing to write; the deferred remove drops the
 		// waiter and the button's count falls on its own.
@@ -441,10 +458,10 @@ func (s *server) handlePoke(w http.ResponseWriter, r *http.Request) {
 	released, ev := s.waits.release(body.By, body.Note)
 	s.broadcastWaiters()
 	s.writeJSON(w, http.StatusOK, map[string]any{
-		"ok":       true,
+		wireOK:     true,
 		"released": released,
-		"at":       ev.At,
-		"by":       ev.By,
+		wireAt:     ev.At,
+		wireBy:     ev.By,
 	})
 }
 
@@ -521,7 +538,7 @@ func Wait(ctx context.Context, root Root, name, by, forWhat, note string, timeou
 	}
 	fmt.Fprintln(out, string(body))
 
-	if ev.Event == "timeout" {
+	if ev.Event == eventTimeout {
 		return ExitTimeout, nil
 	}
 	return ExitOK, nil
@@ -534,7 +551,7 @@ func Poke(ctx context.Context, root Root, name, by, note string, out io.Writer) 
 	if err != nil {
 		return err
 	}
-	payload, err := json.Marshal(map[string]string{"by": by, "note": note})
+	payload, err := json.Marshal(map[string]string{wireBy: by, wireNote: note})
 	if err != nil {
 		return err
 	}

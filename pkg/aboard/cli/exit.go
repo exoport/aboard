@@ -54,8 +54,7 @@ func ExitCode(err error) (code int, silent bool) {
 	if err == nil {
 		return aboard.ExitOK, false
 	}
-	var ee *exitError
-	if errors.As(err, &ee) {
+	if ee, ok := errors.AsType[*exitError](err); ok {
 		return ee.code, errors.Is(ee.err, errSilent)
 	}
 	return aboard.ExitFailed, false

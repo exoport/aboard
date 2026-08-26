@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,33 +32,46 @@ const (
 	logTailLines = 500
 )
 
-// A tab id, and nothing else: this becomes a filename, so it is validated rather
-// than sanitised. Anything unexpected is refused outright.
-var logTabRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
-
 var logMu sync.Mutex
 
-func (s *server) logPath(tab string) (string, bool) {
-	if !logTabRe.MatchString(tab) {
-		return "", false
-	}
-	return s.root.LogFile(tab), true
-}
+// A PATH-TRAVERSAL NOTE, for the //nolint:gosec below.
+//
+// `path` here is whatever Root.LogFile returned, and LogFile refuses any tab id
+// that is not `^[A-Za-z0-9_-]{1,64}$` before it joins anything — no separator, no
+// dot, so no ".." and no absolute path — and then applies filepath.Base to the
+// filename it builds anyway. TestLogFileRefusesAnIDThatCannotBeAFilename asserts
+// both halves, including that every accepted id lands in the logs directory.
+//
+// gosec still reports G703 on every use of the result, and the reason is a real
+// limitation rather than a disagreement about the code: its taint analysis only
+// consults its sanitizer list inside the function holding the sink
+// (taint.isTainted). Across a call boundary it uses valueReachableFromParams,
+// which asks "is this return value derived from a tainted argument" and never
+// looks at sanitizers at all — so filepath.Base is invisible from here no matter
+// how the guard is written, unless the join moves into this file. It does not:
+// paths are built in layout.go and nowhere else, which is the rule that made the
+// guard checkable in the first place.
+//
+// The alternative rejected: applying filepath.Base to the tab id at the CALL
+// site, which does silence the analyser and is a bug — Base("../../bb42") is
+// "bb42", so a traversal attempt would stop being refused and start quietly
+// succeeding against a different tab.
+func (s *server) logPath(tab string) (string, bool) { return s.root.LogFile(tab) }
 
 func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
 	path, ok := s.logPath(tab)
 	if !ok {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: msgTabPlainID})
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
-		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "chunk too large"})
+		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{wireError: "chunk too large"})
 		return
 	}
 	if len(body) == 0 {
-		s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": 0})
+		s.writeJSON(w, http.StatusOK, map[string]any{wireOK: true, wireBytes: 0})
 		return
 	}
 
@@ -67,33 +79,34 @@ func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	defer logMu.Unlock()
 
 	if err := os.MkdirAll(s.root.LogsDir(), 0o755); err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the log directory"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot create the log directory"})
 		return
 	}
-	if info, err := os.Stat(path); err == nil && info.Size()+int64(len(body)) > logMaxBytes {
-		_ = os.Rename(path, path+".1")
+	if info, err := os.Stat(path); err == nil && info.Size()+int64(len(body)) > logMaxBytes { //nolint:gosec // see the path-traversal note above
+		_ = os.Rename(path, path+".1") //nolint:gosec // see the path-traversal note above
 	}
+	//nolint:gosec // path: see the path-traversal note above; 0o644: the board's repo-wide file-mode policy, see the note in init.go
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot open the log"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot open the log"})
 		return
 	}
 	defer func() { _ = f.Close() }()
 	if _, err := f.Write(body); err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot append"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot append"})
 		return
 	}
 	if body[len(body)-1] != '\n' {
 		_, _ = f.Write([]byte{'\n'})
 	}
-	s.writeJSON(w, http.StatusOK, map[string]any{"ok": true, "bytes": len(body)})
+	s.writeJSON(w, http.StatusOK, map[string]any{wireOK: true, wireBytes: len(body)})
 }
 
 func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
 	path, ok := s.logPath(tab)
 	if !ok {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "tab must be a plain id"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: msgTabPlainID})
 		return
 	}
 	tail := logTailLines
@@ -103,7 +116,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // see the path-traversal note above
 	if err != nil {
 		s.writeJSON(w, http.StatusOK, map[string]any{"lines": []string{}, "size": 0, "missing": true})
 		return
@@ -135,7 +148,7 @@ func Log(ctx context.Context, root Root, name, tab string, in io.Reader, out io.
 	if err != nil {
 		return err
 	}
-	if !logTabRe.MatchString(tab) {
+	if !validTabFileID(tab) {
 		return fmt.Errorf("%q is not a plain tab id", tab)
 	}
 	url := inst.URL + "/log?tab=" + tab

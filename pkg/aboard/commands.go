@@ -37,6 +37,48 @@ const (
 // the cobra tree against: a drifting default would be a real contract break.
 const defaultOutputFormat = "human"
 
+// The two strings the table below and the cobra tree in package cli must spell
+// IDENTICALLY — TestFlagParity compares `--output-format`'s help text and
+// `--by`'s default byte for byte across the two. Exported for that reason and no
+// other: the parity test can only report a disagreement after it has happened,
+// whereas one constant makes the agreement structural. Anything else the two
+// files share is caught by that test and stays a literal on both sides, next to
+// the variable it binds.
+const (
+	// UsageOutputFormat is the help line of every --output-format flag.
+	UsageOutputFormat = "human, json or yaml"
+	// DefaultActor is what --by falls back to when an agent does not say who it is.
+	DefaultActor = "agent-1"
+)
+
+// pflag's own type names, as Flag.Type must report them: the parity test reads
+// them back off the cobra tree with Value.Type(), so these are pflag's spelling,
+// not ours.
+const (
+	flagTypeString   = "string"
+	flagTypeBool     = "bool"
+	flagTypeInt      = "int"
+	flagTypeDuration = "duration"
+)
+
+// meaningPrinted is what ExitOK means for a command whose whole job is to print.
+const meaningPrinted = "printed"
+
+// Flag names and one default that the table below repeats. Unexported, unlike
+// the two above: a name that drifts is caught STRUCTURALLY by TestFlagParity —
+// it walks the cobra tree flag by flag and reports the one side that has a flag
+// the other does not — whereas a drifting help string or default is only caught
+// as a diff, which is why those two are shared with package cli and these are
+// not. The cobra side keeps its literal next to the variable it binds.
+const (
+	flagNameBy           = "by"
+	flagNameOutputFormat = "output-format"
+
+	// defFalse is how pflag renders a bool flag's default, which is what the
+	// parity test reads back off the tree.
+	defFalse = "false"
+)
+
 // Flag is one declared flag: what a caller may pass, and what it defaults to.
 // Type is pflag's own type name ("string", "int", "bool", "duration"), because
 // that is what the parity test can read back off the cobra tree.
@@ -74,8 +116,8 @@ type Command struct {
 // subcommand.
 func RootFlags() []Flag {
 	return []Flag{
-		{Name: "cwd", Type: "string", Doc: "directory to resolve the project root from (default: the working directory)"},
-		{Name: "name", Type: "string", Doc: "board name, for a second isolated board in the same project (env ABOARD_NAME)"},
+		{Name: "cwd", Type: flagTypeString, Doc: "directory to resolve the project root from (default: the working directory)"},
+		{Name: "name", Type: flagTypeString, Doc: "board name, for a second isolated board in the same project (env ABOARD_NAME)"},
 	}
 }
 
@@ -110,11 +152,11 @@ func Commands() []Command {
 			Name: "serve",
 			Doc:  "run the board server for this project",
 			Flags: []Flag{
-				{Name: "base-path", Type: "string", Doc: "serve under a URL prefix, e.g. /aboard (default: the server root)"},
-				{Name: "dev", Type: "bool", Def: "false", Doc: "serve the web tree from disk instead of the embedded copy"},
-				{Name: "dev-dir", Type: "string", Doc: "with --dev, the web tree to serve (default: pkg/aboard/web under the root)"},
-				{Name: "port", Type: "int", Def: "0", Doc: "port to listen on (0 derives one from the project root; env PORT)"},
-				{Name: "state", Type: "string", Doc: "state file to serve (default: .aboard/aboard.json under the root)"},
+				{Name: "base-path", Type: flagTypeString, Doc: "serve under a URL prefix, e.g. /aboard (default: the server root)"},
+				{Name: "dev", Type: flagTypeBool, Def: defFalse, Doc: "serve the web tree from disk instead of the embedded copy"},
+				{Name: "dev-dir", Type: flagTypeString, Doc: "with --dev, the web tree to serve (default: pkg/aboard/web under the root)"},
+				{Name: "port", Type: flagTypeInt, Def: "0", Doc: "port to listen on (0 derives one from the project root; env PORT)"},
+				{Name: "state", Type: flagTypeString, Doc: "state file to serve (default: .aboard/aboard.json under the root)"},
 			},
 			Exits: commonExits(),
 		},
@@ -122,7 +164,7 @@ func Commands() []Command {
 			Name: "status",
 			Doc:  "report this project's running board, if any, and the caps beacon",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},
@@ -130,9 +172,9 @@ func Commands() []Command {
 			Name: "init",
 			Doc:  "create .aboard/ in this directory and write an empty board",
 			Flags: []Flag{
-				{Name: "example", Type: "bool", Def: "false", Doc: "seed the board with the example tabs compiled into this binary"},
-				{Name: "gitignore", Type: "bool", Def: "false", Doc: "append " + GitignoreLine + " to the project's .gitignore if it is not already ignored"},
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: "example", Type: flagTypeBool, Def: defFalse, Doc: "seed the board with the example tabs compiled into this binary"},
+				{Name: "gitignore", Type: flagTypeBool, Def: defFalse, Doc: "append " + GitignoreLine + " to the project's .gitignore if it is not already ignored"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},
@@ -140,11 +182,11 @@ func Commands() []Command {
 			Name: "apply",
 			Doc:  "read a board document on stdin and write it through the running board (compare-and-set)",
 			Flags: []Flag{
-				{Name: "by", Type: "string", Def: "agent-1", Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
-				{Name: "check", Type: "bool", Def: "false", Doc: "run the write warnings and stop: nothing is posted, and no board need be running"},
-				{Name: "force", Type: "bool", Def: "false", Doc: "write without compare-and-set, overwriting anything since you read the document"},
-				{Name: "label", Type: "string", Doc: "why this write is happening; recorded on the journal entry, not in the board"},
-				{Name: "strict", Type: "bool", Def: "false", Doc: "refuse the write if anything warns (exit 1, nothing written)"},
+				{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "actor recorded in lastEditedBy and on every tab this write touched"},
+				{Name: "check", Type: flagTypeBool, Def: defFalse, Doc: "run the write warnings and stop: nothing is posted, and no board need be running"},
+				{Name: "force", Type: flagTypeBool, Def: defFalse, Doc: "write without compare-and-set, overwriting anything since you read the document"},
+				{Name: "label", Type: flagTypeString, Doc: "why this write is happening; recorded on the journal entry, not in the board"},
+				{Name: "strict", Type: flagTypeBool, Def: defFalse, Doc: "refuse the write if anything warns (exit 1, nothing written)"},
 			},
 			Exits: commonExits(),
 		},
@@ -152,10 +194,10 @@ func Commands() []Command {
 			Name: "wait",
 			Doc:  "block until the board is poked or until a predicate matches",
 			Flags: []Flag{
-				{Name: "by", Type: "string", Def: "agent-1", Doc: "who is waiting; shown on the human's notify button"},
-				{Name: "for", Type: "string", Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>"`},
-				{Name: "note", Type: "string", Doc: "why you are waiting; shown on the button beside your name"},
-				{Name: "timeout", Type: "duration", Def: "10m0s", Doc: "how long to block before giving up"},
+				{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "who is waiting; shown on the human's notify button"},
+				{Name: "for", Type: flagTypeString, Def: "poke", Doc: `what to wait for: poke | change | "tab <id>" | "answer <id>" | "node <id>=<status>" | "rendered <id>"`},
+				{Name: "note", Type: flagTypeString, Doc: "why you are waiting; shown on the button beside your name"},
+				{Name: "timeout", Type: flagTypeDuration, Def: "10m0s", Doc: "how long to block before giving up"},
 			},
 			Exits: append(commonExits(), Exit{Code: ExitTimeout, Meaning: "the timeout ran out; nobody poked"}),
 		},
@@ -163,8 +205,8 @@ func Commands() []Command {
 			Name: "poke",
 			Doc:  "release every session waiting on this board, as the human's notify button does",
 			Flags: []Flag{
-				{Name: "by", Type: "string", Def: "agent-1", Doc: "who is releasing them"},
-				{Name: "note", Type: "string", Doc: "a message for the waiting sessions"},
+				{Name: flagNameBy, Type: flagTypeString, Def: DefaultActor, Doc: "who is releasing them"},
+				{Name: "note", Type: flagTypeString, Doc: "a message for the waiting sessions"},
 			},
 			Exits: commonExits(),
 		},
@@ -172,8 +214,8 @@ func Commands() []Command {
 			Name: "journal",
 			Doc:  "print recent accepted writes: when, who, which tabs",
 			Flags: []Flag{
-				{Name: "limit", Type: "int", Def: "40", Doc: "how many entries to print"},
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: "limit", Type: flagTypeInt, Def: "40", Doc: "how many entries to print"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},
@@ -182,9 +224,9 @@ func Commands() []Command {
 			Args: "<tab>",
 			Doc:  "list what a tab said before, from the journal; --at N prints a document `apply` accepts",
 			Flags: []Flag{
-				{Name: "at", Type: "int", Def: "0", Doc: "print the document that restores version N instead of listing (1 is the most recent)"},
-				{Name: "limit", Type: "int", Def: "20", Doc: "how many versions to list"},
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: "at", Type: flagTypeInt, Def: "0", Doc: "print the document that restores version N instead of listing (1 is the most recent)"},
+				{Name: "limit", Type: flagTypeInt, Def: "20", Doc: "how many versions to list"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},
@@ -204,7 +246,7 @@ func Commands() []Command {
 			Args: "[tab]",
 			Doc:  "print what the browser reported it drew: control ids, presses, and unknown-component markers",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},
@@ -212,9 +254,9 @@ func Commands() []Command {
 			Name: "uploads",
 			Doc:  "list the files under .aboard/uploads/ with their size and the tabs that mention them",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
-				{Name: "prune", Type: "bool", Def: "false", Doc: "show which unreferenced files would be deleted"},
-				{Name: "yes", Type: "bool", Def: "false", Doc: "with --prune, actually delete them"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
+				{Name: "prune", Type: flagTypeBool, Def: defFalse, Doc: "show which unreferenced files would be deleted"},
+				{Name: "yes", Type: flagTypeBool, Def: defFalse, Doc: "with --prune, actually delete them"},
 			},
 			Exits: commonExits(),
 		},
@@ -223,7 +265,7 @@ func Commands() []Command {
 			Args: "<tab|key>",
 			Doc:  "print one tab as text, for pasting into the project's own documents",
 			Flags: []Flag{
-				{Name: "format", Type: "string", Def: "md", Doc: "md or csv"},
+				{Name: "format", Type: flagTypeString, Def: "md", Doc: "md or csv"},
 			},
 			Exits: commonExits(),
 		},
@@ -232,8 +274,8 @@ func Commands() []Command {
 			Args: "[type]",
 			Doc:  "print what this board can do: types, state fields, controls, endpoints, commands",
 			Flags: []Flag{
-				{Name: "check", Type: "bool", Def: "false", Doc: "exit 1 if the committed skill reference is stale"},
-				{Name: "format", Type: "string", Def: "json", Doc: "json, md, or js (the generated control module)"},
+				{Name: "check", Type: flagTypeBool, Def: defFalse, Doc: "exit 1 if the committed skill reference is stale"},
+				{Name: "format", Type: flagTypeString, Def: "json", Doc: "json, md, or js (the generated control module)"},
 			},
 			Exits: []Exit{
 				{Code: ExitOK, Meaning: "printed; or with --check, the committed reference is current"},
@@ -245,7 +287,7 @@ func Commands() []Command {
 			Name: "recipes",
 			Doc:  "list the recipes available here, or print one",
 			Exits: []Exit{
-				{Code: ExitOK, Meaning: "printed"},
+				{Code: ExitOK, Meaning: meaningPrinted},
 				{Code: ExitFailed, Meaning: "no such recipe, or the recipe has no template"},
 				{Code: ExitUsage, Meaning: "an unknown output format"},
 			},
@@ -254,10 +296,10 @@ func Commands() []Command {
 					Name: "list",
 					Doc:  "list every recipe available in this project, and where each came from",
 					Flags: []Flag{
-						{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+						{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 					},
 					Exits: []Exit{
-						{Code: ExitOK, Meaning: "printed"},
+						{Code: ExitOK, Meaning: meaningPrinted},
 						{Code: ExitFailed, Meaning: "the recipe directories could not be read"},
 						{Code: ExitUsage, Meaning: "an unknown output format"},
 					},
@@ -267,10 +309,10 @@ func Commands() []Command {
 					Args: "<name>",
 					Doc:  "print one recipe's body, or just its tab skeleton",
 					Flags: []Flag{
-						{Name: "template", Type: "bool", Def: "false", Doc: "print only the recipe's JSON tab skeleton"},
+						{Name: "template", Type: flagTypeBool, Def: defFalse, Doc: "print only the recipe's JSON tab skeleton"},
 					},
 					Exits: []Exit{
-						{Code: ExitOK, Meaning: "printed"},
+						{Code: ExitOK, Meaning: meaningPrinted},
 						{Code: ExitFailed, Meaning: "no such recipe, it does not parse, or it has no template"},
 						{Code: ExitUsage, Meaning: "a missing or extra argument"},
 					},
@@ -281,7 +323,7 @@ func Commands() []Command {
 			Name: "version",
 			Doc:  "print the build identity of this binary",
 			Flags: []Flag{
-				{Name: "output-format", Type: "string", Def: defaultOutputFormat, Doc: "human, json or yaml"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
 		},

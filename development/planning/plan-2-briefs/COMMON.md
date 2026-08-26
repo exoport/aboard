@@ -6,8 +6,10 @@ plan itself is `development/planning/plan-2_finish-line.md` and the repo's `CLAU
 ## The repo
 
 - Repo: `/home/diegos/_dev/exoport/aboard` (module `github.com/exoport/aboard`). Go 1.26,
-  stdlib + cobra/pflag/yaml.v3 only. `gofumpt`, `golangci-lint` are on PATH (bingo-pinned copies
-  come from `make tools`). Chromium is at `/home/diegos/.local/bin/chromium`. Node is on PATH.
+  stdlib + cobra/pflag/yaml.v3 only. **Tools come from `.bingo` through `make`, never from
+  `$PATH`** — a `$PATH` gofumpt or golangci-lint is a different version and will tell you a
+  different story (resolved in item 10; see `development/README.md`). `make tools` fetches them.
+  Chromium is at `/home/diegos/.local/bin/chromium`. Node is on PATH.
 - **The spike at `/home/diegos/_dev/ai/board` is read-only history. Never write there, never
   touch its board on port 46624.**
 - **Never commit, never push, never `git stash`/`git checkout --`/`git reset` anything you did
@@ -22,7 +24,8 @@ plan itself is `development/planning/plan-2_finish-line.md` and the repo's `CLAU
 ## The ladder (run it, in this order, before you report)
 
 ```sh
-go build ./... && go vet ./... && gofumpt -l . && go test -race ./...
+go build ./... && go vet ./... && go test -race ./...
+make fmt-check                 # the pinned gofumpt; NOT a bare `gofumpt -l .` from $PATH
 make lint                      # must be zero findings; never weaken .golangci.yaml
 make caps                      # ONLY when a views/*.spec.json or the command table changed
 ./aboard capabilities --check  # must exit 0 after make caps

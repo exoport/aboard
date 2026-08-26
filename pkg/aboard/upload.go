@@ -86,38 +86,38 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, uploadMaxBytes))
 	if err != nil {
 		s.writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
-			"error": fmt.Sprintf("image is larger than %d MiB", uploadMaxBytes>>20),
+			wireError: fmt.Sprintf("image is larger than %d MiB", uploadMaxBytes>>20),
 		})
 		return
 	}
 	if len(body) == 0 {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "empty body"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "empty body"})
 		return
 	}
 
 	ext, mime, ok := sniffUpload(body)
 	if !ok {
 		s.writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{
-			"error": "not a png, jpeg, gif or webp (checked against the bytes, not the name)",
+			wireError: "not a png, jpeg, gif or webp (checked against the bytes, not the name)",
 		})
 		return
 	}
 
 	if err := os.MkdirAll(s.root.UploadsDir(), 0o755); err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot create the uploads directory"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot create the uploads directory"})
 		return
 	}
 
 	name := fmt.Sprintf("%s-%s.%s", time.Now().UTC().Format("20060102-150405"), slugUpload(r.URL.Query().Get("name")), ext)
 	if err := os.WriteFile(s.root.UploadFile(name), body, 0o644); err != nil { //nolint:gosec // 0o644 is the board's repo-wide file-mode policy; see the note in init.go
-		s.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot write the file"})
+		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot write the file"})
 		return
 	}
 
 	s.writeJSON(w, http.StatusOK, map[string]any{
-		"url":   uploadDir + "/" + name,
-		"bytes": len(body),
-		"type":  mime,
+		"url":     uploadDir + "/" + name,
+		wireBytes: len(body),
+		wireType:  mime,
 	})
 }
 
@@ -191,9 +191,9 @@ func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 			continue
 		}
 		files = append(files, map[string]any{
-			"url":   uploadDir + "/" + e.Name(),
-			"bytes": info.Size(),
-			"at":    info.ModTime().UTC().Format(time.RFC3339),
+			"url":     uploadDir + "/" + e.Name(),
+			wireBytes: info.Size(),
+			wireAt:    info.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
 	s.writeJSON(w, http.StatusOK, map[string]any{"files": files})

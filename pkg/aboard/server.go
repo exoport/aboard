@@ -714,9 +714,9 @@ func (s *server) route(w http.ResponseWriter, r *http.Request) {
 // routeRecords answers from a sidecar under run/ that is not the board at all.
 func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) bool {
 	switch {
-	case upath == "/aboard.json" && r.Method == http.MethodGet:
+	case upath == routeState && r.Method == http.MethodGet:
 		s.getState(w, r)
-	case upath == "/aboard.json" && r.Method == http.MethodPost:
+	case upath == routeState && r.Method == http.MethodPost:
 		s.postState(w, r)
 	case upath == "/health" && r.Method == http.MethodGet:
 		s.writeJSON(w, http.StatusOK, s.instance)
@@ -755,9 +755,9 @@ func (s *server) routeRecords(w http.ResponseWriter, r *http.Request, upath stri
 		s.handleWatch(w, r)
 	case upath == "/rendered" && r.Method == http.MethodPost:
 		s.handleRendered(w, r)
-	case upath == "/log" && r.Method == http.MethodPost:
+	case upath == routeLog && r.Method == http.MethodPost:
 		s.handleLogPost(w, r)
-	case upath == "/log" && r.Method == http.MethodGet:
+	case upath == routeLog && r.Method == http.MethodGet:
 		s.handleLogGet(w, r)
 	default:
 		return false
@@ -977,7 +977,7 @@ func (s *server) getState(w http.ResponseWriter, r *http.Request) {
 func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBodyBytes))
 	if err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body too large or unreadable"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "body too large or unreadable"})
 		return
 	}
 
@@ -988,7 +988,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 	incoming, err := decodeDocument(raw)
 	if err != nil {
 		if errors.Is(err, errTabsNotArray) {
-			s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
+			s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "expected a tabs array"})
 			return
 		}
 		// The parser is encoding/json/v2, which is stricter than the one this
@@ -998,13 +998,13 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		// the offset, and the caller is an agent that can fix it — a bare "invalid
 		// json" on a 4 MB document is a message that sends somebody to a diff.
 		s.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error":  "invalid json",
-			"reason": err.Error(),
+			wireError:  "invalid json",
+			wireReason: err.Error(),
 		})
 		return
 	}
 	if !incoming.hasTabs {
-		s.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expected a tabs array"})
+		s.writeJSON(w, http.StatusBadRequest, map[string]string{wireError: "expected a tabs array"})
 		return
 	}
 
@@ -1019,8 +1019,8 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		// the caller believes it asked for compare-and-set, the server silently
 		// did not, and the 200 says the write was fine.
 		s.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error":  "invalid __base",
-			"reason": "__base must be the `rev` of the document you read, as a number or its decimal string",
+			wireError:  "invalid __base",
+			wireReason: "__base must be the `rev` of the document you read, as a number or its decimal string",
 		})
 		return
 	}
@@ -1073,7 +1073,7 @@ func (s *server) postState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reply := map[string]any{"ok": true, "rev": res.rev, "updatedAt": res.stamp}
+	reply := map[string]any{wireOK: true, keyRev: res.rev, keyUpdatedAt: res.stamp}
 	// The warnings go back to whoever made the write, which for a browser write is
 	// the only actor who can see them at all — the shell has no stderr. Omitted
 	// when there are none, so a clean write's reply is the shape it always was.
@@ -1146,7 +1146,7 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 
 	live, err := s.currentLocked()
 	if err != nil {
-		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{"error": err.Error()}}
+		return commitResult{}, &apiError{http.StatusBadRequest, map[string]string{wireError: err.Error()}}
 	}
 	current := live.doc
 
@@ -1179,7 +1179,7 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 	for i := range next.tabs {
 		next.byID[next.tabs[i].ID] = i
 	}
-	next.nextID, _ = rawInt(next.fields["nextId"])
+	next.nextID, _ = rawInt(next.fields[keyNextID])
 
 	// Ids are board-wide monotonic; never let the counter regress or fall behind
 	// the ids already in use (see ids.go). Only the tabs this write changed are
@@ -1212,14 +1212,14 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 		name  string
 		value any
 	}{
-		{"nextId", nextID},
-		{"version", SchemaVersion},
-		{"rev", rev},
-		{"updatedAt", stamp},
-		{"lastEditedBy", by},
+		{keyNextID, nextID},
+		{keyVersion, SchemaVersion},
+		{keyRev, rev},
+		{keyUpdatedAt, stamp},
+		{keyLastEditedBy, by},
 	} {
 		if err := next.setField(f.name, f.value); err != nil {
-			return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "encode failed"}}
+			return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{wireError: "encode failed"}}
 		}
 	}
 	next.nextID = nextID
@@ -1227,7 +1227,7 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 
 	out, err := next.marshalIndent()
 	if err != nil {
-		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "encode failed"}}
+		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{wireError: "encode failed"}}
 	}
 	out = append(out, '\n')
 
@@ -1257,7 +1257,7 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 	entry.Warnings = changedTabWarnings(s.specs(), next.tabs)
 
 	if err := s.writeAtomic(out); err != nil {
-		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{"error": "write failed"}}
+		return commitResult{}, &apiError{http.StatusInternalServerError, map[string]string{wireError: "write failed"}}
 	}
 
 	// The document just written IS the current document — parsed, hashed and id-
@@ -1368,8 +1368,8 @@ func baseTokenRaw(raw jsontext.Value) (string, bool) {
 
 func revisionFromFields(fields map[string]jsontext.Value) revision {
 	got := revision{}
-	got.updatedAt = rawString(fields["updatedAt"])
-	if n, ok := rawInt(fields["rev"]); ok {
+	got.updatedAt = rawString(fields[keyUpdatedAt])
+	if n, ok := rawInt(fields[keyRev]); ok {
 		got.rev, got.had = n, true
 	}
 	return got
@@ -1394,20 +1394,20 @@ func (v revision) refuse(base string) *apiError {
 			return nil
 		}
 		return &apiError{http.StatusConflict, map[string]string{
-			"error":  "conflict",
-			"live":   strconv.Itoa(v.rev),
-			"base":   base,
-			"reason": fmt.Sprintf("your base is rev %d and the board is at rev %d — re-read the document, redo the edit, apply again", n, v.rev),
+			wireError:  "conflict",
+			"live":     strconv.Itoa(v.rev),
+			"base":     base,
+			wireReason: fmt.Sprintf("your base is rev %d and the board is at rev %d — re-read the document, redo the edit, apply again", n, v.rev),
 		}}
 	}
 	if v.legacy() && base == v.updatedAt {
 		return nil
 	}
 	return &apiError{http.StatusConflict, map[string]string{
-		"error":  "conflict",
-		"live":   strconv.Itoa(v.rev),
-		"base":   base,
-		"reason": "__base must be the `rev` of the document you read; a timestamp is the old token and is no longer compared",
+		wireError:  "conflict",
+		"live":     strconv.Itoa(v.rev),
+		"base":     base,
+		wireReason: "__base must be the `rev` of the document you read; a timestamp is the old token and is no longer compared",
 	}}
 }
 
@@ -1739,6 +1739,14 @@ func (s *server) writeAsset(w http.ResponseWriter, r *http.Request, name string,
 	if typ := mime.TypeByExtension(path.Ext(name)); typ != "" {
 		w.Header().Set("Content-Type", typ)
 	}
+	// nosniff, on every asset. The declared type is right for each of them, and
+	// this is what makes that declaration binding: without it a browser is free
+	// to sniff a file whose extension mime knows nothing about and decide it is
+	// HTML. Nothing here is user content — see the note on the Write below — but
+	// "the type we said" and "the type it is treated as" being the same thing is
+	// what makes that argument checkable rather than a promise about a directory
+	// listing.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	// Embedded assets cannot change without a rebuild, so let the browser keep
 	// them — this is what stops the 3.5 MB mermaid bundle being refetched on
@@ -1755,7 +1763,23 @@ func (s *server) writeAsset(w http.ResponseWriter, r *http.Request, name string,
 			return
 		}
 	}
-	_, _ = w.Write(body)
+	// gosec reports G705 (XSS via taint analysis) here, because the REQUEST chose
+	// which asset to send: static() takes the path out of the URL, so `body` is
+	// derived from user input as far as the analysis can see.
+	//
+	// It chose the file; it did not write the bytes. The name is matched against
+	// serveFiles/serveDirs — an allow-list of literals — before anything is read,
+	// and it is read from s.assets, which is the //go:embed tree compiled into
+	// this binary (or, under --dev, the developer's own checkout). There is no
+	// path by which a request contributes a byte of the response body. The one
+	// value that IS interpolated into an asset is s.base, in serveShell, and
+	// ValidateBasePath has already refused anything outside
+	// `(/[A-Za-z0-9._~-]+)+` — no quote, no angle bracket, nothing that can leave
+	// the JS string literal it lands in.
+	//
+	// The type is declared and pinned with nosniff above, so a .js or .css asset
+	// cannot be re-read as a document either.
+	_, _ = w.Write(body) //nolint:gosec // G705: the request picks WHICH embedded asset, never its contents; see the paragraph above
 }
 
 // writeJSON is a METHOD, and that is the whole reason it changed shape: the one

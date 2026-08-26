@@ -3,6 +3,7 @@ package aboard
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -100,3 +101,82 @@ func TestEveryDocumentedMakeTargetIsListedByHelp(t *testing.T) {
 var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
+
+// `make fmt-check` is a GATE, and a gate is only worth its failure modes. The
+// recipe captures gofumpt's output and fails when the list is non-empty — which
+// on its own is green whenever the tool itself fails, because `gofumpt -l`
+// prints nothing when it cannot parse a file. Measured: a file with a syntax
+// error in it passed this gate, printing "fmt-check ok" and exiting 0.
+//
+// The recipe's shell is LIFTED OUT OF the Makefile rather than restated here,
+// for the same reason the help test reads the help rule's pattern: a copy passes
+// against the broken Makefile, which is the one run it exists for. $(GOFUMPT) is
+// then pointed at a stub, so the three cases are exactly the three answers the
+// real tool can give.
+func TestFmtCheckFailsWhenGofumptItselfFails(t *testing.T) {
+	src, err := os.ReadFile("../../Makefile")
+	if err != nil {
+		t.Fatalf("reading the Makefile: %v", err)
+	}
+	recipe := fmtCheckRecipe(t, string(src))
+
+	for _, tc := range []struct {
+		name    string
+		stub    string
+		wantErr bool
+	}{
+		// gofumpt could not parse something. It prints a diagnostic on stderr
+		// and lists no files, so "no files listed" must not be read as "clean".
+		{"the tool fails", "#!/bin/sh\necho 'x.go:3:16: expected )' >&2\nexit 2\n", true},
+		// The tree needs formatting.
+		{"a file needs formatting", "#!/bin/sh\necho pkg/aboard/x.go\nexit 0\n", true},
+		// Clean.
+		{"the tree is clean", "#!/bin/sh\nexit 0\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := filepath.Join(t.TempDir(), "gofumpt-stub")
+			if err := os.WriteFile(stub, []byte(tc.stub), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command("sh", "-c", strings.ReplaceAll(recipe, "@GOFUMPT@", stub))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErr && err == nil {
+				t.Errorf("the recipe exited 0 over a stub that %s — the gate is green having checked nothing:\n%s", tc.name, out)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("the recipe failed over a clean tree: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+// fmtCheckRecipe returns the fmt-check recipe as a shell script, with $(GOFUMPT)
+// replaced by the marker @GOFUMPT@ and make's `$$` unescaped back to `$`.
+func fmtCheckRecipe(t *testing.T, src string) string {
+	t.Helper()
+	lines := strings.Split(src, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, "fmt-check:") {
+			start = i + 1
+			break
+		}
+	}
+	if start < 0 {
+		t.Fatal("no `fmt-check:` target in the Makefile — this test reads the recipe from there rather than keeping a copy, so update the extraction, do not paste the recipe in here")
+	}
+	body := []string{}
+	for _, line := range lines[start:] {
+		if !strings.HasPrefix(line, "\t") {
+			break
+		}
+		body = append(body, strings.TrimPrefix(strings.TrimPrefix(line, "\t"), "@"))
+	}
+	if len(body) == 0 {
+		t.Fatal("the fmt-check target has no recipe lines")
+	}
+	script := strings.Join(body, "\n")
+	script = strings.ReplaceAll(script, "$(GOFUMPT)", "@GOFUMPT@")
+	// make's escape for a literal `$` in a recipe.
+	return strings.ReplaceAll(script, "$$", "$")
+}

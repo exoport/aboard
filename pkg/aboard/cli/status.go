@@ -31,6 +31,6 @@ copied the skill has nothing to be out of date.`,
 			return renderOutput(stdout(opts), outputFormat, rep, rep.Human)
 		},
 	}
-	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, "human, json or yaml")
+	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
 	return cmd
 }
