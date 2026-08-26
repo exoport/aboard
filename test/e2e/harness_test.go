@@ -161,7 +161,7 @@ func seedBoard(dir string) error {
 // up yet — and the sidecar is deliberately NOT in the state document, so there
 // is nothing to keep in step.
 func seedLog(root aboard.Root) error {
-	if err := os.MkdirAll(root.LogsDir(), 0o755); err != nil {
+	if err := os.MkdirAll(root.LogsDir(""), 0o755); err != nil {
 		return err
 	}
 	var b strings.Builder
@@ -177,7 +177,7 @@ func seedLog(root aboard.Root) error {
 	}
 	// 0o644, like everything else the board writes: see the file-mode note in
 	// init.go.
-	logFile, ok := root.LogFile("bb126")
+	logFile, ok := root.LogFile("", "bb126")
 	if !ok {
 		return errors.New(`the fixture log tab id "bb126" is not one a path can be built from`)
 	}

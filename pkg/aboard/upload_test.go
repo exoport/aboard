@@ -167,7 +167,7 @@ func TestUploadsFindsAFileNamedOnlyInAWidgetsMarkup(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
 
-	rep, err := Uploads(root, "")
+	rep, err := Uploads(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestPruneRemovesOnlyTheUnreferencedFiles(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
 
-	rep, err := Uploads(root, "")
+	rep, err := Uploads(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestPruneRemovesOnlyTheUnreferencedFiles(t *testing.T) {
 // image has simply never been pasted into it.
 func TestUploadsOnABoardThatHasNeverHadOne(t *testing.T) {
 	root := uploadBoardRoot(t)
-	rep, err := Uploads(root, "")
+	rep, err := Uploads(root)
 	if err != nil {
 		t.Fatalf("a board with no uploads directory must not be an error: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestUploadsOnABoardThatHasNeverHadOne(t *testing.T) {
 func TestTheUploadsListingSaysHowItDecided(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "orphan.png")
-	rep, err := Uploads(root, "")
+	rep, err := Uploads(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,5 +245,59 @@ func TestTheUploadsListingSaysHowItDecided(t *testing.T) {
 	}
 	if !strings.Contains(got, "* 1 unreferenced") {
 		t.Errorf("the totals must count the orphans:\n%s", got)
+	}
+}
+
+// `uploads/` belongs to the PROJECT and every board in it shares the directory,
+// so the accounting has to read every board's tabs. It read ONE board's, so an
+// image referenced only by the review board came back "no tab mentions it" from
+// the default board — and `--prune --yes` deleted a picture somebody was looking
+// at. Measured, and the delete is irreversible: `.aboard/` is gitignored, so
+// there is no copy anywhere to go back to.
+func TestUploadsSeesEveryBoardInTheProject(t *testing.T) {
+	root := uploadBoardRoot(t)
+	const reviewBoard = `{"version":3,"rev":1,"nextId":2,"tabs":[
+	  {"id":"bb1","name":"Side note","type":"markup",
+	   "state":{"images":[{"src":"uploads/only-on-review.png"}]}}]}`
+	if err := os.WriteFile(root.StateFile("review"), []byte(reviewBoard), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	seedUploads(t, root, "kept.png", "in-a-widget.png", "only-on-review.png", "orphan.png")
+
+	rep, err := Uploads(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]UploadRow{}
+	for _, f := range rep.Files {
+		byName[f.Name] = f
+	}
+	row := byName["only-on-review.png"]
+	if !row.Referenced() {
+		t.Fatalf("an image referenced only by the named board is not an orphan: %+v", row)
+	}
+	// Qualified, because tab ids are allocated per board: both documents have a
+	// bb1 and they are different tabs, so a bare id in a project-wide listing is
+	// not an answer.
+	if len(row.Tabs) != 1 || row.Tabs[0] != "review:bb1" {
+		t.Errorf("the reference must name the board that holds it: %v", row.Tabs)
+	}
+	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "bb1" {
+		t.Errorf("the default board's ids stay bare: %v", got)
+	}
+	if rep.Orphaned != 1 || !strings.Contains(rep.Human(true), "aboard.review.json") {
+		t.Errorf("orphaned = %d, and the listing must say which documents it scanned:\n%s", rep.Orphaned, rep.Human(true))
+	}
+
+	// And the prune agrees with the listing, which is the half that deletes.
+	removed, err := PruneUploads(root, rep.Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != "orphan.png" {
+		t.Fatalf("removed %v, want just orphan.png", removed)
+	}
+	if _, err := os.Stat(root.UploadFile("only-on-review.png")); err != nil {
+		t.Errorf("the named board's image was deleted: %v", err)
 	}
 }

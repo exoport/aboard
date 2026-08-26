@@ -74,25 +74,27 @@ guarantee, that is the change, and it needs a way to prove itself first.
 ## What the lock does not protect
 
 **Two server processes on one state file.** A mutex is process-local, so this is a real
-limit, not an oversight. It is handled a level up rather than here: when `serve` derives
-its port it probes whoever holds it, recognises this project's own board, and refuses to
-start beside it, naming the URL and pid of the one already running. One board, one
-server, one lock.
+limit, not an oversight. It is handled a level up rather than here, and the question asked
+up there is "does this project already have a live board of this name?" — not "is this
+port taken?". Before it binds anything, `serve` reads this project's instance record for
+this name and asks the process it names over `/health`; a board that answers as this
+project's own is named in the refusal, with its URL and its pid, whatever port was
+requested. One board, one server, one lock.
 
-"Handled a level up" is doing real work in that sentence, and the level above is anchored
-to a PORT rather than to a project. `serve` now probes whoever holds the port it is about
-to bind on the explicit path as well as the derived one — that half was closed — but a
-`--port` (or `PORT`) naming a *free* port has no occupant to recognise, so a second
-server for the same project is still something you can ask for by name. Neither lock sees
-the other, and the two of them race exactly as two goroutines used to; worse, the
-newcomer rewrites `run/instance.json` to point at itself, so every client command follows
-it and the original board becomes invisible while continuing to serve.
+The anchor moved because the old one leaked. It used to be the PORT: `serve` probed
+whoever held the port it was about to bind, which caught the ordinary case and missed the
+one you could ask for by name — `--port` (or `PORT`) naming a *free* port had no occupant
+to recognise, so a second server for the same project started happily on the same state
+file. Neither lock saw the other, and the two of them raced exactly as two goroutines used
+to; worse, the newcomer rewrote `run/instance.json` to point at itself, so every client
+command followed it and the original board became invisible while continuing to serve.
 
-Closing that properly means asking "does this project already have a live board?" rather
-than "is this port taken?" — a different question, with a stale-record case of its own to
-answer. It is recorded here because a page about what serialisation guarantees should say
-where the guarantee is anchored and how firmly, and the honest answer is: firmly, inside
-one server, and a second server is prevented only where the two would collide on a port.
+The stale-record case that comes with the new anchor is answered rather than avoided: a
+record whose process does not answer is a board that was killed, so `serve` proceeds and
+overwrites it. The port probe stays in the derived walk for the mirror-image case, a live
+board whose record was deleted underneath it. So the honest answer is now: firmly, inside
+one server, and a second server for the same board is refused however its port was
+chosen.
 
 **Anything that edits `.aboard/aboard.json` behind the server's back.** An `Edit` from a
 tool, a text editor, a script with a redirect — none of them can be serialised by a lock

@@ -27,6 +27,9 @@ when there is not, so this works in a project whose board is stopped — it is t
 third command of the resume protocol, and a session that has just cleared its
 context has no reason to start a server before asking what happened.
 
+Each board owns its journal: a named board's is journal.<name>.jsonl, so the
+entries here are this board's writes and nobody else's.
+
 With two sessions and a human writing one document, "who changed the plan while I
 was thinking?" otherwise has no answer except git archaeology over a file that
 moves constantly. Every accepted write funnels through one function, so this
@@ -51,9 +54,9 @@ cannot be bypassed by an agent that forgot to record something.`,
 			if outputFormat == formatHuman {
 				switch source {
 				case aboard.JournalFromDisk:
-					fmt.Fprintf(stderr(opts), "(from disk: %s — no board running)\n", root.JournalFile())
+					fmt.Fprintf(stderr(opts), "(from disk: %s — no board running)\n", root.JournalFile(name))
 				case aboard.JournalFromDiskStale:
-					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile())
+					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile(name))
 				}
 			}
 			return renderOutput(stdout(opts), outputFormat, entries,

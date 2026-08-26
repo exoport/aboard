@@ -40,8 +40,8 @@ func testServer(t *testing.T, document string) *server {
 		watchers:  map[chan string]struct{}{},
 		waits:     newWaitHub(),
 		ui:        newUIWatcher(false),
-		journal:   newJournal(root),
-		receipts:  newReceiptStore(root),
+		journal:   newJournal(root, ""),
+		receipts:  newReceiptStore(root, ""),
 	}
 }
 

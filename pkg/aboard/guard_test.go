@@ -3,8 +3,10 @@ package aboard
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -170,5 +172,127 @@ func TestAnEscapingNameWritesNothing(t *testing.T) {
 	outside := root.StateFile(name)
 	if _, err := os.Stat(outside); err == nil {
 		t.Fatalf("%s exists — a previous run of this escape left a file behind", outside)
+	}
+}
+
+// writeInstanceRecord puts a discovery record on disk for a board that may or
+// may not be listening — which is the whole subject of the two tests below.
+func writeInstanceRecord(t *testing.T, root Root, name string, port, pid int) {
+	t.Helper()
+	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(Instance{
+		App: HostStandalone, Project: root.String(), Name: name,
+		Port: port, URL: fmt.Sprintf("http://localhost:%d", port), PID: pid,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.InstanceFile(name), body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// aFreePort is a port nothing is listening on: bound to find out which, then
+// released. Racy in principle and unavoidable — the question "what would a
+// second server find free" has no non-racy form — and the window is a test's
+// own microseconds.
+func aFreePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("a tcp listener reported %T", ln.Addr())
+	}
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return addr.Port
+}
+
+// boardStub answers /health as this project's board of this name, on a real
+// port, so a probe of it is a probe of a live board.
+func boardStub(t *testing.T, root Root, name string, pid int) *httptest.Server {
+	t.Helper()
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(Instance{
+			App: HostStandalone, Project: root.String(), Name: name,
+			URL: "http://localhost:1", PID: pid,
+		})
+	}))
+	t.Cleanup(stub.Close)
+	return stub
+}
+
+// The duplicate check used to be anchored to the PORT, so `--port <any free
+// port>` had no occupant to recognise and started a SECOND server on the same
+// state file. It then rewrote run/instance.json to point at itself — so every
+// client command followed the newcomer — and on exit removed the record, leaving
+// `aboard status` reporting no board while the first one went on serving.
+//
+// The question is about the project, not about a port: does (this root, this
+// name) already have a board that answers /health?
+func TestAFreeExplicitPortIsStillRefusedWhenThisProjectHasALiveBoard(t *testing.T) {
+	root := Root(t.TempDir())
+	live := boardStub(t, root, "", 4242)
+	writeInstanceRecord(t, root, "", serverPort(t, live.URL), 4242)
+
+	// A port nothing is listening on: the old check would have found it free and
+	// bound it happily.
+	freePort := aFreePort(t)
+
+	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
+	ln, _, err := srv.listen(context.Background(), freePort, root, "")
+	if err == nil {
+		_ = ln.Close()
+		t.Fatal("a second server started on a free --port while this project's board was live")
+	}
+	if !strings.Contains(err.Error(), "already running") || !strings.Contains(err.Error(), "4242") {
+		t.Errorf("the refusal must name the live board and its pid: %v", err)
+	}
+
+	// The named board of the same project is a different board, and must not be
+	// refused by the default board's record.
+	ln2, _, err := srv.listen(context.Background(), freePort, root, "review")
+	if err != nil {
+		t.Fatalf("a named board was refused by the default board's record: %v", err)
+	}
+	_ = ln2.Close()
+}
+
+// A record whose process is gone is the commonest real case — a board that was
+// killed — and refusing to start because of the corpse of the last one would be
+// the worst possible reading of it. The record is proceeded past and overwritten.
+func TestAStaleRecordDoesNotStopANewBoard(t *testing.T) {
+	root := Root(t.TempDir())
+
+	// A port with nothing on it: allocated, then released.
+	writeInstanceRecord(t, root, "", aFreePort(t), 999999)
+
+	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
+	ln, got, err := srv.listen(context.Background(), 0, root, "")
+	if err != nil {
+		t.Fatalf("a stale record stopped a new board: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	srv.port = got
+	if err := srv.writeInstance(root, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	rec, err := RunningInstance(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Port != got || rec.PID != os.Getpid() {
+		t.Errorf("the stale record was not overwritten: %+v", rec)
 	}
 }

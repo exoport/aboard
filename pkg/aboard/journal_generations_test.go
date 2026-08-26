@@ -41,7 +41,7 @@ func TestTheWritePathRecordsTheWholeTabAndStampsTheSchema(t *testing.T) {
 		t.Fatalf("the write answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	entries, err := journalFromDisk(srv.root, 10)
+	entries, err := journalFromDisk(srv.root, srv.name, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestATabWithNoStateIsStillRecordedAsHavingExisted(t *testing.T) {
 		t.Fatalf("the write answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	entries, err := journalFromDisk(srv.root, 10)
+	entries, err := journalFromDisk(srv.root, srv.name, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestARestoreDoesNotResurrectTheMarkers(t *testing.T) {
 // be read the way its own entry says, not the way the file it came from does.
 func TestARotatedJournalMixesGenerations(t *testing.T) {
 	root := Root(t.TempDir())
-	j := newJournal(root)
+	j := newJournal(root, "")
 	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestARotatedJournalMixesGenerations(t *testing.T) {
 	j.append(entryV2(6, "2026-08-26T09:00:00.000Z", "human", "bb1",
 		`{"id":"bb1","name":"Plan then","type":"notes","state":{"v":2}}`))
 
-	if _, err := os.Stat(root.JournalFile() + ".1"); err != nil {
+	if _, err := os.Stat(root.JournalFile("") + ".1"); err != nil {
 		t.Fatalf("the rotated generation is not where this test thinks it is: %v", err)
 	}
 

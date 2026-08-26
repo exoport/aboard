@@ -71,9 +71,13 @@ func TestRootPaths(t *testing.T) {
 	// LogFile answers a question as well as building a path, so it does not fit
 	// the table's shape: an id that could escape the logs directory gets no path
 	// at all. TestLogFileRefusesAnIDThatCannotBeAFilename covers the refusal.
-	logFile, okLogFile := root.LogFile("bb42")
+	logFile, okLogFile := root.LogFile("", "bb42")
 	if !okLogFile {
 		t.Fatal(`LogFile("bb42") refused a plain tab id`)
+	}
+	namedLogFile, okNamedLog := root.LogFile("review", "bb42")
+	if !okNamedLog {
+		t.Fatal(`LogFile("review", "bb42") refused a plain tab id`)
 	}
 
 	cases := []struct {
@@ -89,9 +93,14 @@ func TestRootPaths(t *testing.T) {
 		{"UploadFile", root.UploadFile("a.png"), j(".aboard", "uploads", "a.png")},
 		{"InstanceFile", root.InstanceFile(""), j(".aboard", "run", "instance.json")},
 		{"InstanceFile named", root.InstanceFile("review"), j(".aboard", "run", "instance.review.json")},
-		{"JournalFile", root.JournalFile(), j(".aboard", "run", "journal.jsonl")},
-		{"LogsDir", root.LogsDir(), j(".aboard", "run", "logs")},
+		{"JournalFile", root.JournalFile(""), j(".aboard", "run", "journal.jsonl")},
+		{"JournalFile named", root.JournalFile("review"), j(".aboard", "run", "journal.review.jsonl")},
+		{"RenderedFile", root.RenderedFile(""), j(".aboard", "run", "rendered.json")},
+		{"RenderedFile named", root.RenderedFile("review"), j(".aboard", "run", "rendered.review.json")},
+		{"LogsDir", root.LogsDir(""), j(".aboard", "run", "logs")},
+		{"LogsDir named", root.LogsDir("review"), j(".aboard", "run", "logs", "review")},
 		{"LogFile", logFile, j(".aboard", "run", "logs", "bb42.log")},
+		{"LogFile named", namedLogFile, j(".aboard", "run", "logs", "review", "bb42.log")},
 		{"ShotsDir", root.ShotsDir(), j(".aboard", "run", "shots")},
 		{"E2EDir", root.E2EDir(), j(".aboard", "run", "e2e")},
 		{"E2ECase", root.E2ECase("TestBridge"), j(".aboard", "run", "e2e", "TestBridge")},
@@ -262,18 +271,18 @@ func TestLogFileRefusesAnIDThatCannotBeAFilename(t *testing.T) {
 		"bb 42",
 		strings.Repeat("b", 65),
 	} {
-		if path, ok := root.LogFile(bad); ok {
+		if path, ok := root.LogFile("", bad); ok {
 			t.Errorf("LogFile(%q) = %q, true — wanted a refusal", bad, path)
 		}
 	}
 	for _, good := range []string{"bb42", "bb126", "a", "A_b-1", strings.Repeat("b", 64)} {
-		path, ok := root.LogFile(good)
+		path, ok := root.LogFile("", good)
 		if !ok {
 			t.Errorf("LogFile(%q) refused a plain tab id", good)
 			continue
 		}
-		if got := filepath.Dir(path); got != root.LogsDir() {
-			t.Errorf("LogFile(%q) landed in %q, not the logs directory %q", good, got, root.LogsDir())
+		if got := filepath.Dir(path); got != root.LogsDir("") {
+			t.Errorf("LogFile(%q) landed in %q, not the logs directory %q", good, got, root.LogsDir(""))
 		}
 	}
 }

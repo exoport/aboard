@@ -61,7 +61,7 @@ func TestAWriteThatCannotRenderSaysSoToTheWriterAndInTheJournal(t *testing.T) {
 		t.Errorf("the warning does not name the prop: %q", first)
 	}
 
-	entries, err := journalFromDisk(srv.root, 10)
+	entries, err := journalFromDisk(srv.root, srv.name, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestAWriteLabelReachesTheJournalAndNotTheBoard(t *testing.T) {
 		  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"two"}}
 		]}`)
 
-	entries, err := journalFromDisk(srv.root, 10)
+	entries, err := journalFromDisk(srv.root, srv.name, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

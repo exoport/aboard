@@ -1271,9 +1271,17 @@ function buildNotices(tab) {
         const res = await fetch(api(`/history?tab=${encodeURIComponent(tab.id)}&limit=1`));
         const got = await res.json();
         const version = (got.versions || [])[0];
+        // `board` is which board this history is OF, absent on the default one.
+        // BOTH halves of the pipeline need it and it is easy to carry into only
+        // the first: the left half reads that board's journal, the right half
+        // writes whichever board IT was told about, so a half-qualified line
+        // takes the right document and puts it on the wrong board. The terminal
+        // listing splices the same flag the same way (history.go's nameFlag);
+        // this panel prints a command too, and a command in output is a claim.
+        const nameFlag = got.board ? ` --name ${got.board}` : '';
         preview.textContent = version
           ? `${version.at} · replaced by ${version.by}\n\n${JSON.stringify(version.state, null, 2)}`
-            + `\n\nput it back with:  aboard history ${tab.id} --at 1 | aboard apply --by agent-1`
+            + `\n\nput it back with:  aboard history ${tab.id} --at 1${nameFlag} | aboard apply${nameFlag} --by agent-1`
           : `nothing recorded for ${tab.id}.\n${got.ends || ''}`;
       } catch (err) {
         preview.textContent = `could not read the history: ${err && err.message ? err.message : err}`;

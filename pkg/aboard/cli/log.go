@@ -17,6 +17,10 @@ document: that document is rewritten whole on every write, so an appending log
 inside a tab's state would mean rewriting the entire board once per line. The
 tab's state holds only a pointer.
 
+A named board writes into .aboard/run/logs/<name>/ instead — tab ids are
+allocated per board, so both boards have a bb1 and one directory would have
+interleaved two commands' output in one file.
+
 Lines are echoed to stdout as well — piping output to the board should not mean
 losing it from the terminal you are watching.`,
 		Args:    cobra.ExactArgs(1),

@@ -18,10 +18,20 @@
 //	.aboard/uploads/            images they pasted; content too
 //	.aboard/run/instance.json   port, pid, url — true only for this machine, now
 //	.aboard/run/journal.jsonl   the write log
+//	.aboard/run/rendered.json   what a browser reported it drew
 //	.aboard/run/logs/<tab>.log  sidecar command output
 //	.aboard/run/shots/          screenshots from test/shot.sh
 //
 // A project ignores `.aboard/` wholesale and loses nothing it wanted to keep.
+//
+// The second axis is the BOARD NAME. A named board is a whole board, not a view
+// of one, so everything it writes for itself is qualified: `aboard.<name>.json`,
+// `instance.<name>.json`, `journal.<name>.jsonl`, `rendered.<name>.json`,
+// `logs/<name>/<tab>.log`. Two things stay per PROJECT and are meant to —
+// `uploads/`, because an image is content a human pasted and either board may
+// reference it, and `recipes/`, because a recipe is a document about the project.
+// Those two are also the reason `StateFiles` exists: accounting for a shared
+// directory has to see every board that could be referencing it.
 
 package aboard
 
@@ -33,6 +43,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 )
 
 // DirName is the marker directory an aboard project is recognised by, and the
@@ -143,6 +155,80 @@ func (r Root) StateFile(name string) string {
 	return filepath.Join(r.Dir(), "aboard."+name+".json")
 }
 
+// stateGlob matches EVERY board document in this project — the default board's
+// and every named one's. A pattern rather than a listing, so the join still
+// happens in this file.
+//
+// `aboard*.json` and not `aboard.*.json`, because the default board is
+// `aboard.json` and the named ones are `aboard.<name>.json`; the caller decides
+// which of the two a match is. A write-in-progress temp file cannot be caught by
+// it: TempFileBeside names those `.aboard-<pid>-<n>.json`, and a leading dot is
+// not matched by a pattern that starts with a letter.
+func (r Root) stateGlob() string { return filepath.Join(r.Dir(), "aboard*.json") }
+
+// BoardFile is one board's document: the name it answers to (empty for the
+// default board) and where it lives.
+type BoardFile struct {
+	Name string
+	Path string
+}
+
+// StateFiles lists every board in this project, default first and the named ones
+// sorted after it.
+//
+// It exists for the one question that is about the PROJECT rather than about a
+// board: `aboard uploads` accounts for `.aboard/uploads/`, which every board in
+// the project shares, and it used to scan the tabs of ONE board — so an image
+// referenced only by the review board was an orphan as far as the default board
+// was concerned, and `--prune --yes` deleted a picture somebody was looking at.
+//
+// A file whose name is not one ValidateBoardName would accept is skipped rather
+// than reported: `.aboard/` is a directory a human can drop a file into, and a
+// listing of boards is not the place to complain about it.
+func (r Root) StateFiles() ([]BoardFile, error) {
+	matches, err := filepath.Glob(r.stateGlob())
+	if err != nil {
+		// The pattern is a constant, so this is unreachable in practice; it is
+		// returned rather than dropped because a silent empty list here would
+		// mean "no board references this upload", which is a delete.
+		return nil, fmt.Errorf("listing the boards in %s: %w", r.Dir(), err)
+	}
+	out := make([]BoardFile, 0, len(matches))
+	for _, path := range matches {
+		name, ok := boardNameOfStateFile(path)
+		if !ok {
+			continue
+		}
+		out = append(out, BoardFile{Name: name, Path: path})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// boardNameOfStateFile is StateFile in reverse: which board a document belongs
+// to, and whether it is one at all.
+func boardNameOfStateFile(path string) (string, bool) {
+	base := filepath.Base(path)
+	if base == "aboard.json" {
+		return "", true
+	}
+	name, ok := strings.CutPrefix(base, "aboard.")
+	if !ok {
+		return "", false
+	}
+	name, ok = strings.CutSuffix(name, ".json")
+	// The empty name is checked explicitly, because ValidateBoardName ACCEPTS it
+	// — it is the default board, which means "no suffix". Here it would mean
+	// `aboard..json`, a name StateFile cannot produce, being reported as a second
+	// default board: `uploads` would then read a file a human dropped in as a
+	// board document and refuse to account for anything at all. Only a base this
+	// file could have written is a board.
+	if !ok || name == "" || ValidateBoardName(name) != nil {
+		return "", false
+	}
+	return name, true
+}
+
 // UploadsDir holds images the human pasted or dropped. Content, not runtime:
 // a markup tab references them by name and would break without them.
 func (r Root) UploadsDir() string { return filepath.Join(r.Dir(), uploadDir) }
@@ -197,16 +283,37 @@ func (r Root) InstanceFile(name string) string {
 // files this directory may ever hold.
 func (r Root) InstanceGlob() string { return filepath.Join(r.RunDir(), "instance*.json") }
 
-// JournalFile is the append-only record of accepted writes.
+// JournalFile is the append-only record of accepted writes, per board.
 //
-// NOT qualified by board name, which is the spike's rule kept deliberately
-// rather than reproduced by accident: the journal answers "who changed what in
-// this project", and a second named board in the same project is part of the
-// same conversation. Rotated generations are this path plus ".1".
-func (r Root) JournalFile() string { return filepath.Join(r.RunDir(), "journal.jsonl") }
+// It used to be one file for the whole project, on the argument that the journal
+// answers "who changed what in this project" and a second named board is part of
+// the same conversation. That argument survived contact with two boards for about
+// a minute: tab ids are allocated PER BOARD, so both documents start at bb1, and a
+// shared journal held two entries naming the same id and meaning different tabs
+// with only the tab's name to tell them apart. `history bb1` then offered the
+// OTHER board's version of that id as something to restore. A record you have to
+// disambiguate by eye is not a record, so a named board owns its own.
+//
+// Rotated generations are this path plus ".1".
+func (r Root) JournalFile(name string) string {
+	if name == "" {
+		return filepath.Join(r.RunDir(), "journal.jsonl")
+	}
+	return filepath.Join(r.RunDir(), "journal."+name+".jsonl")
+}
 
-// LogsDir holds the sidecar log files, one per tab.
-func (r Root) LogsDir() string { return filepath.Join(r.RunDir(), "logs") }
+// LogsDir holds the sidecar log files, one per tab — one directory per board.
+//
+// A SUBDIRECTORY rather than a suffix, unlike the journal and the receipts: the
+// leaf here is already `<tab>.log` and the tab id is the thing a reader greps
+// for, so `logs/review/bb12.log` keeps that name intact where `logs/bb12.review.log`
+// would put the board name where the extension is about to be.
+func (r Root) LogsDir(name string) string {
+	if name == "" {
+		return filepath.Join(r.RunDir(), "logs")
+	}
+	return filepath.Join(r.RunDir(), "logs", name)
+}
 
 // logTabRe is what a tab id may contain when it is about to become a filename.
 // It lives here, beside the join it guards, rather than beside the handler that
@@ -226,11 +333,11 @@ var logTabRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 // filepath.Base is belt to the regexp's braces. The pattern already excludes a
 // separator and "..", so Base cannot change an accepted string; it is here so
 // the construction is safe by INSPECTION rather than by cross-reference.
-func (r Root) LogFile(tab string) (string, bool) {
+func (r Root) LogFile(name, tab string) (string, bool) {
 	if !logTabRe.MatchString(tab) {
 		return "", false
 	}
-	return filepath.Join(r.LogsDir(), filepath.Base(tab+".log")), true
+	return filepath.Join(r.LogsDir(name), filepath.Base(tab+".log")), true
 }
 
 // validTabFileID reports whether a tab id may become a filename or a key in a
@@ -245,7 +352,12 @@ func validTabFileID(tab string) bool { return logTabRe.MatchString(tab) }
 // per tab. Under run/ with the journal and the logs, never in the state
 // document — it is per-viewer, machine-local and true only for this moment,
 // which is the same rule that keeps selection, zoom and drafts out of the board.
-func (r Root) RenderedFile() string { return filepath.Join(r.RunDir(), "rendered.json") }
+func (r Root) RenderedFile(name string) string {
+	if name == "" {
+		return filepath.Join(r.RunDir(), "rendered.json")
+	}
+	return filepath.Join(r.RunDir(), "rendered."+name+".json")
+}
 
 // ShotsDir is where test/shot.sh writes. Under the run directory because a
 // screenshot is a machine-local artefact, and inside the project because a

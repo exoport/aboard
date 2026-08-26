@@ -273,7 +273,9 @@ back `touched`, `pendingRemoval` or `seen` — re-raising a dot the human
 dismissed, or re-opening a removal request they answered, is not an undo.
 
 Reads from the running board when there is one and from
-.aboard/run/journal.jsonl when there is not.
+.aboard/run/journal.jsonl when there is not — journal.<name>.jsonl on a named
+board, whose history is its own. The restore line the listing prints carries
+--name on both halves for exactly that reason.
 
 Examples:
 
@@ -365,6 +367,9 @@ when there is not, so this works in a project whose board is stopped — it is t
 third command of the resume protocol, and a session that has just cleared its
 context has no reason to start a server before asking what happened.
 
+Each board owns its journal: a named board's is journal.<name>.jsonl, so the
+entries here are this board's writes and nobody else's.
+
 With two sessions and a human writing one document, "who changed the plan while I
 was thinking?" otherwise has no answer except git archaeology over a file that
 moves constantly. Every accepted write funnels through one function, so this
@@ -399,6 +404,10 @@ The stream lives in a sidecar file under .aboard/run/logs/, NOT inside the board
 document: that document is rewritten whole on every write, so an appending log
 inside a tab's state would mean rewriting the entire board once per line. The
 tab's state holds only a pointer.
+
+A named board writes into .aboard/run/logs/<name>/ instead — tab ids are
+allocated per board, so both boards have a bb1 and one directory would have
+interleaved two commands' output in one file.
 
 Lines are echoed to stdout as well — piping output to the board should not mean
 losing it from the terminal you are watching.
@@ -575,8 +584,8 @@ Two things it is deliberately not evidence of, printed with the output so they
 travel with it: no receipt means nobody had the tab OPEN, and a control listed
 here was REACHED — never that it behaved correctly.
 
-Reads .aboard/run/rendered.json, so it needs no server. With no argument it
-prints every tab that has a receipt.
+Reads .aboard/run/rendered.json — or rendered.<name>.json on a named board — so
+it needs no server. With no argument it prints every tab that has a receipt.
 
 Examples:
 
@@ -695,7 +704,12 @@ to delete an image somebody is looking at.
 --prune on its own prints and REFUSES: deletion is irreversible and .aboard/ is
 gitignored, so there is no copy anywhere to go back to.
 
-Reads the state file directly, so it needs no server.
+The accounting is per PROJECT, not per board, so --name does not narrow it:
+.aboard/uploads/ is shared by every board in the project, and a scan of one
+board's tabs would call another board's image an orphan. Tab ids from a named
+board are printed as <board>:<tab>.
+
+Reads the state files directly, so it needs no server.
 
 Examples:
 

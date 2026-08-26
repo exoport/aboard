@@ -178,10 +178,16 @@ start a second board for the same project and prints the URL of the one already
 running — take that URL rather than freeing the port. The board a colleague or another
 session is watching is not yours to restart.
 
-That refusal is anchored to the PORT, not the project: `serve --port <a free port>` (or
-`PORT=`) starts a second server on the same state file, rewrites `run/instance.json` to
-point at itself, and on exit removes it — leaving `aboard status` reporting no board
-while the original serves on. Measured 2026-08-26. Use `--name` for a second board.
+That refusal is anchored to the BOARD, not to the port, so `--port` is not a way around
+it: before binding anything, `serve` reads this project's instance record for this name
+and asks the process it names over `/health`, and a board that answers as this project's
+own is named in the refusal whatever port was requested (`PORT=` too). A record that does
+not answer is a killed board, so it is overwritten rather than obeyed; the port probe
+stays in the derived walk for the mirror case, a live board whose record was deleted.
+It WAS per port until 2026-08-26 — `serve --port <a free port>` started a second server
+on the same state file, rewrote `run/instance.json` to point at itself, and on exit
+removed it, leaving `aboard status` reporting no board while the original served on.
+Measured, then fixed. Use `--name` for a second board.
 **And never `pkill -f "aboard serve"`**: it matches every board on the machine, including
 the human's. Kill by the pid in the instance record, as `restart.sh` does.
 
@@ -193,6 +199,7 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
 - **Nothing in the UI may START an agent session.** The board may ask; a session may choose to wait — [why](docs/explanation/why-nothing-in-the-ui-starts-a-session.md).
 - **A diff renderer is rejected. Closed, not deferred** — [why](docs/explanation/why-no-diff-renderer.md).
 - **`aboard boards` is a `/proc` scan, Linux only, honest everywhere else — and there is still no registry.** The human dropped this feature on 2026-08-26 and REVERSED that the same day, with the design: scan the process table, no file. Both halves are load-bearing and neither is open. **The scan** (`pkg/aboard/boards_linux.go`) walks `/proc/[0-9]*`, matches on `cmdline` rather than `comm` — `comm` is 15 characters and, under `ape aboard serve`, is the HOST's name, so a name filter misses one of the two ways this project is meant to run — honours a `--cwd` found in the argv, `FindRoot`s from there, and then does exactly what `status` does for one project: read the root's `instance*.json`, keep the record whose `pid` matches, verify it over `/health`. One row per (root, name), sorted, with the FULL project path, because a reader of a machine-wide listing is by definition not standing in the project it names. **The registry stays rejected**: `~/.aboard/known-roots.json` would be new user-level state outside `.aboard/`, written on every serve and still only a hint, where a process either exists or does not and nothing has to be cleaned up when it dies. **`/proc` is Linux-only, and that is answered rather than argued with**: the scanner is behind `//go:build linux`, everywhere else the command still exists, is still declared, and exits 2 with one line naming the platform and pointing at `aboard status` inside each project. A command missing on two of three platforms is worse than one that is present and honest. Two things it deliberately does NOT do: drop a record whose process has gone (it is listed as "recorded but not answering" — a stale record is information), and hide how much of the machine it could see ("N processes inspected", and "N could not be inspected (permission)" for another user's board).
+- **A named board owns everything it writes for itself; the project owns `uploads/` and `recipes/`.** `--name` used to qualify only the state file and the instance record, so two boards in one project shared `journal.jsonl`, `rendered.json` and `logs/<tab>.log` — every record keyed by TAB ID, and tab ids are allocated per board, so both documents have a `bb1`. The shared journal then held two entries naming `bb1` and meaning different tabs, and `aboard history bb1 --name review` offered the DEFAULT board's version as a document to restore. Each board now writes `journal.<name>.jsonl`, `rendered.<name>.json` and `logs/<name>/<tab>.log`. **No migration, and none is possible**: an entry already in `journal.jsonl` does not record which document the write went to, so old entries stay readable and count as the default board's. The two shared paths are shared on purpose and neither is keyed by tab id — an upload is content a human pasted and either board may show it, a recipe is a document about the project. That is why **`aboard uploads` reads every board's document** and prints a named board's tab as `review:bb1`: it used to scan one board's tabs, so `--prune --yes` deleted an image the other board was displaying. `--name` does not narrow it. See [named boards](docs/reference/layout.md#named-boards).
 - **`html` tabs are sandboxed with `connect-src 'none'`**, and `frame-ancestors` deliberately admits VS Code's webview origins — [why](docs/explanation/why-html-tabs-are-sandboxed.md).
 - **Two identities, one `.aboard/`**: `aboard` and `ape-aboard` are hosts; the manifest's app name is neither — [why](docs/explanation/why-two-identities.md).
 - **The capability surface is declared and checked, never scraped**; controls are a list because their order is the toolbar's — [why](docs/explanation/why-the-manifest-is-declared.md).

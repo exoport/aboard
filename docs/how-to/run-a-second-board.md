@@ -5,9 +5,9 @@ one file, a second agent session on an unrelated question — and you do not wan
 scrolling past the work already on the board.
 
 A **named board** is a second, independent board in the same project. It has its own
-document and its own URL, and the two documents never touch each other. What it does
-*not* have is its own journal, its own uploads or its own logs, and that is the part
-worth reading before you start.
+document, its own URL, its own journal, its own mount receipts and its own sidecar
+logs. Two things it shares with every other board in the project, deliberately:
+`uploads/` and `recipes/`.
 
 ## Do you need one at all?
 
@@ -43,6 +43,10 @@ aboard serve --name review
     instance.review.json   the named one's
 ```
 
+Its runtime files appear as it is used — `run/journal.review.jsonl`,
+`run/rendered.review.json`, `run/logs/review/` — each beside the default board's and
+never inside it.
+
 `serve --name` starts it on its own port and prints its own URL, with the name shown
 beside it:
 
@@ -74,85 +78,63 @@ aboard status          # the review board
 
 ## What a name changes, and what it does not
 
-Exactly three things get their own copy: **the document**, **the instance record**, and
-**the port** (derived from the project root *plus* the name, so the URL is as stable as
-the default board's). The rest of `.aboard/` is per **project**, and both boards share
-it:
+Everything a board writes for **itself** gets its own copy — the document, the instance
+record, the port (derived from the project root *plus* the name, so the URL is as stable
+as the default board's), the journal, the mount receipts and the sidecar logs:
 
-| shared by both boards | consequence |
-| --------------------- | ----------- |
-| `run/journal.jsonl`   | `aboard journal` and `aboard history` show the other board's writes too |
-| `run/logs/<tab>.log`  | a `log` tab on either board writes into the same directory, keyed by tab id |
-| `run/rendered.json`   | one mount-receipt file, keyed by tab id |
-| `uploads/`            | one image store for the project |
-| `recipes/`            | one recipe directory |
+| the default board                   | the board named `review`     |
+| ----------------------------------- | ---------------------------- |
+| `aboard.json`                       | `aboard.review.json`         |
+| `run/instance.json`                 | `run/instance.review.json`   |
+| `run/journal.jsonl`                 | `run/journal.review.jsonl`   |
+| `run/rendered.json`                 | `run/rendered.review.json`   |
+| `run/logs/<tab>.log`                | `run/logs/review/<tab>.log`  |
 
-Three consequences follow, and none of them is obvious from the outside.
+The reason all five are per board is one fact: **tab ids are allocated per board.** Each
+document has its own `nextId`, so a fresh named board starts at `bb1` exactly as the
+default one did, and every record above is keyed by tab id. One shared file meant two
+different tabs under one key — a journal that needed the tab's *name* read to say which
+board an entry came from, and an `aboard history bb1` that could offer you the other
+board's version of that id as a document to restore.
 
-### Tab ids are allocated per board, so an id can mean two things
+Two things stay shared, and both are shared on purpose:
 
-Each document has its own `nextId`, so a fresh named board starts at `bb1` exactly as
-the default one did. Write to both and the shared journal holds two entries that name
-the same id and mean different tabs:
+| shared by every board in the project | why |
+| ------------------------------------ | --- |
+| `uploads/`                           | an image is content a human pasted, and either board may put it on a tab |
+| `recipes/`                           | a recipe is a document about the project, not about one of its boards |
 
-```
-2026-08-26T13:51:27.510Z  agent-1          bb1 (Plan)
-                          docs probe: default board
-2026-08-26T13:51:27.546Z  agent-2          bb1 (Side note)
-                          docs probe: review board
-```
+Neither is keyed by tab id, which is what makes sharing them safe. The one consequence
+worth knowing is the uploads accounting, below.
 
-The `names` on the entry are the only thing separating them. `aboard journal` prints
-them, which is why the tab name is worth reading and the id alone is not enough. `rev`
-does not help either: it counts per board, so both of those entries are `rev 1`.
+### Journal entries written before the split stay where they are
 
-**`aboard watch` is the exception, and it is the useful one.** `journal` and `history`
-read the shared file on disk; `watch` is a live stream from one running server, so it
-carries only that board's writes. If you are following one board while another is busy,
-watch it — that is the view that does not mix them.
+There is no migration, and none is possible: an entry already in `journal.jsonl` does
+not record which document the write went to, and guessing from the tab id is exactly the
+ambiguity being removed. Old entries stay readable and count as the **default** board's
+history from now on. If you had two boards before this landed, a `bb<n>` in that file
+may belong to either — read the `by` and the tab name, as you had to then.
 
-### `aboard history` finds a tab id, not a board
+### `aboard uploads` reads every board in the project
 
-`history` reads the same project-wide journal, so on a named board it can hand you the
-*other* board's version of an id both boards happen to use — and `history <id> --at N`
-turns that into a document you could apply. Before restoring, check the name in the
-listing is the tab you meant:
+`uploads/` is shared, so its accounting has to be: the scan reads the default document
+and every `aboard.<name>.json`, and prints a named board's tab id qualified.
 
 ```bash
-aboard history bb1 --name review      # read the listing first
+aboard uploads          # --name does not narrow it; the directory is the project's
 ```
 
 ```
-bb1 — 1 recorded version, newest first
-   1  2026-08-26T13:52:04.583Z  replaced by agent-1              24 bytes (Plan)
+  only-on-review.png                                 1 B  review:bb1
+* orphan.png                                         1 B  no tab mentions it
 
-restore one with:  aboard history bb1 --at 1 | aboard apply --by agent-1
+2 files, 2 B in /home/you/work/your-project/.aboard/uploads
+references scanned in 2 board documents: aboard.json, aboard.review.json  (a tab id is prefixed with its board name)
 ```
 
-That listing is the review board's, and the version it is offering you is **Plan** — the
-*default* board's tab. Two things to notice before you act on it: the name in the
-listing is the only thing that would have told you, and **the printed `restore one
-with:` line does not carry `--name`**, so copying it verbatim reads and writes the
-default board.
-
-If the two boards have overlapping ids and you need an undo, the safe move is to read
-the version out and re-apply the tab by hand rather than piping `--at` straight into
-`apply`.
-
-### `aboard uploads --prune` sees one board's tabs
-
-The reference scan reads the tabs of **the board you asked about**, and the uploads
-directory belongs to the project. So an image used only by a tab on the review board is
-"unreferenced" as far as the default board is concerned:
-
-```bash
-aboard uploads                  # default board: "no tab mentions it"
-aboard uploads --name review    # review board:  "bb1"
-```
-
-`--prune` on its own prints and refuses, which is the guard that matters here. **Check
-both boards before `--prune --yes`**, because deletion is irreversible and `.aboard/` is
-gitignored, so there is no copy to go back to.
+That is what stops `--prune --yes` from deleting a picture the other board is showing.
+`--prune` on its own still prints and refuses, because deletion is irreversible and
+`.aboard/` is gitignored, so there is no copy to go back to.
 
 ## Find them again
 
@@ -191,10 +173,12 @@ Windows the command exists, exits `2`, and says so — the per-project answer th
 
 ## Get rid of one
 
-Stop the server, then delete its document:
+Stop the server, then delete its document and its runtime files:
 
 ```bash
 rm .aboard/aboard.review.json
+rm -f .aboard/run/journal.review.jsonl* .aboard/run/rendered.review.json
+rm -rf .aboard/run/logs/review
 ```
 
 The instance record goes on its own: a server removes `run/instance.<name>.json` as it
@@ -203,12 +187,15 @@ it is not undone by the old process exiting afterwards. If a board was killed ha
 file may be left behind; `aboard status --name <name>` verifies a record over `/health`
 before believing it, so a stale one is reported rather than trusted.
 
-Nothing else knows about the board. Its journal entries stay in the shared log until
-rotation takes them, and any uploads only it referenced are now genuinely unreferenced —
-which is the one moment `aboard uploads --prune` is doing what you want.
+Nothing else knows about the board. Everything above is under `.aboard/`, which the
+project ignores whole, so leaving it costs nothing but disk. Any uploads only that board
+referenced are now genuinely unreferenced — which is the one moment
+`aboard uploads --prune` is doing what you want, and the reason to delete the document
+**first**: the accounting reads every board's document, so an image is only an orphan
+once the board that named it is gone.
 
 ## See also
 
 - [The `.aboard/` layout](../reference/layout.md#named-boards) — the same split, stated as reference, plus port derivation.
 - [Why a local, non-authoritative channel](../explanation/why-a-local-non-authoritative-channel.md) — why a board is cheap enough to throw away.
-- [How aboard runs](../explanation/how-aboard-runs.md) — the moving parts a second board duplicates and the ones it shares.
+- [How aboard runs](../explanation/how-aboard-runs.md) — the moving parts a second board duplicates and the two it shares.

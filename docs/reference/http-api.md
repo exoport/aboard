@@ -254,20 +254,18 @@ A write that omits `__base` is still serialised, but it is not compared against 
 The lock is process-local: it orders the writers inside ONE server and nothing else.
 That is why `apply` posts here rather than writing the file itself, which is what puts
 an agent's write in the same queue as the browser's. It is also why a second server on
-one project has to be prevented a level up: before binding, `serve` probes whoever holds
-the port it is about to take, recognises this project's own board, and refuses to start
-beside it — on the derived path and on an explicit `--port`/`PORT` alike. (The explicit
-port used to skip the probe entirely.)
+one project has to be prevented a level up, and the check asks about the **board** rather
+than about a port: before binding anything, `serve` reads this project's instance record
+for this name and asks the process it names over `/health` whether it is this project's
+board of this name. If it is, `serve` refuses and prints its URL and pid — whatever port
+was requested, `--port` and `PORT` included. A record that does not answer is stale and
+is overwritten; the per-port probe stays as well, for a live board whose record was
+deleted underneath it.
 
-**That check is per PORT, not per project**, and the gap is worth stating rather than
-implying: `--port` (or `PORT`) naming a *free* port starts a second server on the same
-state file, because there is no occupant on that port to recognise. Neither lock sees the
-other, and the newcomer rewrites `run/instance.json` to point at itself — so every client
-command follows the second server, and when it exits it takes the record with it and
-`aboard status` reports no board while the original is still serving. Use
-[`--name`](layout.md#named-boards) for a second board; do not reach for `--port` to get
-one. See
-[why writes are serialised](../explanation/why-writes-are-serialised.md).
+One board, one server, one lock — so `--name` is how you get a second board, and
+`--port` only ever moves one. See
+[why writes are serialised](../explanation/why-writes-are-serialised.md) and
+[named boards](layout.md#named-boards).
 
 **What the server stamps, whatever you sent:** `version` (this server writes its own
 schema version by definition), `rev` (the previous revision plus one), `nextId`
@@ -406,6 +404,10 @@ recent N. Each entry carries the timestamp, the actor, the origin, and every tab
 write changed **as it was before** — which is what lets the `trace` renderer show a
 change without keeping history in the board document.
 
+The entries are **this board's**: each board in a project writes its own file
+(`journal.jsonl`, `journal.<name>.jsonl`), because tab ids are allocated per board and a
+shared record held two boards' `bb1` under one id.
+
 ```json
 {
   "schema": 2,
@@ -481,8 +483,15 @@ derivation because the terminal prints the same one: the journal keeps one rotat
 generation, so a tab's past is bounded and an empty list would otherwise be
 indistinguishable from "everything about it rotated away".
 
+The response also carries `board`: which board this history is OF, absent for the
+default one. It is there to be printed — both the terminal listing and the shell's
+change banner end with a `aboard history … | aboard apply` line, and that line without
+`--name` would read and write the default board. The banner builds its flag from this
+field, which is why it is on the wire rather than known only to the CLI.
+
 The change banner in the shell reads this; `aboard history` reads it too, falling back to
-`.aboard/run/journal.jsonl` when no board is running.
+`.aboard/run/journal.jsonl` when no board is running — `journal.<name>.jsonl` on a named
+board, which owns its own journal.
 
 ## `GET /watch`
 
@@ -512,8 +521,10 @@ distinguishes a mount from a press report, so "mounted 9×" does not come to mea
 "somebody clicked eight times".
 
 `tab` must be a plain id; anything else is `400`, because it becomes a key in a file a
-terminal prints. Everything lands in `.aboard/run/rendered.json` — a **sidecar**, never
-the state document, for the same reason selection and zoom are not in it — and
+terminal prints. Everything lands in `.aboard/run/rendered.json` — `rendered.<name>.json`
+on a named board, since tab ids are allocated per board and one file would have held two
+boards' `bb1` under one key. A **sidecar**, never the state document, for the same reason
+selection and zoom are not in it — and
 `aboard rendered` prints it. A receipt also releases a session waiting on
 `aboard wait --for "rendered <id>"`.
 
@@ -524,7 +535,8 @@ It **reports**; it does not act, and it never writes a tab.
 `?tab=<id>` is required and must be a plain id — it becomes a filename, so anything else
 is `400`.
 
-POST appends the request body to `.aboard/run/logs/<tab>.log`, adding a trailing newline
+POST appends the request body to `.aboard/run/logs/<tab>.log` — `logs/<name>/<tab>.log`
+on a named board, which owns its own — adding a trailing newline
 if the chunk lacks one, and rotates to `<tab>.log.1` when the file would exceed its size
 cap. Answers `{"ok": true, "bytes": N}`; an empty body is a no-op success. A chunk over
 the per-request cap is refused.

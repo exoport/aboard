@@ -22,7 +22,11 @@ aboard serve           # run the server for this project
 already running, that is success, not an obstacle — use the URL it prints. `serve`
 enforces this rather than trusting you to: a second `aboard serve` for the same
 project exits non-zero with `this project's board is already running at <url>
-(pid N)` instead of taking the port.
+(pid N)` instead of taking the port. That refusal is about the BOARD, not the
+port: `--port`/`PORT` naming a completely free port is refused just the same,
+because `serve` asks this project's instance record — and the process it names,
+over `/health` — before it binds anything. A record nothing answers is a killed
+board and is overwritten, so a crash does not lock you out.
 
 ```
 aboard running at http://localhost:41837
@@ -196,29 +200,41 @@ tabs to keep straight.
 Use this sparingly. A shared board is the feature; two boards is a fallback for
 when the work genuinely does not overlap.
 
-### What the two boards still share
+### What a name qualifies, and the two things it does not
 
-A name qualifies the state file and the instance record. It qualifies **nothing
-else**, and the rest of `.aboard/` is per PROJECT:
+A named board owns everything it writes for **itself**:
 
-| path | shared |
+| the default board | the board named `review` |
 |---|---|
-| `run/journal.jsonl` | one write log for the whole project |
-| `run/logs/<tab>.log` | one sidecar log directory |
-| `run/rendered.json` | one mount-receipt file |
-| `uploads/` | one image store |
-| `recipes/` | one recipe directory |
+| `aboard.json` | `aboard.review.json` |
+| `run/instance.json` | `run/instance.review.json` |
+| `run/journal.jsonl` | `run/journal.review.jsonl` |
+| `run/rendered.json` | `run/rendered.review.json` |
+| `run/logs/<tab>.log` | `run/logs/review/<tab>.log` |
 
-The consequence to hold in your head, because nothing on screen will remind you:
-**`aboard journal` and `aboard history` in a named board list the other board's
-writes as well as yours**, and tab ids are allocated per BOARD — so a `bb12` in
-the journal may belong to either one, and the id alone cannot tell you which.
-Read the `by` and the timestamp, or follow the board you actually mean with
-`aboard watch` while you work. Do not conclude from a journal line that a tab in
-YOUR board changed.
+All five are per board for one reason: **tab ids are allocated per BOARD.** Both
+documents start at `bb1`, and each of those records is keyed by tab id — so one
+shared file held two different tabs under one key. `aboard journal` could not say
+which board an entry belonged to without reading the tab's name, and
+`aboard history bb1 --name review` would hand you the DEFAULT board's version of
+`bb1` as a document to restore. That is fixed; `journal`, `history`, `watch`,
+`rendered` and `log` on a named board are about that board and nothing else.
 
-Whether those five should become per-board is the human's call and is not
-settled; this is the behaviour as it stands.
+Two paths stay per PROJECT, deliberately, and neither is keyed by tab id:
+
+| shared | why |
+|---|---|
+| `uploads/` | an image is content the human pasted; either board may show it |
+| `recipes/` | a recipe is a document about the project, not about one board |
+
+So **`aboard uploads` reads every board's document**, prints a named board's tab
+as `review:bb1`, and `--name` does not narrow it. It used to scan one board's
+tabs, which made another board's image look unreferenced and let
+`--prune --yes` delete a picture somebody was looking at.
+
+Journal entries written before the split are not migrated and cannot be: the
+record does not say which document a write went to. They stay readable and count
+as the default board's.
 
 ### Which boards are up, anywhere on this machine
 

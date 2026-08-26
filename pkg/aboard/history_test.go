@@ -29,7 +29,7 @@ func journalWith(t *testing.T, root Root, entries ...JournalEntry) {
 		b.Write(body)
 		b.WriteByte('\n')
 	}
-	if err := os.WriteFile(root.JournalFile(), b.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(root.JournalFile(""), b.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

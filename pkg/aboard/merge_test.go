@@ -410,7 +410,7 @@ func TestAMergedWriteKeepsTheLabelOfTheWriteItRedoes(t *testing.T) {
 		t.Fatalf("this test only means anything on the merged path, got %q", out.String())
 	}
 
-	entries, err := journalFromDisk(root, 10)
+	entries, err := journalFromDisk(root, "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -534,7 +534,7 @@ func TestAPreSchema2RecordStillCannotAttributeARename(t *testing.T) {
 // `schema` dropped, and `before[<id>]` cut back to the bare state it used to be.
 func narrowTheJournal(t *testing.T, root Root) {
 	t.Helper()
-	raw, err := os.ReadFile(root.JournalFile())
+	raw, err := os.ReadFile(root.JournalFile(""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func narrowTheJournal(t *testing.T, root Root) {
 		out.Write(body)
 		out.WriteByte('\n')
 	}
-	if err := os.WriteFile(root.JournalFile(), out.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(root.JournalFile(""), out.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

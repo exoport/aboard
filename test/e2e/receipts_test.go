@@ -100,7 +100,7 @@ func TestAnUnknownComponentTheHumanRevealedReachesTheAgent(t *testing.T) {
 // is the property that lets a session ask after the board has stopped.
 func receiptFor(t *testing.T, tab string) aboard.Receipt {
 	t.Helper()
-	list, err := aboard.Rendered(t.Context(), board, tab)
+	list, err := aboard.Rendered(t.Context(), board, "", tab)
 	if err != nil {
 		t.Fatalf("reading receipts: %v", err)
 	}

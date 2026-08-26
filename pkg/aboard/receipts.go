@@ -90,8 +90,8 @@ type receiptStore struct {
 	path string
 }
 
-func newReceiptStore(root Root) *receiptStore {
-	return &receiptStore{dir: root.RunDir(), path: root.RenderedFile()}
+func newReceiptStore(root Root, name string) *receiptStore {
+	return &receiptStore{dir: root.RunDir(), path: root.RenderedFile(name)}
 }
 
 // record folds one posted receipt into the file and returns the merged row.
@@ -223,8 +223,8 @@ func (s *server) handleRendered(w http.ResponseWriter, r *http.Request) {
 // the server but READING it is a file read, exactly as `journal` and `export`
 // are. A session asking "did the browser draw this" after the board was stopped
 // is asking a question the answer to which is already on disk.
-func Rendered(_ context.Context, root Root, tab string) ([]Receipt, error) {
-	all := readReceipts(root.RenderedFile())
+func Rendered(_ context.Context, root Root, name, tab string) ([]Receipt, error) {
+	all := readReceipts(root.RenderedFile(name))
 	out := []Receipt{}
 	for _, id := range sortedKeysOf(all) {
 		if tab != "" && id != tab {

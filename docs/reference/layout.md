@@ -20,8 +20,11 @@ opinion about it.
       instance.json        port, pid, url, state file — the discovery record
       instance.<name>.json the same, for a named board
       journal.jsonl        the append-only log of accepted writes (+ .1 rotation)
+      journal.<name>.jsonl the named board's own log
       rendered.json        mount receipts: what a browser reported it drew, per tab
+      rendered.<name>.json the named board's own receipts
       logs/<tab>.log       sidecar output for a `log` tab
+      logs/<name>/<tab>.log  the named board's own sidecar logs
       shots/               screenshots from test/shot.sh
 ```
 
@@ -31,6 +34,10 @@ would break without it. Everything under `run/` is true only for this machine an
 moment — including `rendered.json`, which is per-VIEWER as well: it says what a browser
 drew, which is the same class of fact as selection, zoom and a chat draft, and is
 therefore exactly as unwelcome in the board document.
+
+The second axis is the **board name**. A named board owns its document, its instance
+record, its journal, its receipts and its logs; `uploads/` and `recipes/` are the two
+things every board in the project shares — see [named boards](#named-boards).
 
 `run/` is nested inside `.aboard/` rather than sitting beside it so that a project
 ignores **one** path and loses nothing it wanted to keep:
@@ -92,13 +99,26 @@ Overrides, in precedence order: `--port N`, then the `PORT` environment variable
 the derived port. An explicit port that is busy is a plain error rather than a walk —
 you asked for that port.
 
-The duplicate refusal is anchored to the **port**, not to the project, so an explicit
-port that is *free* has no occupant to recognise: it starts a second server on the same
-state file, and the newcomer overwrites `run/instance.json` with its own details.
+The duplicate refusal is anchored to the **board**, not to the port, so `--port` is not
+a way around it. Before it binds anything, `serve` reads this project's instance record
+for this name and asks the process it points at over `/health` whether it is this
+project's board of this name; if it is, the refusal names its URL and pid whatever port
+was requested:
+
+```console
+$ aboard serve --port 45999
+Error: this project's board is already running at http://localhost:44340 (pid 347050)
+```
+
+A record that does **not** answer is stale — a board that was killed — so `serve`
+proceeds and overwrites it. The per-port probe survives beside the record check, because
+a board whose record was deleted while it ran is invisible to the record and still very
+much listening.
+
 `--port` moves one board; it is not the way to have two. Use
 [a named board](#named-boards) for that, and see
 [the compare-and-set contract](http-api.md#post-aboardjson) for what two servers on
-one file costs.
+one file would cost.
 
 ## Named boards
 
@@ -109,37 +129,62 @@ one — is selected by name:
 aboard serve --name review
 ```
 
-A name changes three things and nothing else: the state file becomes
-`.aboard/aboard.<name>.json`, the instance record becomes
-`run/instance.<name>.json`, and the port is derived from root **plus** name. The two
-boards' **documents** never interfere.
+A named board is a whole board, not a view of one: **everything it writes for itself is
+its own.** The state file is `.aboard/aboard.<name>.json`, the instance record is
+`run/instance.<name>.json`, the port is derived from root **plus** name, and the runtime
+record — the journal, the mount receipts, the sidecar logs — is qualified the same way.
 
 `ABOARD_NAME` sets the name for a session that is working on one, so it does not have to
 be repeated on every command.
 
-### What a named board does NOT get its own copy of
+### What a board owns, and what the project owns
 
-"three things and nothing else" is exact, and the rest of `.aboard/` is per **project**.
-Two boards in one project share every one of these:
+| path                          | owned by     |
+| ----------------------------- | ------------ |
+| `aboard.json` · `aboard.<name>.json` | the board |
+| `run/instance.json` · `run/instance.<name>.json` | the board |
+| `run/journal.jsonl` · `run/journal.<name>.jsonl` | the board |
+| `run/rendered.json` · `run/rendered.<name>.json` | the board |
+| `run/logs/<tab>.log` · `run/logs/<name>/<tab>.log` | the board |
+| `uploads/`                    | the project — **shared** |
+| `recipes/`                    | the project — **shared** |
 
-| path                          | shared by both boards |
-| ----------------------------- | --------------------- |
-| `run/journal.jsonl`           | one write log for the project |
-| `run/logs/<tab>.log`          | one sidecar log directory |
-| `run/rendered.json`           | one mount-receipt file |
-| `uploads/`                    | one image store |
-| `recipes/`                    | one recipe directory |
+The five that are per board are per board for one reason: **tab ids are allocated per
+board.** Each document has its own `nextId`, so a fresh named board starts at `bb1`
+exactly as the default one did, and any record keyed by tab id — a journal entry, a
+mount receipt, a sidecar log — held two different tabs under one key when the file was
+shared. `aboard history bb1` on a named board would offer you the *other* board's
+version of that id as a document to restore.
 
-The journal is the one that will surprise you, so say the consequence out loud:
-**`aboard journal` and `aboard history` in a named board show the other board's entries
-too**, and tab ids are allocated **per board**, so a `bb12` in the journal may belong to
-either one. A row is not enough to tell them apart — read the `by` and the timestamp, or
-watch the board you mean with `aboard watch` while you work.
+The two that stay shared are shared **by design**, and neither is keyed by tab id:
 
-The journal being project-wide is deliberate: it answers "who changed what in this
-project", and a second board in the same project is part of the same conversation. The
-other four are shared because they were never qualified by name in the first place;
-whether they should be is the human's call and is not settled here.
+- `uploads/` is content a human pasted, and either board may put it on a tab. The accounting reads every board's document for exactly that reason — see below.
+- `recipes/` is a document about the **project**; a recipe that only worked on one of its boards would be a strange thing to write.
+
+A journal entry made before a board's files were split stays where it was written: there
+is no migration, because entries already mixed into `journal.jsonl` cannot be attributed
+to a board after the fact — the record does not say which document a write went to, and
+guessing from a tab id is the very ambiguity being removed. Old entries are readable and
+belong to the default board's history from now on.
+
+### `aboard uploads` is per project, not per board
+
+`.aboard/uploads/` is shared, so its accounting reads **every** board's document — the
+default one and every `aboard.<name>.json`. A tab id from a named board is printed
+qualified, `review:bb1`, since a bare id would not say which board it is on:
+
+```console
+$ aboard uploads
+  only-on-review.png                                 1 B  review:bb1
+* orphan.png                                         1 B  no tab mentions it
+
+2 files, 2 B in /home/you/work/your-project/.aboard/uploads
+references scanned in 2 board documents: aboard.json, aboard.review.json  (a tab id is prefixed with its board name)
+```
+
+`--name` does not narrow it, and that is the point: a scan of one board's tabs would
+call another board's image an orphan, and `--prune --yes` would delete a picture
+somebody is looking at.
 
 ## Finding boards in other projects
 

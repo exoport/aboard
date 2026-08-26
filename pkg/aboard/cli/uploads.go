@@ -31,7 +31,12 @@ to delete an image somebody is looking at.
 --prune on its own prints and REFUSES: deletion is irreversible and .aboard/ is
 gitignored, so there is no copy anywhere to go back to.
 
-Reads the state file directly, so it needs no server.`,
+The accounting is per PROJECT, not per board, so --name does not narrow it:
+.aboard/uploads/ is shared by every board in the project, and a scan of one
+board's tabs would call another board's image an orphan. Tab ids from a named
+board are printed as <board>:<tab>.
+
+Reads the state files directly, so it needs no server.`,
 		Args:    cobra.NoArgs,
 		Example: "  aboard uploads\n  aboard uploads --prune --yes",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -45,11 +50,7 @@ Reads the state file directly, so it needs no server.`,
 			if err != nil {
 				return err
 			}
-			name, err := boardName(cmd)
-			if err != nil {
-				return err
-			}
-			rep, err := aboard.Uploads(root, name)
+			rep, err := aboard.Uploads(root)
 			if err != nil {
 				return err
 			}

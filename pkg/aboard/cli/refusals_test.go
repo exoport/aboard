@@ -161,7 +161,7 @@ func TestJournalFallsBackWhenTheRecordedBoardIsDead(t *testing.T) {
 	if err := os.WriteFile(root.InstanceFile(""), rec, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(root.JournalFile(),
+	if err := os.WriteFile(root.JournalFile(""),
 		[]byte(`{"at":"T1","by":"agent-1","tabs":["bb1"]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestJournalFallsBackWhenTheRecordedBoardIsDead(t *testing.T) {
 	if !strings.Contains(out, "agent-1") {
 		t.Errorf("the entry on disk was not printed:\n%s", out)
 	}
-	if !strings.Contains(errOut, "from disk") || !strings.Contains(errOut, root.JournalFile()) {
+	if !strings.Contains(errOut, "from disk") || !strings.Contains(errOut, root.JournalFile("")) {
 		t.Errorf("stderr does not say it read the file:\n%s", errOut)
 	}
 	if !strings.Contains(errOut, "not answering") {

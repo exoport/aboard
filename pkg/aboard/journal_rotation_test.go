@@ -15,7 +15,7 @@ import (
 // readable on disk with nothing willing to open them.
 func TestTailReadsTheRotatedGenerationOldestFirst(t *testing.T) {
 	root := Root(t.TempDir())
-	j := newJournal(root)
+	j := newJournal(root, "")
 	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestTailReadsTheRotatedGenerationOldestFirst(t *testing.T) {
 		j.append(JournalEntry{At: fmt.Sprintf("t%d", i), By: "human", Tabs: []string{"bb1"}})
 	}
 
-	if _, err := os.Stat(root.JournalFile() + ".1"); err != nil {
+	if _, err := os.Stat(root.JournalFile("") + ".1"); err != nil {
 		t.Fatalf("the rotated generation is not where this test thinks it is: %v", err)
 	}
 
@@ -52,7 +52,7 @@ func TestTailReadsTheRotatedGenerationOldestFirst(t *testing.T) {
 // so journal.jsonl.1 does not exist and must not be an error.
 func TestTailWithNoRotatedGeneration(t *testing.T) {
 	root := Root(t.TempDir())
-	j := newJournal(root)
+	j := newJournal(root, "")
 	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestTailWithNoRotatedGeneration(t *testing.T) {
 // dead board sees the rotated history too.
 func TestJournalFromDiskSpansGenerations(t *testing.T) {
 	root := Root(t.TempDir())
-	j := newJournal(root)
+	j := newJournal(root, "")
 	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestJournalFromDiskSpansGenerations(t *testing.T) {
 	j.mu.Unlock()
 	j.append(JournalEntry{At: "t2", By: "human", Tabs: []string{"bb1"}})
 
-	entries, err := journalFromDisk(root, 40)
+	entries, err := journalFromDisk(root, "", 40)
 	if err != nil {
 		t.Fatal(err)
 	}

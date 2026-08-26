@@ -125,8 +125,14 @@ type ServeConfig struct {
 }
 
 type server struct {
-	opts      Options
-	root      Root
+	opts Options
+	root Root
+	// name is which board this server serves — empty for the default one. It is
+	// on the server and not only on the ServeConfig because everything under
+	// run/ is qualified by it: the journal, the mount receipts and the sidecar
+	// logs each belong to ONE board, and a handler that reached for the default
+	// path would write a named board's log into the default board's directory.
+	name      string
 	stateFile string
 	assets    fs.FS
 	dev       bool
@@ -339,6 +345,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	srv := &server{
 		opts:      opts,
 		root:      cfg.Root,
+		name:      cfg.Name,
 		stateFile: stateFile,
 		assets:    assets,
 		dev:       cfg.Dev,
@@ -347,8 +354,8 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		watchers:  map[chan string]struct{}{},
 		waits:     newWaitHub(),
 		ui:        newUIWatcher(cfg.Dev),
-		journal:   newJournal(cfg.Root),
-		receipts:  newReceiptStore(cfg.Root),
+		journal:   newJournal(cfg.Root, cfg.Name),
+		receipts:  newReceiptStore(cfg.Root, cfg.Name),
 	}
 
 	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name)
@@ -411,15 +418,25 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 // is already busy — but if the occupant turns out to be this project's own
 // board, say so and stop instead of starting a duplicate.
 //
-// Duplicate detection runs FIRST, whichever way the port was chosen. It used to
-// live only in the derive-and-walk loop, so `--port` (and `PORT`) skipped it
-// entirely: a second server started happily on the same state file, rewrote
-// `instance.json` to point at itself, and killing it left every client command
-// aimed at a dead port while a perfectly healthy board went on serving. The
-// duplicate is the thing being prevented, and the duplicate does not care how
-// its port was picked — the check belongs to the project, not to the branch.
+// Duplicate detection runs FIRST, whichever way the port was chosen, and it asks
+// the question about the BOARD before it asks the one about a port. The board
+// question is refuseRecordedBoard: does (this root, this name) already have a
+// server that answers /health? The port question is refuseDuplicate, and it
+// survives because the derived walk still has to tell a stranger on a port from
+// this project's own board on it.
+//
+// It was the other way round, and the gap was the whole of `--port`. The check
+// lived on the port, so `serve --port <any free port>` had no occupant to
+// recognise: a second server started happily on the same state file, rewrote
+// `instance.json` to point at itself, and on exit removed it — leaving `status`
+// reporting no board while the first one served on. Two write locks that cannot
+// see each other, and a discovery record naming whichever of them wrote last.
+// A duplicate does not care how its port was picked, so neither does the check.
 func (s *server) listen(ctx context.Context, want int, root Root, name string) (net.Listener, int, error) {
 	var lc net.ListenConfig
+	if err := s.refuseRecordedBoard(ctx, root, name); err != nil {
+		return nil, 0, err
+	}
 	if want != 0 {
 		if err := s.refuseDuplicate(ctx, root, name, want); err != nil {
 			return nil, 0, err
@@ -446,9 +463,49 @@ func (s *server) listen(ctx context.Context, want int, root Root, name string) (
 	return nil, 0, fmt.Errorf("no free port found in %d-%d after %d tries", portBase, portBase+portSpan-1, portTries)
 }
 
+// refuseRecordedBoard is the duplicate check that is about the BOARD rather than
+// about a port: this project already has a live board of this name, wherever it
+// is listening, so do not start a second one.
+//
+// The record is the only thing that can answer it. A board's port is derived, but
+// it is not a fact — a stranger on the derived port moves it, `--port` moves it,
+// `PORT` moves it — so "is this project already serving" cannot be asked of any
+// port this process would think to try. `run/instance*.json` is where a running
+// board says where it went, and /health is what makes the record evidence rather
+// than a claim.
+//
+// A record that does not answer is STALE and this returns nil: the commonest real
+// case is a board that was killed, and refusing to start because of the corpse of
+// the last one would be the worst possible reading of the record. The same goes
+// for a record whose port has been taken over by a different project's board —
+// it answers, but not as us. Both cases proceed, and writeInstance overwrites the
+// record on the way up.
+func (s *server) refuseRecordedBoard(ctx context.Context, root Root, name string) error {
+	// A bool rather than an early `if err != nil { return nil }`: an absent or
+	// unreadable record is not a failure to report here, it is the ordinary case
+	// of a project whose board is not running.
+	rec, recErr := RunningInstance(root, name)
+	if recorded := recErr == nil && rec.Port != 0; !recorded {
+		return nil
+	}
+	live := ProbeBoard(ctx, rec.Port, rec.Base)
+	if live == nil || live.Project != root.String() || live.Name != name {
+		return nil
+	}
+	// The LIVE record's URL and pid, not the file's: they agree in every ordinary
+	// case, and where they do not the answering process is the one the reader has
+	// to go and look at.
+	return fmt.Errorf("this project's board is already running at %s (pid %d)", live.URL, live.PID)
+}
+
 // refuseDuplicate reports an error when THIS project's board already holds the
 // port, and nothing otherwise — a stranger on the port is somebody else's
 // business, and on the derived path the loop walks past it.
+//
+// Still here, and not made redundant by refuseRecordedBoard above: a board whose
+// record was deleted while it ran — `rm -rf .aboard/run`, a stopped board's
+// cleanup racing a restart — is invisible to the record check and still very much
+// listening. This one recognises it by asking the port itself.
 func (s *server) refuseDuplicate(ctx context.Context, root Root, name string, port int) error {
 	other := probeOccupant(ctx, root, name, port)
 	if other == nil || other.Project != root.String() || other.Name != name {

@@ -202,6 +202,12 @@ func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 /* ---------- accounting and prune ---------- */
 
 // UploadRow is one file in `.aboard/uploads/`: what it costs, and who names it.
+//
+// `Tabs` holds every tab in the PROJECT that mentions the file, qualified by
+// board: a bare `bb12` is the default board's, `review:bb12` is the named board
+// `review`'s. Qualified by name and never by "the board you asked about", so two
+// runs of this command from two different boards print the same string for the
+// same tab.
 type UploadRow struct {
 	Name  string   `json:"name"           yaml:"name"`
 	URL   string   `json:"url"            yaml:"url"`
@@ -217,11 +223,16 @@ func (u UploadRow) Referenced() bool { return len(u.Tabs) > 0 }
 // `Orphaned` counts the files no tab mentions and `OrphanedBytes` is what pruning
 // them would reclaim.
 type UploadReport struct {
-	Dir           string      `json:"dir"           yaml:"dir"`
-	Files         []UploadRow `json:"files"         yaml:"files"`
-	Bytes         int64       `json:"bytes"         yaml:"bytes"`
-	Orphaned      int         `json:"orphaned"      yaml:"orphaned"`
-	OrphanedBytes int64       `json:"orphanedBytes" yaml:"orphanedBytes"`
+	Dir   string      `json:"dir"   yaml:"dir"`
+	Files []UploadRow `json:"files" yaml:"files"`
+	Bytes int64       `json:"bytes" yaml:"bytes"`
+	// Boards are the documents that were scanned for references, by file name.
+	// Part of the answer rather than decoration: "no tab mentions it" is a claim
+	// about a set of documents, and this is the set — so a reader about to delete
+	// something can see whether the board they are thinking of was in it.
+	Boards        []string `json:"boards"        yaml:"boards"`
+	Orphaned      int      `json:"orphaned"      yaml:"orphaned"`
+	OrphanedBytes int64    `json:"orphanedBytes" yaml:"orphanedBytes"`
 }
 
 // Uploads lists every file under `.aboard/uploads/` and the tabs that mention it.
@@ -234,18 +245,41 @@ type UploadReport struct {
 // contain this filename — and the failure mode is a file kept that could have
 // gone, which is the right way round for a delete path.
 //
-// Reads the state file directly: no server needed, exactly as `export` and
-// `journal` do not need one.
-func Uploads(root Root, name string) (UploadReport, error) {
-	rep := UploadReport{Dir: root.UploadsDir(), Files: []UploadRow{}}
+// EVERY board in the project is scanned, which is why this takes no board name.
+// `uploads/` is shared by all of them on purpose — an image is content a human
+// pasted, and either board may put it on a tab — so accounting for it from ONE
+// board's tabs asked a question narrower than the directory it was answering
+// about: an image referenced only by the review board came back "no tab mentions
+// it" from the default board, and `--prune --yes` deleted a picture somebody was
+// looking at.
+//
+// Reads the state files directly: no server needed, exactly as `export` and
+// `journal` do not need one. A document that will not parse is a hard error and
+// not a skipped file — a board whose references cannot be read is a board that
+// might be referencing everything, and the next thing the caller does with this
+// report may be a deletion.
+func Uploads(root Root) (UploadReport, error) {
+	rep := UploadReport{Dir: root.UploadsDir(), Files: []UploadRow{}, Boards: []string{}}
 
-	raw, err := os.ReadFile(root.StateFile(name))
+	boards, err := root.StateFiles()
 	if err != nil {
-		return rep, fmt.Errorf("reading %s: %w", root.StateFile(name), err)
+		return rep, err
 	}
-	doc, err := decodeDocument(raw)
-	if err != nil {
-		return rep, fmt.Errorf("the board document does not parse: %w", err)
+	if len(boards) == 0 {
+		return rep, fmt.Errorf("no board document in %s — run `aboard init`", root.Dir())
+	}
+	docs := make([]boardDoc, 0, len(boards))
+	for _, b := range boards {
+		raw, err := os.ReadFile(b.Path)
+		if err != nil {
+			return rep, fmt.Errorf("reading %s: %w", b.Path, err)
+		}
+		doc, err := decodeDocument(raw)
+		if err != nil {
+			return rep, fmt.Errorf("%s does not parse: %w", b.Path, err)
+		}
+		docs = append(docs, boardDoc{name: b.Name, doc: doc})
+		rep.Boards = append(rep.Boards, filepath.Base(b.Path))
 	}
 
 	entries, err := os.ReadDir(root.UploadsDir())
@@ -271,7 +305,7 @@ func Uploads(root Root, name string) (UploadReport, error) {
 			URL:   uploadDir + "/" + e.Name(),
 			Bytes: info.Size(),
 			At:    info.ModTime().UTC().Format(time.RFC3339),
-			Tabs:  tabsMentioning(doc, e.Name()),
+			Tabs:  tabsMentioning(docs, e.Name()),
 		}
 		rep.Bytes += row.Bytes
 		if !row.Referenced() {
@@ -284,23 +318,45 @@ func Uploads(root Root, name string) (UploadReport, error) {
 	return rep, nil
 }
 
-// tabsMentioning finds every tab whose raw text contains a filename.
+// boardDoc is one board's parsed document with the name it answers to, so a
+// reference can say WHICH board holds the tab it found.
+type boardDoc struct {
+	name string
+	doc  *stateDoc
+}
+
+// tabsMentioning finds every tab, on any board in the project, whose raw text
+// contains a filename.
 //
 // The tab's `name` and `note` are searched along with its state, because a tab
 // can perfectly well be the record of an image by naming it — and a scan that
 // missed that would call the file an orphan.
-func tabsMentioning(doc *stateDoc, file string) []string {
+func tabsMentioning(boards []boardDoc, file string) []string {
 	needle := []byte(file)
 	out := []string{}
-	for i := range doc.tabs {
-		t := &doc.tabs[i]
-		if bytes.Contains(t.State, needle) ||
-			strings.Contains(t.Name, file) ||
-			strings.Contains(t.Note, file) {
-			out = append(out, t.ID)
+	for _, b := range boards {
+		for i := range b.doc.tabs {
+			t := &b.doc.tabs[i]
+			if bytes.Contains(t.State, needle) ||
+				strings.Contains(t.Name, file) ||
+				strings.Contains(t.Note, file) {
+				out = append(out, qualifiedTab(b.name, t.ID))
+			}
 		}
 	}
 	return out
+}
+
+// qualifiedTab names a tab across the whole project. Tab ids are allocated PER
+// BOARD, so both documents in a two-board project have a `bb1` and they are
+// different tabs; an unqualified id in a project-wide listing is therefore not an
+// answer. The default board's ids stay bare, so a one-board project — which is
+// almost every project — prints exactly what it printed before.
+func qualifiedTab(board, id string) string {
+	if board == "" {
+		return id
+	}
+	return board + ":" + id
 }
 
 // PruneUploads deletes the files no tab mentions. It NEVER decides on its own:
@@ -345,6 +401,14 @@ func (r UploadReport) Human(prune bool) string {
 		fmt.Fprintf(&b, "%s %-44s %9s  %s\n", mark, f.Name, humanBytes(f.Bytes), who)
 	}
 	fmt.Fprintf(&b, "\n%d file%s, %s in %s\n", len(r.Files), plural(len(r.Files)), humanBytes(r.Bytes), r.Dir)
+	// Which documents the references were looked for in. `uploads/` belongs to
+	// the PROJECT, so "no tab mentions it" is a claim about every board in it,
+	// and on a project with two boards the reader has to be able to see that both
+	// were read — and that a `review:bb1` in the listing is not a tab of theirs.
+	if len(r.Boards) > 1 {
+		fmt.Fprintf(&b, "references scanned in %d board documents: %s  (a tab id is prefixed with its board name)\n",
+			len(r.Boards), strings.Join(r.Boards, ", "))
+	}
 	if r.Orphaned == 0 {
 		b.WriteString("every upload is mentioned by a tab — nothing to prune\n")
 		return b.String()

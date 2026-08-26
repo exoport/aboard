@@ -6,6 +6,49 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **fix: a second board for one project is refused however its port was chosen.** The
+  duplicate check was anchored to the PORT, so `aboard serve --port <anything free>` (or
+  `PORT=`) had no occupant to recognise: it started a SECOND server on the same state
+  file, rewrote `run/instance.json` to point at itself — every client command then
+  followed the newcomer — and on exit removed the record, leaving `aboard status`
+  reporting no board while the original served on. Two write locks that could not see
+  each other. Before it binds anything, `serve` now reads this project's instance record
+  for this name and asks the process it names over `/health`; a board that answers as
+  this project's own is named in the refusal with its URL and pid, whatever port was
+  requested. A record nothing answers is a killed board: it is overwritten, not obeyed.
+  The per-port probe stays in the derived walk for the mirror case — a live board whose
+  record was deleted underneath it.
+- **fix: a named board owns its journal, its mount receipts and its sidecar logs.**
+  `--name` qualified the state file and the instance record and nothing else, so two
+  boards in one project wrote into `run/journal.jsonl`, `run/rendered.json` and
+  `run/logs/<tab>.log` together — and every one of those is keyed by TAB ID while tab ids
+  are allocated per BOARD, so both documents have a `bb1`. The journal held two entries
+  naming `bb1` and meaning different tabs, and `aboard history bb1 --name review` would
+  offer the DEFAULT board's version as a document to restore. Each board now writes
+  `journal.<name>.jsonl` (`.1` rotation included), `rendered.<name>.json` and
+  `logs/<name>/<tab>.log`; `journal`, `watch`, `history`, `rendered` and `log` each read
+  their own board's. The default board's paths are unchanged, byte for byte.
+  **No migration is possible** for entries already mixed into `journal.jsonl`: the record
+  does not say which document a write went to, and guessing from a tab id is the
+  ambiguity being removed. Those entries stay readable and count as the default board's.
+- **fix: `aboard history`'s restore line carries `--name`.** The listing ends with
+  `aboard history <tab> --at N | aboard apply --by agent-1`, and copied off a named
+  board's listing that read the default board's journal and wrote the default board's
+  document. Both halves now carry `--name <board>` when the board is named; the default
+  board's line is unchanged. `GET /history` gained a `board` field for the same reason,
+  and the **change banner in the browser** — which prints the same pipeline, and is where
+  a human actually meets it — splices the same flag from that field. Two places print
+  that command; fixing one of them would have left the other quietly wrong.
+- **fix: `aboard uploads` accounts for every board in the project.** `.aboard/uploads/` is
+  shared by all of them — an image is content the human pasted, and either board may show
+  it — but the reference scan read ONE board's tabs, so an image used only by the review
+  board came back "no tab mentions it" from the default board and `--prune --yes` deleted
+  a picture somebody was looking at. The scan now reads every `aboard.json` and
+  `aboard.<name>.json` in the project, prints a named board's tab id as `review:bb1`, and
+  says which documents it read. `--name` deliberately does not narrow it. A board
+  document that will not parse is now a hard error rather than a skipped file: a board
+  whose references cannot be read might be referencing anything, and the next thing the
+  caller does with the report may be a deletion.
 - **feat: a journal entry records the whole tab, so `apply`'s merge survives a foreign
   rename.** `JournalEntry.Before` held a tab's `state` and nothing else, so a tab
   RENAMED on the board while an agent wrote to a different tab could not be classified

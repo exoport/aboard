@@ -93,19 +93,28 @@ Error: this project's board is already running at http://localhost:44195 (pid 12
 
 That is deliberate: a second session must not be able to yank the server out from under
 the first, and two servers on one state file would be two write locks that cannot see
-each other. The probe runs on the derived path and on an explicit `--port`/`PORT` alike —
-the duplicate is the thing being prevented, and it does not care how the port was chosen.
+each other.
 
 An **explicit** `--port` that is busy with something else is a plain error rather than a
 walk. You asked for that port; quietly using a different one would be worse than failing.
 
-**The check is per port, not per project, and that gap is real.** `--port` naming a
-*free* port has no occupant to recognise, so it starts a second server on the same state
-file. The newcomer overwrites `run/instance.json` with its own details, so every client
-command follows it — and when it exits it removes the record, leaving `aboard status`
-reporting no board while the original is still serving happily. If you want two boards in
-one project, use `--name`, which gives each one its own document, its own record and its
-own derived port. `--port` is for moving one board, not for having two.
+**The check is about the board, not about the port.** Before it binds anything, `serve`
+reads this project's instance record for this name and asks the process it names over
+`/health` whether it is this project's board of this name. If it is, the refusal above
+happens whatever port was requested — `--port` and `PORT` included. It has to work that
+way round, because a board's port is not a fact: a stranger on the derived port moves it,
+`--port` moves it, so "is this project already serving?" cannot be asked of any one port.
+
+Two cases are deliberately not refusals. A record that does **not** answer is stale — the
+commonest one being a board that was killed — so `serve` proceeds and overwrites it;
+refusing because of the corpse of the last board would be the worst possible reading of
+the record. And the per-port probe stays in the walk beside the record check, for the
+opposite case: a live board whose record was deleted underneath it is invisible to the
+record and still very much listening.
+
+If you want two boards in one project, use `--name`, which gives each one its own
+document, its own record, its own derived port and its own journal, receipts and logs.
+`--port` is for moving one board, not for having two.
 
 ## The instance record is how everything finds everything
 
@@ -197,6 +206,13 @@ The split inside `.aboard/` is the one thing worth knowing about the tree:
 
 - **Content** — `aboard.json`, `uploads/`, `recipes/`. A `markup` tab references an upload by name and would break without it.
 - **Machine-local runtime** — everything under `run/`: the instance record, the journal, per-tab sidecar logs, mount receipts, screenshots. True for this machine and this moment only.
+
+There is a second axis, and it only shows up once a project has two boards: a **named
+board owns everything it writes for itself** — its document, its instance record, its
+journal, its receipts and its logs are all qualified by the name. `uploads/` and
+`recipes/` are the two the project keeps, and neither is keyed by tab id, which is what
+makes sharing them safe: tab ids are allocated per board, so every record that *is* keyed
+by one had to be split or it would hold two boards' `bb1` under one key.
 
 `run/` is nested inside `.aboard/` rather than sitting beside it so that a project ignores
 **one** path and loses nothing it wanted to keep. And the whole directory *is* ignored: a

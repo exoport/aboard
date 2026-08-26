@@ -66,7 +66,7 @@ func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /log?tab=bb126 = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	logFile, ok := srv.root.LogFile("bb126")
+	logFile, ok := srv.root.LogFile("", "bb126")
 	if !ok {
 		t.Fatal(`LogFile("bb126") refused a plain tab id`)
 	}
@@ -77,7 +77,7 @@ func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
 	// And nothing at all was written outside the logs directory. Walked rather
 	// than stat-ed for each bad id, because the interesting failure is a file
 	// somewhere nobody thought to look.
-	logsDir := srv.root.LogsDir()
+	logsDir := srv.root.LogsDir("")
 	err := filepath.WalkDir(string(srv.root), func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

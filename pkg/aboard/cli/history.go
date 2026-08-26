@@ -46,7 +46,9 @@ back ` + "`touched`" + `, ` + "`pendingRemoval`" + ` or ` + "`seen`" + ` — re-
 dismissed, or re-opening a removal request they answered, is not an undo.
 
 Reads from the running board when there is one and from
-.aboard/run/journal.jsonl when there is not.`,
+.aboard/run/journal.jsonl when there is not — journal.<name>.jsonl on a named
+board, whose history is its own. The restore line the listing prints carries
+--name on both halves for exactly that reason.`,
 		Args:    cobra.ExactArgs(1),
 		Example: "  aboard history bb133\n  aboard history bb133 --at 1 | aboard apply --by agent-1",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -77,9 +79,9 @@ Reads from the running board when there is one and from
 			if outputFormat == formatHuman {
 				switch got.Source {
 				case aboard.JournalFromDisk:
-					fmt.Fprintf(stderr(opts), "(from disk: %s — no board running)\n", root.JournalFile())
+					fmt.Fprintf(stderr(opts), "(from disk: %s — no board running)\n", root.JournalFile(name))
 				case aboard.JournalFromDiskStale:
-					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile())
+					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile(name))
 				}
 			}
 			return renderOutput(stdout(opts), outputFormat, got, got.Human)

@@ -51,11 +51,10 @@ aboard init --name review
 aboard serve --name review
 ```
 
-That derives its own port, uses its own state file and records itself separately, so the
-two **documents** never interfere. The rest of `.aboard/` is per project and both boards
-share it — one journal, one uploads directory, one set of sidecar logs — and tab ids are
-allocated per board, so the same id can mean two different tabs. The consequences are
-worth reading before you rely on it:
+That derives its own port and owns its own state file, instance record, journal, mount
+receipts and sidecar logs, so nothing it writes lands in the first board's files.
+`uploads/` and `recipes/` are shared by every board in the project, deliberately. The
+details are in
 [How to run a second board in one project](run-a-second-board.md).
 
 ## When the page reloads itself

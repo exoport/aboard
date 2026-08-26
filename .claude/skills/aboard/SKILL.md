@@ -207,9 +207,10 @@ own, because a second session's restart takes the first session's server out fro
 under it. `aboard serve` will not do it for you either: it refuses to start a
 second board for the same project and prints where the running one is
 (`this project's board is already running at <url> (pid N)`). That refusal is the
-answer, not an obstacle. Restart only after changing Go code or the embedded web
-tree, and prefer saying so: it briefly drops the other session's browser
-connection.
+answer, not an obstacle — and it is about the BOARD, not the port, so
+`--port <something free>` is refused exactly the same way. Restart only after
+changing Go code or the embedded web tree, and prefer saying so: it briefly
+drops the other session's browser connection.
 
 **Asking is only half a question.** If you need the answer before you can go on,
 block for it instead of polling:
@@ -446,7 +447,8 @@ direction:
 - **To show someone else**, export the tab (markdown, CSV, SVG from its
   right-click menu) and commit that. A genuinely shared board would need auth and
   hosting, and this server deliberately has neither.
-- **The journal is local too.** `.aboard/run/journal.jsonl` tells you who changed
+- **The journal is local too.** `.aboard/run/journal.jsonl` — `journal.<name>.jsonl`
+  if you are on a named board, which keeps its own — tells you who changed
   what on THIS machine. It is not a project audit trail; do not cite it as one.
   It is also the board's only undo: `aboard history <tab>` lists what a tab was,
   newest first, and `aboard history <tab> --at 1` prints a whole document
@@ -640,14 +642,14 @@ working directory, or from `--cwd`. One line in `.gitignore` covers all of it.
 | path | what it is |
 |---|---|
 | `.aboard/aboard.json` | the board itself: the document you read and apply |
-| `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) — the state file and the instance record are all a name gets its own copy of; see [references/multi-session.md](references/multi-session.md) for what the two boards SHARE |
-| `.aboard/uploads/` | images the human pasted or dropped — content, not runtime (`aboard uploads` says which tabs mention each one, and prunes the rest behind `--yes`) |
-| `.aboard/recipes/` | this project's own recipes, shadowing the built-ins by name |
+| `.aboard/aboard.<name>.json` | a second, isolated board (`aboard serve --name review`) — it owns every runtime file below as well; `uploads/` and `recipes/` are the two the project keeps. See [references/multi-session.md](references/multi-session.md) |
+| `.aboard/uploads/` | images the human pasted or dropped — content, not runtime, and shared by every board in the project (`aboard uploads` reads them all, says which tabs mention each file, and prunes the rest behind `--yes`) |
+| `.aboard/recipes/` | this project's own recipes, shadowing the built-ins by name — shared too |
 | `.aboard/run/instance.json` | port, pid, URL of the running board — the discovery authority |
 | `.aboard/run/instance.<name>.json` | the same, per named board |
-| `.aboard/run/journal.jsonl` | every accepted write; what `trace`, `aboard journal` and `aboard history` read |
-| `.aboard/run/rendered.json` | mount receipts: what a browser reported it drew, per tab (`aboard rendered`) |
-| `.aboard/run/logs/<tab>.log` | one sidecar log per `log` tab |
+| `.aboard/run/journal.jsonl` | every accepted write; what `trace`, `aboard journal` and `aboard history` read (`journal.<name>.jsonl` per named board) |
+| `.aboard/run/rendered.json` | mount receipts: what a browser reported it drew, per tab (`aboard rendered`; `rendered.<name>.json` per named board) |
+| `.aboard/run/logs/<tab>.log` | one sidecar log per `log` tab (`logs/<name>/<tab>.log` per named board) |
 | `.aboard/run/shots/` | screenshots from the local browser suite |
 
 The split is content against machine-local runtime: everything under `run/` is

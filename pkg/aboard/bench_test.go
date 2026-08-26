@@ -116,7 +116,7 @@ func benchServer(b *testing.B, doc []byte) *server {
 		watchers:  map[chan string]struct{}{},
 		waits:     newWaitHub(),
 		ui:        newUIWatcher(false),
-		journal:   newJournal(root),
+		journal:   newJournal(root, ""),
 	}
 }
 

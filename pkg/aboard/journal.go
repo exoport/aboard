@@ -143,8 +143,8 @@ type journal struct {
 	path string
 }
 
-func newJournal(root Root) *journal {
-	return &journal{dir: root.RunDir(), path: root.JournalFile()}
+func newJournal(root Root, name string) *journal {
+	return &journal{dir: root.RunDir(), path: root.JournalFile(name)}
 }
 
 func (j *journal) append(entry JournalEntry) {
@@ -524,7 +524,7 @@ const (
 func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]JournalEntry, string, error) {
 	inst, err := RunningInstance(root, name)
 	if err != nil {
-		return journalDiskAnswer(root, limit, JournalFromDisk)
+		return journalDiskAnswer(root, name, limit, JournalFromDisk)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		fmt.Sprintf("%s/journal?limit=%d", inst.URL, limit), http.NoBody)
@@ -542,7 +542,7 @@ func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]J
 		if ctx.Err() != nil {
 			return nil, JournalFromServer, fmt.Errorf("reading the journal from %s: %w", inst.URL, err)
 		}
-		return journalDiskAnswer(root, limit, JournalFromDiskStale)
+		return journalDiskAnswer(root, name, limit, JournalFromDiskStale)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -557,8 +557,8 @@ func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]J
 
 // journalDiskAnswer is the disk read plus its label, so both fallbacks return
 // the same shape and neither can forget to say where the answer came from.
-func journalDiskAnswer(root Root, limit int, source string) ([]JournalEntry, string, error) {
-	entries, err := journalFromDisk(root, limit)
+func journalDiskAnswer(root Root, name string, limit int, source string) ([]JournalEntry, string, error) {
+	entries, err := journalFromDisk(root, name, limit)
 	if err != nil {
 		return nil, source, err
 	}
@@ -575,13 +575,13 @@ const maxJournalLine = 4 << 20
 //
 // A journal file that does not exist yet is an empty list, not an error: a board
 // that has never been written to has nothing to report, and that is an answer.
-func journalFromDisk(root Root, limit int) ([]JournalEntry, error) {
-	raw := newJournal(root).tail(limit)
+func journalFromDisk(root Root, name string, limit int) ([]JournalEntry, error) {
+	raw := newJournal(root, name).tail(limit)
 	out := make([]JournalEntry, 0, len(raw))
 	for i, line := range raw {
 		var entry JournalEntry
 		if err := json.Unmarshal(line, &entry); err != nil {
-			return nil, fmt.Errorf("%s line %d is not a journal entry: %w", root.JournalFile(), i+1, err)
+			return nil, fmt.Errorf("%s line %d is not a journal entry: %w", root.JournalFile(name), i+1, err)
 		}
 		out = append(out, entry)
 	}

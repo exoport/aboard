@@ -28,7 +28,7 @@ func TestARenderedReceiptComesBackOutOfTheSidecar(t *testing.T) {
 		t.Fatalf("POST /rendered answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	got, err := Rendered(t.Context(), srv.root, "bb1")
+	got, err := Rendered(t.Context(), srv.root, srv.name, "bb1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestReceiptsAccumulatePressesAndReplaceMarkers(t *testing.T) {
 	// "mounted 9×" mean "somebody clicked eight times".
 	postReceipt(t, srv, `{"tab":"bb1","type":"ui","fired":{"relayout":1}}`)
 
-	got, err := Rendered(t.Context(), srv.root, "bb1")
+	got, err := Rendered(t.Context(), srv.root, srv.name, "bb1")
 	if err != nil || len(got) != 1 {
 		t.Fatalf("reading back: %v %+v", err, got)
 	}
@@ -95,7 +95,7 @@ func TestAReceiptNeverTouchesTheBoardDocument(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Error("posting a receipt rewrote the board document")
 	}
-	if _, err := os.Stat(srv.root.RenderedFile()); err != nil {
+	if _, err := os.Stat(srv.root.RenderedFile("")); err != nil {
 		t.Errorf("the receipt did not land in the sidecar: %v", err)
 	}
 }

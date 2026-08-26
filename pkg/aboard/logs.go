@@ -56,7 +56,7 @@ var logMu sync.Mutex
 // site, which does silence the analyser and is a bug — Base("../../bb42") is
 // "bb42", so a traversal attempt would stop being refused and start quietly
 // succeeding against a different tab.
-func (s *server) logPath(tab string) (string, bool) { return s.root.LogFile(tab) }
+func (s *server) logPath(tab string) (string, bool) { return s.root.LogFile(s.name, tab) }
 
 func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
@@ -78,7 +78,7 @@ func (s *server) handleLogPost(w http.ResponseWriter, r *http.Request) {
 	logMu.Lock()
 	defer logMu.Unlock()
 
-	if err := os.MkdirAll(s.root.LogsDir(), 0o755); err != nil {
+	if err := os.MkdirAll(s.root.LogsDir(s.name), 0o755); err != nil {
 		s.writeJSON(w, http.StatusInternalServerError, map[string]string{wireError: "cannot create the log directory"})
 		return
 	}

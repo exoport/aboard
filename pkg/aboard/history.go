@@ -109,6 +109,19 @@ type TabHistory struct {
 	// form omitted would be the two halves disagreeing in the one place it
 	// matters.
 	Ends string `json:"ends" yaml:"ends"`
+	// Board is which board this history is OF — absent for the default one. It
+	// is here to be printed: the listing ends with a `history … | apply` line,
+	// and that line without `--name` reads the default board's journal and writes
+	// the default board's document. Copied off a named board's listing it was a
+	// command that restored the wrong tab onto the wrong board, and neither half
+	// of it would have said so.
+	//
+	// Exported and on the wire because there are TWO printers of that line and
+	// the second one is the shell's change banner, which has only this endpoint
+	// to go on. A fact the terminal states while the JSON omits it is the two
+	// halves disagreeing — and the half a human is looking at when a banner
+	// appears is the browser's.
+	Board string `json:"board,omitempty" yaml:"board,omitempty"`
 }
 
 // historyFrom filters journal entries down to one tab's versions.
@@ -179,6 +192,7 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	got := historyFrom(entries, tab, limit)
 	got.Truncated = len(entries) >= historyScan
 	got.Source = JournalFromServer
+	got.Board = s.name
 	got.Ends = got.EndsAt()
 	s.writeJSON(w, http.StatusOK, got)
 }
@@ -198,6 +212,7 @@ func History(ctx context.Context, root Root, name, tab string, limit int) (TabHi
 	got := historyFrom(entries, tab, limit)
 	got.Truncated = len(entries) >= historyScan
 	got.Source = source
+	got.Board = name
 	got.Ends = got.EndsAt()
 	return got, nil
 }
@@ -230,10 +245,26 @@ func (h TabHistory) Human() string {
 			}
 			fmt.Fprintf(&b, "  %2d  %s  replaced by %-16s %6d bytes%s\n", v.N, v.At, v.By, v.Bytes, label)
 		}
-		fmt.Fprintf(&b, "\nrestore one with:  aboard history %s --at 1 | aboard apply --by agent-1\n", h.Tab)
+		fmt.Fprintf(&b, "\nrestore one with:  aboard history %s --at 1%s | aboard apply%s --by agent-1\n",
+			h.Tab, h.nameFlag(), h.nameFlag())
 	}
 	fmt.Fprintf(&b, "\n%s\n", h.EndsAt())
 	return b.String()
+}
+
+// nameFlag is ` --name <board>` for a named board and nothing for the default
+// one, for splicing into a command this listing is telling somebody to run.
+//
+// BOTH halves of the restore pipeline need it and it is easy to carry into only
+// the first: `aboard history <tab> --at 1` reads the named board's journal, and
+// the `aboard apply` on the other side of the pipe writes whichever board IT was
+// told about — so a half-qualified pipeline takes the right document and puts it
+// on the wrong board.
+func (h TabHistory) nameFlag() string {
+	if h.Board == "" {
+		return ""
+	}
+	return " --name " + h.Board
 }
 
 // EndsAt is the sentence about where the record stops. Its own method because
