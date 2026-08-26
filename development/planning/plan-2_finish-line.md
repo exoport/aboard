@@ -1,6 +1,6 @@
 # Plan 2 — the finish line: everything owed, in order
 
-**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–2 done. Tick items here
+**Status: written 2026-08-25 at `8fedd67`; execution started 2026-08-25 (briefs at `28252bb`). Items 1–3 done; item 8 done in aboard_vscode (`6711c15` there). Tick items here
 as they land (commit hash beside each), so a session resuming after a context clear reads this
 file and knows exactly where it is.**
 
@@ -82,7 +82,7 @@ their real tests in item 4 and a DOM-level probe now.
 behaviour (revision token, origin refusal, `--force`), and the review file's Medium entries are
 struck through with the commit hash.
 
-### 3. Review fixes C — coverage, docs, lows  ☐
+### 3. Review fixes C — coverage, docs, lows  ☑ `2b701a8`
 
 Source: the review's Medium (coverage/docs) and Low lists. Scope: the parity test walks
 subcommands (a `Subcommands` field); `reconcileNextID` table tests (the JSON item refactors it);
@@ -149,7 +149,7 @@ cannot take the page down. Each verified per the handoff's Verification subsecti
 tests (the active-tab message is observable from the harness).
 **Done when** the extension's M2 and M4 no longer have a "if it has not landed" clause.
 
-### 8. The VS Code extension — implemented, not installed  ☐
+### 8. The VS Code extension — implemented, not installed  ☑ aboard_vscode `6711c15` (built out of order, in parallel with item 3, because it is a separate repo; a reconcile against items 7's landed contract happens in item 7/9)
 
 Source: `/home/diegos/_dev/exoport/aboard_vscode/docs/handoff.md` (§5 layout, §6 the two moving
 parts, §7 the tree, §8 milestones M1–M5). Scope: the repo scaffold exactly as §5 (`package.json`
