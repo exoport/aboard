@@ -230,6 +230,8 @@ Chromium, which flaked once and would again.
 
 ### 10n. The extension hands the board the VS Code theme  ☑ aboard_vscode `4b7cb67` (`aboard.theme` = follow|board; guarded to the board's AAA rule; OBSERVED by the human on 2026-08-26: the board switch and following a VS Code theme change both work in a real host)
 
+### 10o. The handoffs retired (both repos), the spike's comparison matrix promoted, one gotcha carried  ☑ `611c0b7` + aboard_vscode `7eb231a` (`development/handoffs/` and `aboard_vscode/docs/handoff.md` deleted after promotion; `docs/explanation/why-a-board-and-not-an-artifact.md`)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
