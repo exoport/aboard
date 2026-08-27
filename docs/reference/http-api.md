@@ -375,9 +375,9 @@ the caller's next one:
 ```
 
 **What the parser refuses.** The document is parsed with
-[`encoding/json/v2`](https://github.com/go-json-experiment/json), which is
-stricter than the parser this server used to run, and three of the differences
-are visible to a caller:
+[`encoding/json/v2`](https://pkg.go.dev/encoding/json/v2), part of the standard
+library since Go 1.27, which is stricter than the parser this server used to run,
+and three of the differences are visible to a caller:
 
 | written | v1 did | now |
 | --- | --- | --- |

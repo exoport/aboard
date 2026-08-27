@@ -30,6 +30,7 @@ package aboard
 import (
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -37,8 +38,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // historyScan is how many journal entries a history read looks through. The

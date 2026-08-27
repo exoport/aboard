@@ -41,11 +41,11 @@ $(GOLANGCI_LINT): $(BINGO_DIR)/golangci-lint.mod
 	@echo "(re)installing $(GOBIN)/golangci-lint-v2.13.1"
 	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=golangci-lint.mod -o=$(GOBIN)/golangci-lint-v2.13.1 "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
 
-GORELEASER := $(GOBIN)/goreleaser-v2.17.1
+GORELEASER := $(GOBIN)/goreleaser-v2.18.0
 $(GORELEASER): $(BINGO_DIR)/goreleaser.mod
 	@# Install binary/ries using Go 1.14+ build command. This is using bwplotka/bingo-controlled, separate go module with pinned dependencies.
-	@echo "(re)installing $(GOBIN)/goreleaser-v2.17.1"
-	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=goreleaser.mod -o=$(GOBIN)/goreleaser-v2.17.1 "github.com/goreleaser/goreleaser/v2"
+	@echo "(re)installing $(GOBIN)/goreleaser-v2.18.0"
+	@cd $(BINGO_DIR) && GOWORK=off GOOS=$(GOHOSTOS) GOARCH=$(GOHOSTARCH) GOARM=$(GOHOSTARM) $(GO) build -mod=mod -modfile=goreleaser.mod -o=$(GOBIN)/goreleaser-v2.18.0 "github.com/goreleaser/goreleaser/v2"
 
 GOVULNCHECK := $(GOBIN)/govulncheck-v1.7.0
 $(GOVULNCHECK): $(BINGO_DIR)/govulncheck.mod

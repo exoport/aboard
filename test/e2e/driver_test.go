@@ -111,6 +111,17 @@ func launchOptions() playwright.BrowserTypeLaunchOptions {
 	headed := os.Getenv("E2E_HEADED") == "1"
 	opts := playwright.BrowserTypeLaunchOptions{
 		Headless: new(!headed),
+		// Channel is what makes `NoInstallShell: true` above true rather than a
+		// wish. Without it, a headless launch on this driver resolves to
+		// `chrome-headless-shell` — the separate ~90 MB download runOptions()
+		// deliberately skips — and the run dies before the first test with
+		// "Executable doesn't exist at .../chrome-headless-shell", which reads
+		// like a broken machine rather than a contradiction inside this file.
+		// `chromium` names the full browser for headless and headed alike, which
+		// is what this suite always meant to drive: the shell is the OLD headless
+		// implementation, and this repo already has iframe-painting gotchas that
+		// come from exactly that difference.
+		Channel: new("chromium"),
 	}
 	if headed {
 		// Enough to watch what the driver is doing without the run taking a

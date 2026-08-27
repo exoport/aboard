@@ -43,7 +43,7 @@ jobs:
           # `latest` would mean `make snapshot` and the real release are two
           # different programs, and the difference only ever shows up in the run
           # that publishes. Move this and the .bingo pin together.
-          version: v2.17.1
+          version: v2.18.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

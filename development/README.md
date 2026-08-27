@@ -36,9 +36,9 @@ features, the panel prerequisites, the VS Code extension (implemented, not insta
 bookkeeping. `plan-1_port-from-spike.md` is the record of how the repo came to be and its 16
 decisions still bind.
 
-**The one open list is [plan-2 §10](planning/plan-2_finish-line.md#10-gated-on-the-human--do-not-start-without-an-answer)** — six
+**The one open list is [plan-2 §10](planning/plan-2_finish-line.md#10-gated-on-the-human--do-not-start-without-an-answer)** — five
 entries, all of them questions for the human rather than work to pick up. Do not start any of
-them without an answer: the remote and first tag, Go 1.27, the `ape aboard` mount and the
+them without an answer: the remote and first tag, the `ape aboard` mount and the
 `aboard <cmd>` strings measured for it, installing the VS Code extension (M6), and the five
 porting judgement calls — `make dist` dropped, `restart.sh` kept, NOTICE in the release
 archives, the `vuln` CI job, and the two hidden commands outside the declared table — which
@@ -55,6 +55,13 @@ building the feature. The other three: the example board's
 prose says "the agent", the notify button's acknowledgement is a toast the SSE repaint cannot
 reach, and `JournalEntry.Before` carries the whole tab so the `apply` merge survives a foreign
 rename.
+
+A fifth left it on **2026-08-27**: **Go 1.27**, answered by the human once the toolchain was
+installed on the machine. `go.mod` says `go 1.27.0`, the `github.com/go-json-experiment/json`
+dependency is gone in favour of the stdlib `encoding/json/v2` and `encoding/json/jsontext`,
+and the goreleaser pin that entry was blocking moved to **v2.18.0**. The `apex_process_ape`
+condition attached to it — one toolchain across both — was overtaken rather than met: the
+human moved the machine, and the `ape aboard` mount is still its own §10 entry.
 
 Below that, one more list: real findings that are nobody's blocker and nobody's question —
 decisions for whoever next touches that code. They are not §10, and they are not work queued

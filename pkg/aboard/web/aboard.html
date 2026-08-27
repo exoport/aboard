@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <title>aboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The board has no icon, and this line is how it SAYS so. Without a rel=icon
+     a browser asks for /favicon.ico unprompted, which is not on the static
+     allow-list (serveFiles in server.go) and so comes back 403 — a red console
+     error on every single page load, in every real browser, since the first
+     commit. The browser suite could not see it: it drove chrome-headless-shell,
+     which does not ask. It only surfaced when the suite moved to the full
+     Chromium (test/e2e/driver_test.go). An empty `data:` URL is the standard way
+     to answer "there is nothing to fetch" without inventing a mark or opening a
+     route; give this an href and the board has a tab icon. -->
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="app.css">
 <!-- The URL prefix this board is served under, injected by the server from
      --base-path. Must stay on one line and byte-identical: serveShell

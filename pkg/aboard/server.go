@@ -34,6 +34,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -52,9 +54,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 
 	"github.com/exoport/aboard/pkg/aboard/web"
 )

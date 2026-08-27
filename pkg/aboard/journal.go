@@ -26,6 +26,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,8 +35,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
 const (

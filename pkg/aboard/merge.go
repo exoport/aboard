@@ -34,6 +34,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -41,9 +43,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 )
 
 // ErrCollision is a conflict the merge will not resolve on its own, and every

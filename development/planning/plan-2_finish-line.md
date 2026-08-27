@@ -4,9 +4,9 @@
 `28252bb`) and finished 2026-08-26. All nine items are done, plus 10a (the make targets are the
 gate) and 10b (the human's answers to four §10 questions) — the hash beside each is the commit
 that landed it; item 8 landed in the `aboard_vscode` repo (`6711c15` + `ca72ca6` there), not this
-one. §10 is the only list still open, it is four entries shorter since the human answered
-those four on 2026-08-26 (their dispositions are §10c), and every entry left in it is a question for
-the human rather than work to pick up. A session resuming after a context clear reads this line
+one. §10 is the only list still open, it is FIVE entries shorter since the human answered
+four of them on 2026-08-26 (their dispositions are §10c) and Go 1.27 on 2026-08-27 (§10p), and
+every entry left in it is a question for the human rather than work to pick up. A session resuming after a context clear reads this line
 and knows there is no queue: ask the human what is next.**
 
 This is the master list. Every item points at the document that holds its detail; this file
@@ -136,8 +136,9 @@ Source: `development/handoffs/handoff-json-hot-paths.md`. Scope, in its own deci
 benchmark harness with the "before" numbers recorded in that file; (2) parse once and keep the
 document in memory, compare by hash, `reconcileNextID` walks only changed tabs, watcher gated on
 mtime+size, `GET` from cache with ETag/304, the browser's baseline clone replaced, `maxBodyBytes`
-raised deliberately; (1) `encoding/json/v2` via `go-json-experiment/json` (or Go 1.27 if ape moves)
-with `jsontext.Value` and the stricter-defaults test pass. (3) per-tab resources is NOT built.
+raised deliberately; (1) `encoding/json/v2` via `go-json-experiment/json` (or Go 1.27 if ape moves
+— which is what happened on 2026-08-27; the mirror is gone and the stdlib package is imported
+directly, §10p) with `jsontext.Value` and the stricter-defaults test pass. (3) per-tab resources is NOT built.
 **Done when** the "Measured" table in the handoff has before/after rows and the acceptance line of
 every structural item holds under the benchmark, with `make e2e` still green.
 
@@ -232,17 +233,48 @@ Chromium, which flaked once and would again.
 
 ### 10o. The handoffs retired (both repos), the spike's comparison matrix promoted, one gotcha carried  ☑ `611c0b7` + aboard_vscode `7eb231a` (`development/handoffs/` and `aboard_vscode/docs/handoff.md` deleted after promotion; `docs/explanation/why-a-board-and-not-an-artifact.md`)
 
+### 10p. Go 1.27: the JSON dependency dropped, goreleaser unpinned from its blocker  ☑ (answered by the human on 2026-08-27, once the toolchain was installed on the machine)
+
+The §10 entry read "only if `apex_process_ape` moves too". That condition was **overtaken
+rather than met**: the human moved this machine to Go 1.27 and said to go, and the `ape aboard`
+mount remains its own §10 entry. What landed, and what it cost:
+
+- `go.mod` → `go 1.27.0`; `github.com/go-json-experiment/json` **removed**. Nine files swapped
+  `github.com/go-json-experiment/json` → `encoding/json/v2` and `.../jsontext` →
+  `encoding/json/jsontext`, and nothing else changed, because the module was always the Go
+  team's published mirror of the same implementation. Direct dependencies are now cobra, pflag,
+  yaml.v3 and (test-only) playwright-go.
+- **The import group had to be fixed by hand.** gofumpt moves a plain `encoding/json/jsontext`
+  into the stdlib group but leaves an ALIASED `jsonv2 "encoding/json/v2"` in whatever group it
+  is already in — so a straight path substitution leaves a stdlib import sitting in the
+  third-party block, which `goimports` (enabled under `formatters` in `.golangci.yaml`) would
+  eventually argue about. Moved into the std group by hand; gofumpt then leaves it alone, so
+  the form is stable rather than merely accepted once.
+- **One lint finding, and it is a real fact about Go 1.27**: `unconvert` on
+  `json.RawMessage(v)` in `codec_test.go`. v1's `RawMessage` is now `= jsontext.Value` — an
+  ALIAS, in `$GOROOT/src/encoding/json/v2_stream.go` — not a second `[]byte` type, so the
+  conversion is a no-op. Replaced with `maps.Copy`, with the reason written into the test.
+- **The byte-identical assertion passed unchanged.** `TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder`
+  is the one that decides whether every board on disk changes shape on its next write; v1 keeps
+  v1 semantics on top of v2, so it is still a real comparison and it is still green.
+- **goreleaser v2.17.1 → v2.18.0**, in `.bingo/goreleaser.mod` AND `.github/workflows/release.yml`
+  (the two-file pin CLAUDE.md warns about). Proven with `make snapshot`: all six targets build.
+  golangci-lint, gofumpt and govulncheck were already at their latest releases and did not move;
+  all three run clean against a Go 1.27 module, so no pin moved just to keep a gate green.
+- Ladder: `go build`/`go vet`, `make fmt-check`, `go test -race ./...`, `make lint` (0 issues),
+  `make govulncheck` (0 called vulnerabilities), `make snapshot`.
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
-  (`git@github.diegos_exo:exoport/aboard.git` and `…/aboard_vscode.git`) and **nothing has been
+  (`github.com/exoport/aboard` and `…/aboard_vscode` — `git remote -v` shows a
+  `git@github.diegosz:…` rewrite because this machine has a `url.…insteadOf` rule pointing at an
+  SSH host alias, which is local config and not the address) and **nothing has been
   pushed to either**. What is still the human's: pushing at all — which waits on their own manual
   test of both repos and their review of this section — the org's Actions OIDC/`id-token: write`
   permission for keyless cosign, and `v0.1.0`. The release pipeline is untested against a real tag
   until that happens; `make snapshot` is the local proof.
-- **Go 1.27 for the `json/v2` item** — only if `apex_process_ape` moves too (one toolchain for the
-  `ape aboard` mount). It now gates a second thing: **goreleaser v2.18.0 requires Go 1.27**, so
-  the pin stops at v2.17.1 until this is answered (item 10, 2026-08-26).
+- ~~**Go 1.27 for the `json/v2` item**~~ — **ANSWERED 2026-08-27, see §10p.**
 - **The `ape aboard` mount itself** — out of scope for this plan by the human's word ("in the
   future"); when it comes it is a plan in the ape repo: `require github.com/exoport/aboard` at a
   real tag, `root.AddCommand(cli.NewRootCmd(cli.Options{Host: aboard.HostApe}))`, and the two latent

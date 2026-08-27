@@ -2,12 +2,11 @@ package aboard
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"log"
 	"maps"
 	"time"
-
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // Tabs are data, not code. A tab names a purpose, picks a renderer by `type`,

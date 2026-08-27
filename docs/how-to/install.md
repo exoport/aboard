@@ -20,7 +20,8 @@ go install github.com/exoport/aboard/cmd/aboard@latest
 ```
 
 The binary lands at `$(go env GOPATH)/bin/aboard`; make sure that directory is on your
-`PATH`. Needs Go 1.26 or later.
+`PATH`. Needs Go 1.27 or later — the board's JSON codec is the standard library's
+`encoding/json/v2`, which is not present before that.
 
 A `go install` build carries no goreleaser ldflags, so its identity comes from Go's own
 build information: `aboard version` reports the **module version** it was installed at.

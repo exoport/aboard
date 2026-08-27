@@ -263,6 +263,32 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: the board stops asking for a favicon it was refusing to serve.** With no
+  `<link rel="icon">` in the shell, every browser asked for `/favicon.ico` on its own; that
+  path is not on the server's static allow-list, so the answer was `403` and the console
+  carried a red error on **every page load, in every real browser, since the first commit**.
+  The shell now says there is no icon (`href="data:,"`), which costs no route and invents no
+  mark. Found only because the browser suite moved off `chrome-headless-shell` — which never
+  asks — onto the full Chromium; see below.
+- **test: the browser suite drives the full Chromium, not the headless shell.**
+  `runOptions()` has always set `NoInstallShell: true` and said why, but the launch never
+  named a channel, so a headless launch resolved to `chrome-headless-shell` anyway — which
+  worked only for as long as some earlier install had left one in `~/.cache/ms-playwright`.
+  On a clean cache the run died before its first test with "Executable doesn't exist at
+  .../chrome-headless-shell". `Channel: "chromium"` makes the file's own stated intent true,
+  and the first thing the real browser found was the favicon 403 above.
+- **build: Go 1.27, and the JSON dependency is gone.** `encoding/json/v2` and
+  `encoding/json/jsontext` are in the standard library as of Go 1.27, so
+  `github.com/go-json-experiment/json` — which was only ever the Go team's published mirror
+  of that same code — left `go.mod`. Nine files changed an import path and nothing else.
+  **A `go install` build now needs Go 1.27 or later**, which is the one user-visible part of
+  this; the direct dependency list is down to cobra, pflag and yaml.v3, with playwright-go
+  test-only behind `//go:build e2e`. Nothing about the board on disk changed: the assertion
+  that the written document is byte-identical to what `encoding/json` produced passed
+  unchanged across the swap, because v1 keeps v1 semantics even though it is now implemented
+  on top of v2. The pinned `goreleaser` moved to **v2.18.0**, which had been held at v2.17.1
+  only because it requires Go 1.27; golangci-lint, gofumpt and govulncheck were already at
+  their latest and all three are clean against the new toolchain.
 - **chore: `make lint` is silent again.** `.golangci.yaml` disables `gomodguard` so that
   `gomodguard_v2`, which `default: all` already enables, is the only one running; v2.13.1
   printed a deprecation warning on every run while both were on. The opposite of the

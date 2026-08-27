@@ -58,11 +58,15 @@ into the README). The review file has a disposition beside every finding, and
 That one run is also the only reason the native-dialog defect below was ever found: it
 is invisible to a suite that runs at the top level of a browser, and it had shipped.
 
-**The one open list is that plan's §10** — six entries, and every one of them is a
-question rather than work: the remote and the first tag, Go 1.27, the `ape aboard` mount
+**The one open list is that plan's §10** — five entries, and every one of them is a
+question rather than work: the remote and the first tag, the `ape aboard` mount
 and the `aboard <cmd>` strings that go with it, installing the extension, and the five
 porting judgement calls that stand until overruled (written out in §10 itself since
-2026-08-27, rather than pointing at a file). Four
+2026-08-27, rather than pointing at a file). **Go 1.27 left that list on 2026-08-27**,
+answered by the human: the toolchain moved on this machine, so `go.mod` says `go 1.27.0`,
+`github.com/go-json-experiment/json` is gone in favour of the stdlib `encoding/json/v2`,
+and the goreleaser pin it was blocking reached v2.18.0 — see the dependency decision
+below. Four
 more left that list on 2026-08-26 when the human answered them (§10c, and the work
 landed with the answers): the example board's prose says "the agent", the notify
 button's acknowledgement is a flash the repaint cannot reach, the journal entry carries
@@ -76,8 +80,13 @@ nobody re-measures them. A fifth, the pinned-versus-`$PATH` divergence, is RESOL
 see "the make targets are the gate" below.
 
 If you are resuming and looking for the next task, **there is not one queued — ask the
-human.** A remote exists (`git@github.diegos_exo:exoport/aboard.git`, and
-`…/aboard_vscode.git` for the extension) and **nothing has ever been pushed to either**.
+human.** A remote exists (`github.com/exoport/aboard`, and `…/aboard_vscode` for the
+extension) and **nothing has ever been pushed to either**. `git remote -v` prints
+`git@github.diegosz:exoport/…` rather than `github.com` because this machine rewrites it
+with a `url.…insteadOf` rule in `git config` pointing at an SSH host alias that picks the
+right key — the alias is local configuration, not the address, so **write `github.com` in
+prose**; an earlier version of this file said `github.diegos_exo`, which is neither the
+real host nor the alias actually in use.
 Pushing waits for the human: their own manual test of both repos, and their review of
 plan-2 §10.
 
@@ -157,8 +166,12 @@ nothing. One pin moves with a second file: `goreleaser`'s version is written int
 `.github/workflows/release.yml` as well, and the comment on that line says so.
 
 Pinned versions live in `.bingo/*.mod`: golangci-lint **v2.13.1**, gofumpt **v0.11.0**,
-govulncheck **v1.7.0**, goreleaser **v2.17.1** (v2.18.0 wants Go 1.27, which is gated on
-the human — plan-2 §10).
+govulncheck **v1.7.0**, goreleaser **v2.18.0**. The first three were already the latest
+release when the toolchain moved to Go 1.27 on 2026-08-27 and did not need to move;
+goreleaser did, because v2.18.0 requires Go 1.27 and the pin had been held at v2.17.1
+waiting for exactly that. All four run against a Go 1.27 module unchanged — golangci-lint
+v2.13.1 in particular reports 0 issues on it, so no pin had to be moved to keep a gate
+green.
 
 ### Commits
 
@@ -289,7 +302,7 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
 - **The board draws its own questions.** `views/dialog.js` is the only confirm/prompt on the board — see the gotcha below for why a native one is not an option, and `docs/how-to/run-in-vscode.md` for the user-facing version. Its buttons go through plain `button()` rather than `controlsFor()`: a dialog's OK and Cancel are chrome belonging to no renderer, which is the case `views/controls.js` documents for the plain helper, and what an agent needs declared is the control that OPENED the dialog.
 - **The board can be FRAMED, and says so out loud.** Three things exist for a host that owns the tab strip — a VS Code extension is the first: `?chrome=notabs` suppresses the board's own strip for that viewer; the page posts `{__aboard: 'active', tab: '<id>'}` to its parent whenever the active tab changes, so a sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the board and not only clicks that started outside it; and every `localStorage`/`sessionStorage` access is wrapped, because a third-party frame can be refused storage outright and an unguarded read would take the whole page down rather than lose a remembered scroll position. None of the three is server state, and none of them is a hook a host can use to make the board DO anything — the rule that nothing in the UI starts a session holds across the frame boundary too.
 - **One resolved root.** Paths are joined in `layout.go` and nowhere else — enforced by `TestNothingOutsideLayoutJoinsAPath`, an AST walk, because the rule had four violations for as long as nothing checked it. The port is derived from the discovered root, so the URL is the same from any subdirectory.
-- **Dependencies are cobra + pflag + yaml.v3 + `go-json-experiment/json` and their closure.** The JSON one is the Go team's own published mirror of `encoding/json/v2`, which Go 1.27 makes the default `encoding/json`; it has zero dependencies of its own and aliases the stdlib implementation once the toolchain moves. It is here for the raw-value paths the board is made of — a tab's `state` is opaque bytes — where it is 3–7× the v1 encoder, and for `jsontext.Value.Canonicalize()`, which replaced an unmarshal-and-re-marshal round trip. `writeOptions` in `pkg/aboard/document.go` pins `Deterministic` and `EscapeForHTML` so the bytes it writes are byte-identical to what `encoding/json` wrote (asserted); do not drop the second without escaping at `htmltab.go`'s `<script>` splice first. No vendor directory; the mermaid bundle is committed at `pkg/aboard/web/lib/` because Go treats `vendor/` specially. **`playwright-go` is TEST-ONLY**: it is reached only from `test/e2e/`, every file of which is behind `//go:build e2e`, so it never enters the binary — `go list -deps ./cmd/aboard` does not mention it and neither does `go version -m ./aboard`. Its module path is `github.com/mxschmitt/playwright-go`, which is what the community fork publishes in its own `go.mod` at these tags.
+- **Dependencies are cobra + pflag + yaml.v3 and their closure. The JSON one is gone** — as of **2026-08-27** and Go 1.27, `encoding/json/v2` and `encoding/json/jsontext` are STDLIB, so `github.com/go-json-experiment/json` (the Go team's own published mirror, depended on from the port until then) left `go.mod` and nine files swapped an import path. Nothing else moved, because the mirror had always been the same implementation — which is the fact that made the migration cheap and is worth knowing before anyone proposes reverting it. Two things it turned up, both load-bearing. **v1's `json.RawMessage` is now `= jsontext.Value`** (`$GOROOT/src/encoding/json/v2_stream.go`), an ALIAS rather than a second `[]byte` type, so converting between them is a no-op `unconvert` reports — one existed in `codec_test.go` and the comment there records why it went. And **`encoding/json` keeps v1 semantics** even though v1 is now implemented on top of v2, which is what keeps `TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder` a real comparison rather than a tautology: it passed unchanged across the swap, so no board on disk changes shape on its next write. The v2 codec is here for the raw-value paths the board is made of — a tab's `state` is opaque bytes — where it is 3–7× the v1 encoder, and for `jsontext.Value.Canonicalize()`, which replaced an unmarshal-and-re-marshal round trip. `writeOptions` in `pkg/aboard/document.go` pins `Deterministic` and `EscapeForHTML` so the bytes it writes are byte-identical to what `encoding/json` wrote (asserted); do not drop the second without escaping at `htmltab.go`'s `<script>` splice first. No vendor directory; the mermaid bundle is committed at `pkg/aboard/web/lib/` because Go treats `vendor/` specially. **`playwright-go` is TEST-ONLY**: it is reached only from `test/e2e/`, every file of which is behind `//go:build e2e`, so it never enters the binary — `go list -deps ./cmd/aboard` does not mention it and neither does `go version -m ./aboard`. Its module path is `github.com/mxschmitt/playwright-go`, which is what the community fork publishes in its own `go.mod` at these tags.
 - **Handoffs are transient, and a finished one is DELETED.** Decided by the human on
   2026-08-27: "the handoffs were transient implementation artifacts; if already
   implemented, delete them." `development/handoffs/` held six of them, all saying DONE or
@@ -345,6 +358,7 @@ session parked on `aboard wait`, has to survive a restart and a week away.
 - **The web tree is compiled into the binary.** After editing anything under `pkg/aboard/web/`, rebuild (`make build`) or run `aboard serve --dev`, or your change appears to do nothing.
 - **`make caps` builds twice, and neither build is redundant.** `pkg/aboard/web` is embedded, so the first binary emits `views/controls.generated.js` from the current specs and the second embeds the module it just wrote. Drop one and the server serves the previous controls while your spec edit appears to do nothing.
 - **`test/` is embedded too**, and it still holds two probe pages (`pkg/aboard/web/test/mermaid-probe.html`, `theme-probe.html` — the latter takes `?theme=light` and reads its token list out of the stylesheet rather than carrying one, so it can show the variant the switch introduced; it had already lost `--accent-dim` and `--danger` from a hand-written list). Editing anything under `pkg/aboard/web/` and re-running a browser check tests the OLD copy, silently. Rebuild first, not after.
+- **The browser suite drives the FULL Chromium, and it took a clean cache to notice it had not been.** `runOptions()` sets `NoInstallShell: true` — the suite wants the real browser, not the ~90 MB `chrome-headless-shell` — but the launch named no channel, and a headless launch resolves to the shell unless it does. That contradiction was invisible for as long as `~/.cache/ms-playwright` happened to hold a shell from some other install; on a wiped cache (2026-08-27) the run died before its first test with `Executable doesn't exist at …/chrome-headless-shell`, which reads like a broken machine rather than a broken assumption. `Channel: new("chromium")` in `launchOptions()` is what makes the intent true. **The shell and the full browser are not the same witness**: the very first full-Chromium run found a `403` on `/favicon.ico` that had been in every real browser's console since the first commit, because the shell never asks for one. If a test suddenly reports console errors nobody has seen, ask which browser saw it.
 - **Do not run `make e2e` twice in one shell call.** It is ~1 min, so two runs blow a two-minute tool timeout. It needs no server, so there is nothing to start in the foreground and nothing to kill — that class of accident is gone with `test/smoke.sh`.
 - **The browser suite cannot touch your board any more.** `make e2e` seeds a temp root, serves it in-process on a free port, and deletes it. The old `make smoke` had to be aimed at a real board with `PROJECT=`, WROTE to it, and poked the notify channel — releasing any session genuinely blocked on `aboard wait`. `test/shot.sh` still takes `PROJECT` and still needs a running server, because it reads the board and writes only pictures.
 - **A failing `$(...)` aborts a `set -e` script with no message at all.** `sh` is `dash` here, so `BASE=$(sed … missing-file)` ended the old shell suite instantly and `make` printed nothing but its own error line — it read as "the suite is broken", not "the file is missing". `test/shot.sh` is the one shell script left where this can still bite: every command substitution whose failure is survivable needs `|| true`. Same family as `$(cmd; echo $?)` reading empty.

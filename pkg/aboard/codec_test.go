@@ -12,14 +12,14 @@ package aboard
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 )
 
 // The parity that makes this a cost change and not a format change.
@@ -51,10 +51,16 @@ func TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder(t *testing.T) {
 	// asserted separately (TestAStateBlobKeepsItsAuthorsKeyOrder). What is pinned
 	// here is that the CODEC swap on its own changes nothing: same indentation,
 	// same escaping, same root key order.
+	// The map stays typed as json.RawMessage because that is the v1 API's own
+	// vocabulary and naming it is the point of this comparison — but since Go
+	// 1.27 no conversion is needed to fill it, and that is not a tidy-up: v1's
+	// RawMessage is now `= jsontext.Value` (encoding/json/v2_stream.go), an
+	// ALIAS rather than a second []byte type. Writing the conversion back in is
+	// what unconvert reports. What the alias does not change is what is being
+	// compared: json.MarshalIndent below is still the v1 entry point with v1
+	// defaults, which is the whole claim this test makes.
 	obj := make(map[string]json.RawMessage, len(doc.fields)+1)
-	for k, v := range doc.fields {
-		obj[k] = json.RawMessage(v)
-	}
+	maps.Copy(obj, doc.fields)
 	tabs, err := json.Marshal(doc.tabs)
 	if err != nil {
 		t.Fatal(err)

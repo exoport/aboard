@@ -1,10 +1,9 @@
 package aboard
 
 import (
+	jsonv2 "encoding/json/v2"
 	"regexp"
 	"strconv"
-
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
 // Ids are board-wide monotonic, not per-container.

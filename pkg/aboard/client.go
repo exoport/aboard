@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -18,9 +20,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 )
 
 // replyReadLimit caps what a reply body may cost us. Every response this file

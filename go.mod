@@ -1,9 +1,8 @@
 module github.com/exoport/aboard
 
-go 1.26.6
+go 1.27.0
 
 require (
-	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3
 	github.com/mxschmitt/playwright-go v0.6201.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10

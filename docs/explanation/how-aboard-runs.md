@@ -220,9 +220,15 @@ save that rewrites identical bytes still wakes nobody.
 
 ### The codecs that were rejected
 
-The codec that shipped is the Go team's own published mirror of `encoding/json/v2`, which
-Go 1.27 makes the default `encoding/json` — so the adoption question closes itself when
-the toolchain moves. The *other* question does not close, because "let us swap in a faster
+The codec that shipped is `encoding/json/v2`. It arrived here on 2026-08-25 as the Go
+team's own published mirror, `github.com/go-json-experiment/json`, on the reasoning that
+the adoption question would close itself when the toolchain moved — and on **2026-08-27**
+it did: Go 1.27 makes v2 part of the standard library, the module dependency was dropped,
+and nine files changed an import path and nothing else. The benchmark numbers above were
+not re-measured across that swap and did not need to be, because the mirror and the
+stdlib package are the same implementation; what was re-checked is the assertion that
+matters to anyone with a board on disk, `TestTheWrittenDocumentIsByteIdenticalToTheOldEncoder`,
+which still passes. The *other* question does not close, because "let us swap in a faster
 third-party JSON library" is a proposal somebody can make on any Tuesday. The survey was
 run once, on 2026-08-25, and its verdicts are kept here so it is not run again:
 
