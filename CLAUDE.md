@@ -52,7 +52,9 @@ unit-tested, and **run in a real Extension Development Host once, partially**, o
 2026-08-26, then worked through a second time the same day — what those runs reached is
 the status block in the extension's `README.md`, which is now the only record of it: that
 repo's `docs/handoff.md` was deleted on 2026-08-27 with its load-bearing content moved
-into the README). The review file has a disposition beside every finding, and
+into the README). On **2026-08-27** the extension's notify bell became a **nudge button**
+(`$(zap)` / `$(circle-slash)`, commands `aboard.nudge*`) and a dev **`.vsix`** packages
+with `npm run package` — neither yet seen in a running host; plan-2 §10q. The review file has a disposition beside every finding, and
 `development/handoffs/` is gone — see the decision below.
 
 That one run is also the only reason the native-dialog defect below was ever found: it

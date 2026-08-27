@@ -264,6 +264,25 @@ mount remains its own §10 entry. What landed, and what it cost:
 - Ladder: `go build`/`go vet`, `make fmt-check`, `go test -race ./...`, `make lint` (0 issues),
   `make govulncheck` (0 called vulnerabilities), `make snapshot`.
 
+### 10q. The bell becomes a nudge, and a dev `.vsix`  ☑ aboard_vscode `211c85a` (both asked for by the human on 2026-08-27)
+
+- **The icon was semantically wrong, and the mechanism never was.** A bell in an editor means
+  *notifications for you*; this button means an agent is BLOCKED on `aboard wait` and the human
+  is the only one who can release it. `$(zap)` when one is parked — the board's own word, since
+  the route is `POST /poke` — and `$(circle-slash)` when none is. Two glyphs rather than one
+  metaphor with an on/off variant, because `bell`/`bell-dot` is the only codicon pair that
+  carries lit/unlit in one shape, and "nothing to nudge" is a different statement from "nudge"
+  rather than a quieter one. The commands went with it: `aboard.notify*` → `aboard.nudge*`,
+  "Nudge Waiting Agent" — free now, and never cheaper, since nothing is published.
+  `test/manifest.test.ts` refuses any of the three icons matching `/bell/`.
+- **A dev `.vsix`**: `@vscode/vsce` as a dev dependency, `npm run package`, 48 KB, ten files.
+  The reason it matters is not distribution. **An installed build and an F5 build are different
+  programs** — F5 attaches a debugger, which is what made Node 24's inspector kill the SSE
+  stream on every write (`cff655a`), a defect that cannot exist in an installed one; and an
+  installed build is the only thing that runs from the packaged file list, so a `.vscodeignore`
+  that wrongly excludes something is invisible until then. Two new unticked rows on the
+  extension's verification list say exactly that.
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
@@ -281,7 +300,11 @@ mount remains its own §10 entry. What landed, and what it cost:
   hosted-mode findings from the review (invocation strings that say `aboard`, `version`/`/health`
   reporting the host's commit) become real then.
 - **Installing and testing the extension (M6)** — the human's call on when; item 8 stops at a
-  green build.
+  green build. **A dev `.vsix` now exists** (2026-08-27, §10q): `npm run package` in
+  `aboard_vscode` produces `aboard-vscode-0.1.0.vsix`. Nobody has installed from it yet, and
+  that install is a different test from F5 — no debugger, real activation events, the packaged
+  file list rather than the working tree. Publishing anywhere is still gated, and still Open
+  VSX rather than the Marketplace.
 - **Five judgement calls the porting agents made, which stand until the human overrules
   them.** They were recorded in `development/handoffs/handoff-phase-e-finish.md`; that folder
   was deleted on 2026-08-27 once every handoff in it was implemented, so they are written out
