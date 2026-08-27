@@ -218,6 +218,8 @@ Chromium, which flaked once and would again.
 
 ### 10l. Themes: a dark/light switch, `.aboard/theme.json`, no product name in the palette  ☑ `380309f` (capsHash → `6d8593b1`; the embedder theme message is the hook for the extension)
 
+### 10m. The recipes reference page  ☑ `32086a9` (docs/reference/recipes.md: folders and precedence, file format, the frontmatter schema, the template block, the commands; rebased onto 10l)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
