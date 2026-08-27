@@ -296,7 +296,8 @@ lines and the ones with no user-visible surface — the suite, the extension —
   cache with an `ETag`, the file watcher is stat-gated, and the JSON codec is
   `encoding/json/v2` (via the Go team's published mirror) for the raw-value paths a board
   is made of. Every claim has a counting test; the numbers are in
-  `development/handoffs/handoff-json-hot-paths.md`.
+  [what a write costs](docs/explanation/how-aboard-runs.md#what-a-write-costs), and the
+  benchmark that produced them is `pkg/aboard/bench_test.go`.
 - **feat: the board can be framed by an editor.** `?chrome=full|notabs|none` hides the
   board's own tab strip for one viewer — a URL parameter, never server state, because two
   viewers must be able to disagree about chrome while agreeing about content — the page

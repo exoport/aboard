@@ -58,6 +58,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [Why two identities](explanation/why-two-identities.md) — `aboard` and `ape-aboard` over one `.aboard/`
 - [Why writes are serialised](explanation/why-writes-are-serialised.md) — one writer at a time, what a 409 means under concurrency, and the two locks
 - [Why the manifest is declared](explanation/why-the-manifest-is-declared.md) — declaration as the canonical source, controls as a list, and the unverifiable remainder
+- [Why a board and not an artifact](explanation/why-a-board-and-not-an-artifact.md) — the two media compared across 20 dimensions, re-verified against today's code, and the seven proposals that died in review
 
 ## Contributing to the docs
 

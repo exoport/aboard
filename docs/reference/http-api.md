@@ -196,6 +196,30 @@ variants, so a host need not know which one the viewer is in — and is written 
 not the board document, not `localStorage`. See
 [colour and themes](theme.md#a-theme-from-an-embedder).
 
+### What embedding deliberately does not add
+
+Six things a host might expect, each refused on purpose. They are listed because every
+one of them was proposed while the embedding surface was being designed, and a refusal
+without a reason gets re-proposed.
+
+- **No new endpoint.** `/aboard.json`, `/events`, `/capabilities`, `/health`, `/poke` and
+  `/waiters` are the whole surface a viewer needs. A `/tabs`-shaped convenience route
+  would be a second source of truth for something the document already carries.
+- **No authentication, and no relaxing `connect-src 'none'`.** Being framed by an editor
+  changes nothing about either: the server still cannot tell a browser write from an agent
+  one, and a widget frame still gets no network egress.
+- **No "vscode mode" on the server.** Everything above is per-request or per-viewer.
+  Nothing is a server-side flag for who is looking, because two viewers can look at one
+  board in the same second.
+- **The active tab never goes in the state file.** Two viewers, two active tabs — shared
+  state is wrong for one of them the instant there are two, and writing it would raise a
+  spurious `touched` dot besides.
+- **No rendering moves into the host.** The board serves the board; an embedder that drew
+  a tab would be a second renderer to keep in step with every spec change.
+- **`touched` stays a single human-facing marker.** Dismissing it in an editor panel
+  clears it in the browser too — one human, one "have you looked at this". Per-actor read
+  state is what `seen` is for, and nothing about embedding changes it.
+
 ### `GET /theme.json`
 
 The project's house style, validated: unknown token names and unusable values are

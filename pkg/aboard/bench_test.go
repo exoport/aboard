@@ -12,8 +12,9 @@ package aboard
 //
 // So this file is the instrument, not a test: it synthesises N tabs with mixed
 // state sizes (a few 1 MB html states, the rest small notes), and times the three
-// operations the handoff names — one POST that edits ONE small tab, one GET, one
-// watcher tick. Run it with:
+// operations that matter — one POST that edits ONE small tab, one GET, one watcher
+// tick. The numbers it produced, and what they mean, are written up in
+// docs/explanation/how-aboard-runs.md under "What a write costs". Run it with:
 //
 //	go test -run xxx -bench . -benchmem ./pkg/aboard/
 //
@@ -34,7 +35,7 @@ import (
 	"github.com/exoport/aboard/pkg/aboard/web"
 )
 
-// The board sizes the handoff names: today's boards, a big one, and one nobody
+// The three board sizes: today's boards, a big one, and one nobody
 // has yet — 15 is the example board, 5 000 is the size at which a cost
 // proportional to the document is impossible to miss.
 var benchSizes = []int{15, 500, 5000}
@@ -120,7 +121,7 @@ func benchServer(b *testing.B, doc []byte) *server {
 	}
 }
 
-// benchTenMiB is the idle-cost case the handoff names: a board big enough that
+// benchTenMiB is the idle-cost case: a board big enough that
 // hashing all of it five times a second is real disk and CPU spent on nothing.
 func benchTenMiB() []byte {
 	doc := benchDoc(5000)
@@ -226,7 +227,7 @@ func BenchmarkGetState(b *testing.B) {
 }
 
 // BenchmarkWatcherTick is the idle cost: what the poll loop spends every 200 ms
-// on a board nobody is writing to. The 10 MiB case is the one the handoff names
+// on a board nobody is writing to. The 10 MiB case is the one the write-up names
 // — at 5 ticks a second, a whole-file sha256 there is sustained disk and CPU for
 // nothing at all.
 func BenchmarkWatcherTick(b *testing.B) {

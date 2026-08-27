@@ -163,6 +163,97 @@ ride the reply, the journal entry, the event stream and the tab's own banner. So
 an agent made on its terminal reaches the human's screen, and a mistake the human would
 otherwise find first reaches the agent that is still holding the context to fix it.
 
+## What a write costs
+
+Compare-and-set is whole-document, so it is fair to ask what a whole document costs. The
+answer is deliberately **the edit, not the board**, and it was measured rather than
+asserted — twice, because the first pass changed the algorithm and the second changed the
+codec.
+
+The harness is `pkg/aboard/bench_test.go`, and rerunning it is one command:
+
+```bash
+go test -run xxx -bench . -benchmem ./pkg/aboard/
+```
+
+It synthesises N tabs with **three 1 MiB html states at every size** — a constant, not a
+fraction of N. That is what makes the rows comparable: 15 tabs is 3.00 MiB and 500 tabs is
+3.05 MiB, so those two differ by 485 unchanged tabs and almost no bytes, and "does a POST
+scale with the tabs it did not touch" becomes a question the table can answer. 5 000 tabs
+is 3.54 MiB.
+
+| when | tabs | POST one small tab | GET | watcher tick |
+| --- | --- | --- | --- | --- |
+| before | 15 | 197 ms · 83 MB · 2 686 allocs | 0.64 ms | 2.14 ms |
+| before | 500 | 210 ms · 88 MB · 74 962 allocs | 0.66 ms | 2.18 ms |
+| before | 5 000 | 279 ms · 140 MB · 745 603 allocs | 0.83 ms | 2.55 ms |
+| before | 10 MiB board | — | — | 7.71 ms |
+| after the structural fixes | 15 | 61.8 ms · 40 MB · 478 allocs | 1.43 µs | 0.50 µs |
+| after the structural fixes | 500 | 63.7 ms · 42 MB · 2 784 allocs | 1.39 µs | 0.50 µs |
+| after the structural fixes | 5 000 | 78.5 ms · 50 MB · 25 121 allocs | 0.83 µs | 0.50 µs |
+| after the structural fixes | 10 MiB board | — | — | 0.52 µs |
+| after the codec | 15 | **17.2 ms** · 31 MB · 374 allocs | 1.41 µs | 0.50 µs |
+| after the codec | 500 | **17.3 ms** · 32 MB · 1 918 allocs | 1.44 µs | 0.50 µs |
+| after the codec | 5 000 | **28.5 ms** · 44 MB · 16 487 allocs | 1.36 µs | 0.50 µs |
+| after the codec | 10 MiB board | — | — | 0.52 µs |
+
+Measured on an Intel Core Ultra 5 125U at Go 1.26.6, best of two runs. Absolute
+milliseconds are a fact about that machine; the shape below is not.
+
+| | marginal cost of one UNCHANGED tab | 15 → 500 tabs |
+| --- | --- | --- |
+| before | 15.8 µs | 197 ms → 210 ms (+6.6 %) |
+| after the structural fixes | 3.6 µs | 61.8 ms → 63.7 ms (+3.1 %) |
+| after the codec | 2.5 µs | 17.2 ms → 17.3 ms (+0.6 %) |
+
+A POST now scales with the **bytes it has to read, parse and write back**, which is
+irreducible, and no longer with the tabs it left alone. What is left of the per-tab cost is
+the struct decode and encode of the tab list itself.
+
+The `GET` figure is the server's own work per request — a stat and a write to a discarding
+sink. It no longer includes reading the file; copying bytes to a real socket is unchanged
+and is not what moved. The watcher figure is the one worth reading twice: the tick used to
+read and SHA-256 the whole file five times a second unconditionally, so a 10 MiB board cost
+about 50 MB/s of sustained I/O at idle. It is now one `stat`, and hashes only when the size
+or the modification time has moved — while the signature stays a **content** hash, so a
+save that rewrites identical bytes still wakes nobody.
+
+### The codecs that were rejected
+
+The codec that shipped is the Go team's own published mirror of `encoding/json/v2`, which
+Go 1.27 makes the default `encoding/json` — so the adoption question closes itself when
+the toolchain moves. The *other* question does not close, because "let us swap in a faster
+third-party JSON library" is a proposal somebody can make on any Tuesday. The survey was
+run once, on 2026-08-25, and its verdicts are kept here so it is not run again:
+
+| library | why not |
+| --- | --- |
+| **json-iterator/go** | Archived 2025-12-15. |
+| **minio/simdjson-go** | No release since 2023; AVX2 amd64 only, with no fallback. |
+| **goccy/go-json** | Pre-1.0, heavy `unsafe`, open memory-safety and panic issues, no declared Go-version policy — for 1.3–1.8× over v2 on struct unmarshal. |
+| **bytedance/sonic** | JIT plus `linkname`, amd64/arm64 only with a **silent** stdlib fallback elsewhere, and marshal slower than v2. A tool whose containment story is "no network, no auth, few dependencies" is the wrong home for a JIT. |
+| **segmentio/encoding** | Alive, and it edges v2 on raw-value unmarshal — but not worth a dependency against a codec that is about to be the standard library. |
+| **tidwall/gjson + sjson**, **buger/jsonparser** | Healthy, and irrelevant: they matter only for patching one path of a document in place, which is the per-tab write below, which is not being built. |
+
+The measurement that decides this is in the table above rather than in a library
+comparison: a POST already costs the bytes it must read, parse and write back, and a
+faster parser makes each step faster without changing how many steps there are.
+
+### Per-tab writes are not going to be built
+
+The obvious next step — `GET`/`POST /tab/<id>` with per-tab compare-and-set, so the browser
+and agents move one tab instead of the document — is a **closed question, not a backlog
+item**. It would put a second write path through the one choke point off which every tab
+guarantee, every journal `before` record and every wait predicate hangs, which is the most
+expensive place on the server to be subtly wrong.
+
+The trigger that would reopen it is written down so nobody has to argue about it: **a real
+board, not a synthetic one, where a single-tab write measured by the harness above exceeds
+about 200 ms, or where the document exceeds `maxBodyBytes`.** The worst single-tab write
+measured so far is 28.5 ms on a 3.54 MiB board of 5 000 tabs, against a body ceiling of
+32 MiB. Until somebody records a measurement past one of those two numbers, this stays
+closed for the same reason [the diff renderer](why-no-diff-renderer.md) is.
+
 ## The file is watched, so nothing has to be told
 
 The server keeps the document parsed in memory and re-reads only when the file's size or

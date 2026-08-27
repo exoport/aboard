@@ -25,6 +25,14 @@ generalises: *a declaration that is only read by a human is a comment, and comme
 So the fix is not "write it down more carefully". It is to make the declaration
 **load-bearing**.
 
+There is a second asymmetry underneath that one, and it decides what is worth spending
+effort on. Drift runs in two directions with very different costs. A capability the
+description does not mention is merely **unused** — an agent writes something simpler and
+nothing is harmed. A capability the description gets **wrong** is expensive: the agent
+writes state no renderer reads, nothing errors, and it reports having done something it
+did not do. That is the failure this whole seam exists to make impossible, and it is why
+the write path warns rather than staying silent.
+
 ## Rendered from, not described by
 
 Every renderer's controls are declared in its spec, and the renderer **draws them from
@@ -47,6 +55,23 @@ agent-authored content (a `ui` button's label is the agent's) and chrome belongi
 renderer (the context menu, the inline editor, a dialog's Cancel). Whether a button is a
 capability or merely an affordance is a judgement no rule makes, so it is two calls, and
 the difference is visible in review.
+
+## Where the declaration lives, and why it is JSON
+
+Two placement choices carry more weight than they look like they do.
+
+**JSON, not JavaScript.** The renderers are ES modules and their declarations sit beside
+them, but the declaration files are JSON so that Go reads them with a JSON decoder and
+**never parses JavaScript**. A Go program that has to understand a `.js` file to know what
+the board can do is a Go program that will one day disagree with the browser about it.
+
+**Beside the renderer, not centralised in Go.** Collecting every type's fields into one Go
+table would split renderer knowledge from the renderer file — which is the exact cause of
+the drift being fixed, wearing a tidier shape. The trap worth naming: *moving prose into a
+Go string relocates drift rather than removing it.* Emission only fixes drift when the
+declaration lives in the same directory as the code it describes, so that the change which
+adds a capability physically touches the file that documents it. `views/<type>.js` and
+`views/<type>.spec.json`, side by side, is the whole mechanism.
 
 ## Why `controls` is a list
 

@@ -25,6 +25,7 @@ every few months.
 - [why-two-identities.md](why-two-identities.md) — `aboard` and `ape-aboard` sharing one `.aboard/`: what differs, what must not, and why the manifest's app name is neither.
 - [why-writes-are-serialised.md](why-writes-are-serialised.md) — one lock across read → compare-and-set → write, what it deliberately leaves out, and the fanout race that killed the process.
 - [why-the-manifest-is-declared.md](why-the-manifest-is-declared.md) — declaration as the canonical source rather than a scrape; why controls are a list; why the command table replaced walking the flag registry; and why `gestures` stays deliberately unverifiable.
+- [why-a-board-and-not-an-artifact.md](why-a-board-and-not-an-artifact.md) — a board and a hosted HTML artifact across 20 dimensions: what each medium can do that the other cannot, why they are mostly not competitors, and the seven proposals that died in review.
 
 ## Planned explanation
 

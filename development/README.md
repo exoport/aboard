@@ -10,12 +10,21 @@ Two folders, split by **who the document is addressed to**:
   work: the decisions taken with the human, marked DECIDED where they are not to be
   relitigated, and the shape of the commits that carry them out. A plan is written
   before the work and edited during it; its Status line says how far it has got.
-- **[`handoffs/`](handoffs/)** — briefs for a later session. A handoff is what one
-  session leaves for the next when the work is real but not next: the context it would
-  otherwise have to rediscover, what was measured, and what is proposed rather than
-  done. Each one says at the top whether it is live, superseded, or kept only as design
-  rationale — read that line first, because a superseded handoff still holds the
-  reasoning and none of the instructions.
+- **[`research/`](research/)** — measurements and reviews, each with a disposition beside
+  every finding. Written once, not maintained.
+
+There used to be a third folder, `handoffs/`, and its absence is deliberate. A handoff is
+what one session leaves the next when the work is real but not next — and it is a
+**transient implementation artifact**, so once the work lands the handoff is deleted rather
+than left saying DONE at the top while everything still cites it. The six that lived here
+were removed on **2026-08-27**, after what was load-bearing in each was promoted first: the
+write-cost measurements into `docs/explanation/how-aboard-runs.md`, the rejected browser
+drivers into `docs/how-to/run-the-browser-suite.md`, the embedding non-goals into
+`docs/reference/http-api.md`, the two missing manifest arguments into
+`docs/explanation/why-the-manifest-is-declared.md`, and the five porting judgement calls
+into plan-2 §10 itself. `git log` holds the full text of all six. The `handoff` skill still
+exists and still writes to gitignored `_output/handoffs/`; what was retired is keeping them
+**in the repository**.
 
 ## What is open
 
@@ -24,15 +33,16 @@ Two folders, split by **who the document is addressed to**:
 2026-08-25 and executed over 2026-08-25/26 — is **complete**: the two races, the behaviour and
 coverage review fixes, the end-to-end browser suite, the JSON hot paths, the eleven reviewed
 features, the panel prerequisites, the VS Code extension (implemented, not installed), and this
-bookkeeping. Every handoff in [`handoffs/`](handoffs/) says DONE or SUPERSEDED at the top;
-`plan-1_port-from-spike.md` is the record of how the repo came to be and its 16 decisions still
-bind.
+bookkeeping. `plan-1_port-from-spike.md` is the record of how the repo came to be and its 16
+decisions still bind.
 
 **The one open list is [plan-2 §10](planning/plan-2_finish-line.md#10-gated-on-the-human--do-not-start-without-an-answer)** — six
 entries, all of them questions for the human rather than work to pick up. Do not start any of
 them without an answer: the remote and first tag, Go 1.27, the `ape aboard` mount and the
-`aboard <cmd>` strings measured for it, installing the VS Code extension (M6), and a pointer to
-the judgement calls in `handoffs/handoff-phase-e-finish.md`, which stand until overruled.
+`aboard <cmd>` strings measured for it, installing the VS Code extension (M6), and the five
+porting judgement calls — `make dist` dropped, `restart.sh` kept, NOTICE in the release
+archives, the `vuln` CI job, and the two hidden commands outside the declared table — which
+are written out in §10 itself and stand until overruled.
 
 Four entries left that list on 2026-08-26, when the human answered them; their dispositions are
 [§10c](planning/plan-2_finish-line.md#10c-answered-on-2026-08-26--closed-not-deferred) and the

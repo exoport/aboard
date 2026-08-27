@@ -5,6 +5,14 @@ commits 9f0c7af, c192fb8, a83c107, a350127, e5c698b, 0b508d8. Paused before Phas
 pass) at the human's request — resume from `development/handoffs/handoff-phase-e-finish.md`. This is the
 brief every implementing session works from. Where it says DECIDED, do not relitigate.
 
+> **`development/handoffs/` no longer exists**, and neither does the extension repo's
+> `docs/handoff.md`. Both were deleted on **2026-08-27**, once every handoff in them had been
+> implemented and everything load-bearing had been promoted to a permanent home (`docs/`,
+> `CLAUDE.md`, plan-2 §10, and — for the extension — `aboard_vscode/README.md`). Every
+> reference in this file to a `handoff-*.md` file, or to `aboard_vscode/docs/handoff.md`, is preserved
+> as **history**: it names the document this work was written from at the time, and `git log`
+> in the respective repository holds the full text. Nothing in this file is a live pointer, including the Status line above.
+
 **Phase A–C landed** as the three bisectable commits decision 2 asked for:
 `9f0c7af` (port the spike verbatim), `c192fb8` (split into an embeddable engine, a cobra
 tree and one resolved root), `a83c107` (rename the product, keeping every name that is a

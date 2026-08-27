@@ -14,6 +14,14 @@ holds the ORDER, the scope boundary of each item, and what "done" means. Decided
 on 2026-08-25, including the order. Plan 1 (`plan-1_port-from-spike.md`) is complete and is the
 record of how the repo came to be; its 16 decisions still bind.
 
+> **`development/handoffs/` no longer exists**, and neither does the extension repo's
+> `docs/handoff.md`. Both were deleted on **2026-08-27**, once every handoff in them had been
+> implemented and everything load-bearing had been promoted to a permanent home (`docs/`,
+> `CLAUDE.md`, plan-2 §10, and — for the extension — `aboard_vscode/README.md`). Every
+> reference in this file to a `handoff-*.md` file, or to `aboard_vscode/docs/handoff.md`, is preserved
+> as **history**: it names the document this work was written from at the time, and `git log`
+> in the respective repository holds the full text. Nothing in this file is a live pointer, including the Status line above.
+
 ## Goal
 
 `aboard` becomes a tool a stranger can trust: its two known races are gone and the write path is
@@ -240,9 +248,26 @@ Chromium, which flaked once and would again.
   reporting the host's commit) become real then.
 - **Installing and testing the extension (M6)** — the human's call on when; item 8 stops at a
   green build.
-- The judgement calls listed in `handoff-phase-e-finish.md` (`make dist` dropped, `restart.sh`
-  kept, NOTICE in archives, the `vuln` job, hidden commands outside the declared table) stand
-  until the human says otherwise.
+- **Five judgement calls the porting agents made, which stand until the human overrules
+  them.** They were recorded in `development/handoffs/handoff-phase-e-finish.md`; that folder
+  was deleted on 2026-08-27 once every handoff in it was implemented, so they are written out
+  here rather than pointed at. Each is still true of the tree as of that date.
+  - **`make dist` was dropped.** The spike's hand-rolled cross-compile target is replaced by
+    goreleaser (`make snapshot`) plus `make xcompile-windows`, both of which are in
+    `make ci-local`. Nothing produces a `dist/` by hand any more.
+  - **`restart.sh` was kept**, as a dev convenience only, and is documented as such in
+    `CLAUDE.md`'s directory map. `aboard serve` refuses a duplicate on its own; the script
+    exists for the deliberate restart, which the binary has no flag for.
+  - **NOTICE ships inside the release archives**, where `ape` ships only README and LICENSE.
+    The reason is in `.goreleaser.yaml` beside the line: the embedded web tree carries
+    third-party code, so the attribution has to travel with the binary.
+  - **A `vuln` CI job was kept** (`make govulncheck`, pinned through `.bingo`), rather than
+    folding the scan into the main job or dropping it.
+  - **`recipes index` and `gen-docs` are hidden and excluded from the declared command
+    table**, and `TestHiddenCommandsAreDeliberate` asserts that the set of hidden commands is
+    exactly those two. They are build plumbing, not surface. Alongside that call: the four
+    recipe scope names are `apex` / `aboard` / `dot-aboard` / `builtin`, and `init` in a
+    directory that already IS a root but holds no document **completes** rather than refusing.
 - **`aboard <cmd>` is hardcoded in user-facing prose** — 13 places by item 6's reviewer's count,
   four of them added by item 6 itself, and more again if help text and the generated headers are
   counted. This is the latent hosted-mode finding above, now measured: under `ape aboard` every one

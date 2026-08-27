@@ -19,6 +19,16 @@ Compact the current conversation into a Markdown handoff document saved under `_
 This skill is **not** responsible for committing its own output. The caller (the user running this skill solo) owns all commits.
 Do not commit on your own initiative. Commit only if the user explicitly asks (e.g. "commit the handoff"). Leaving the handoff file uncommitted is the default — handoffs are session artifacts and are typically left out of source control.
 
+**In this repository that default is a rule, and it has a second half.** A handoff is a
+**transient implementation artifact**: it lives in gitignored scratch (`_output/handoffs/`,
+which is where this skill already writes), and once the work it describes is implemented it
+is **deleted**. Before deleting one, promote anything a future reader would be wrong
+without — a measurement, a rejected alternative and the reason it lost, a judgement call
+that still stands — into a permanent home: `docs/`, `CLAUDE.md`, or the plan that owns the
+work. Six handoffs were kept under `development/handoffs/` until 2026-08-27, and every one
+of them said DONE at the top while still being cited as though it were live. Do not
+recreate that directory; `git log` holds the deleted files if anybody needs the full text.
+
 ## CRITICAL RULES
 
 - MANDATORY: Execute ALL steps in the EXECUTION section IN EXACT ORDER

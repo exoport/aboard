@@ -182,6 +182,35 @@ Two things the shell suite did that are deliberately **not** reproduced:
 - **It ran `aboard apply` against whatever `PROJECT` named.** Everything here
   writes to a temp root.
 
+## Why playwright-go, and the drivers that were rejected
+
+Kept here because it is the question anybody arriving at this file asks second, and
+because re-running the survey costs a day. All of it was verified on 2026-08-25.
+
+The suite is **playwright-go inside `go test`, behind an `e2e` build tag**. What decided
+it: `Locator`/`FrameLocator` reach the sandboxed widget frame transparently — and that
+frame is the hardest part of this application, because it is `sandbox="allow-scripts"`
+with no `allow-same-origin`, so Chromium's sandboxed-iframe isolation puts it in a
+separate process; `Locator.DragTo` covers HTML5 drag-and-drop while `page.Mouse` covers
+the pointer-capture drags; assertions auto-retry; and tracing writes the same `trace.zip`
+the Playwright trace viewer opens. No Node at runtime.
+
+The alternatives, and why each one lost:
+
+| driver | why not |
+| --- | --- |
+| **go-rod** | No functional commit since 2024-12, and its pinned Chromium is a 2024 build. |
+| **chromedp** | Active and pure Go, but out-of-process frames need the `Target.setAutoAttach{flatten:true}` dance by hand and there is no auto-wait. Hand-rolling the frame path is precisely the wrong place to hand-roll. |
+| **@playwright/test** (Node) | The higher capability ceiling — trace viewer UI, `--ui`, codegen, built-in visual snapshots — at the cost of a second toolchain (`package.json`, `node_modules`) in a Go repository. The only thing lost by staying in Go is a UI that opens a Go-produced trace anyway. |
+| **Puppeteer** | Caretaker mode, with open bugs attaching to out-of-process frames. |
+| **Cypress** | Cannot automate a cross-origin frame at all, and its events are simulated rather than driven through the browser. |
+| **WebdriverIO / Selenium-Go** | Node plus BiDi frame bugs, and an unofficial Go binding with no releases. |
+
+One thing deliberately **not** built, and it is not queued: visual regression against
+pixel baselines. Font rendering makes it the flakiest layer there is, and nothing has
+asked for it. `screen.png` on a failure plus a human looking at it is the coverage that
+exists, and it is the coverage that has actually caught things.
+
 ## The exploratory complement
 
 Driving the board by hand with an agent — `chrome-devtools-mcp` attached to a

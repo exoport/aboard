@@ -49,18 +49,20 @@ you find it.
 suite, the JSON hot paths, the eleven reviewed features, the VS Code panel's
 server-side prerequisites, and the extension itself (in `aboard_vscode`, built,
 unit-tested, and **run in a real Extension Development Host once, partially**, on
-2026-08-26 — what that run reached is the status block in the extension's `README.md`
-and the ticks in its `docs/handoff.md` §11; everything else there is still unobserved).
-Every handoff in `development/handoffs/` says DONE or SUPERSEDED at the top, and the
-review file has a disposition beside every finding.
+2026-08-26, then worked through a second time the same day — what those runs reached is
+the status block in the extension's `README.md`, which is now the only record of it: that
+repo's `docs/handoff.md` was deleted on 2026-08-27 with its load-bearing content moved
+into the README). The review file has a disposition beside every finding, and
+`development/handoffs/` is gone — see the decision below.
 
 That one run is also the only reason the native-dialog defect below was ever found: it
 is invisible to a suite that runs at the top level of a browser, and it had shipped.
 
 **The one open list is that plan's §10** — six entries, and every one of them is a
 question rather than work: the remote and the first tag, Go 1.27, the `ape aboard` mount
-and the `aboard <cmd>` strings that go with it, installing the extension, and a pointer
-to the judgement calls in `handoff-phase-e-finish.md` that stand until overruled. Four
+and the `aboard <cmd>` strings that go with it, installing the extension, and the five
+porting judgement calls that stand until overruled (written out in §10 itself since
+2026-08-27, rather than pointing at a file). Four
 more left that list on 2026-08-26 when the human answered them (§10c, and the work
 landed with the answers): the example board's prose says "the agent", the notify
 button's acknowledgement is a flash the repaint cannot reach, the journal entry carries
@@ -100,7 +102,7 @@ plan-2 §10.
 | `.claude/skills/aboard/`          | The skill: SKILL.md + references. Hand-copied into a project; its generated half is rebuilt by `make caps`.                           |
 | `.claude/skills/{handoff,release}/` | Working skills for this repo, carried from ape: writing a handoff, and cutting a release. The release one drops ape's harness gates. |
 | `docs/`                           | User-facing docs, Diátaxis-structured — see [docs/README.md](docs/README.md).                                                         |
-| `development/`                    | Plans and handoffs. `git log` is a real source here too: commit messages carry the reasoning and the mistakes.                        |
+| `development/`                    | Plans, briefs and the review record. **No handoffs** — see the decision below. `git log` is a real source here too: commit messages carry the reasoning and the mistakes.  |
 
 ## Workflow
 
@@ -288,6 +290,29 @@ the human's. Kill by the pid in the instance record, as `restart.sh` does.
 - **The board can be FRAMED, and says so out loud.** Three things exist for a host that owns the tab strip — a VS Code extension is the first: `?chrome=notabs` suppresses the board's own strip for that viewer; the page posts `{__aboard: 'active', tab: '<id>'}` to its parent whenever the active tab changes, so a sidebar highlight follows `[`, `]` and `1`–`9` pressed inside the board and not only clicks that started outside it; and every `localStorage`/`sessionStorage` access is wrapped, because a third-party frame can be refused storage outright and an unguarded read would take the whole page down rather than lose a remembered scroll position. None of the three is server state, and none of them is a hook a host can use to make the board DO anything — the rule that nothing in the UI starts a session holds across the frame boundary too.
 - **One resolved root.** Paths are joined in `layout.go` and nowhere else — enforced by `TestNothingOutsideLayoutJoinsAPath`, an AST walk, because the rule had four violations for as long as nothing checked it. The port is derived from the discovered root, so the URL is the same from any subdirectory.
 - **Dependencies are cobra + pflag + yaml.v3 + `go-json-experiment/json` and their closure.** The JSON one is the Go team's own published mirror of `encoding/json/v2`, which Go 1.27 makes the default `encoding/json`; it has zero dependencies of its own and aliases the stdlib implementation once the toolchain moves. It is here for the raw-value paths the board is made of — a tab's `state` is opaque bytes — where it is 3–7× the v1 encoder, and for `jsontext.Value.Canonicalize()`, which replaced an unmarshal-and-re-marshal round trip. `writeOptions` in `pkg/aboard/document.go` pins `Deterministic` and `EscapeForHTML` so the bytes it writes are byte-identical to what `encoding/json` wrote (asserted); do not drop the second without escaping at `htmltab.go`'s `<script>` splice first. No vendor directory; the mermaid bundle is committed at `pkg/aboard/web/lib/` because Go treats `vendor/` specially. **`playwright-go` is TEST-ONLY**: it is reached only from `test/e2e/`, every file of which is behind `//go:build e2e`, so it never enters the binary — `go list -deps ./cmd/aboard` does not mention it and neither does `go version -m ./aboard`. Its module path is `github.com/mxschmitt/playwright-go`, which is what the community fork publishes in its own `go.mod` at these tags.
+- **Handoffs are transient, and a finished one is DELETED.** Decided by the human on
+  2026-08-27: "the handoffs were transient implementation artifacts; if already
+  implemented, delete them." `development/handoffs/` held six of them, all saying DONE or
+  SUPERSEDED at the top, and they were still being cited from `CLAUDE.md`, the plans, the
+  CHANGELOG and `development/README.md` as though live — which is the actual cost: a
+  finished handoff does not go quiet, it goes **stale while still being read**. The rule
+  has two halves and only the first is obvious. **Before deleting one, promote what a
+  future reader would be WRONG without**: a measurement, a rejected alternative with the
+  reason it lost, a judgement call that still stands. Then delete it, and fix every
+  reference — `git log` holds the text. The scratch skill (`.claude/skills/handoff/`) is
+  KEPT and already writes to gitignored `_output/handoffs/`, which is the right place: what
+  was retired is keeping handoffs **in the repository**, not writing them at all.
+  Retargeting it at `development/planning/` was rejected for institutionalising exactly the
+  mistake. Where the six went is in the commit that removed them; the durable pieces are the
+  write-cost measurements in `docs/explanation/how-aboard-runs.md`, the rejected browser
+  drivers in `docs/how-to/run-the-browser-suite.md`, the embedding non-goals in
+  `docs/reference/http-api.md`, and plan-2 §10's five porting judgement calls.
+- **A board is not an artifact, and the comparison is written down** —
+  [why a board and not an artifact](docs/explanation/why-a-board-and-not-an-artifact.md).
+  Twenty dimensions, re-verified against this repository rather than the spike it was
+  written on, plus the seven proposals that died in review. Read it before proposing that
+  the board grow sharing, hosting, or a way to act on a click: those are the three things
+  the other medium is for, and each has a reason here it cannot have.
 
 ## This repo gitignores `.aboard/`
 
@@ -329,6 +354,19 @@ session parked on `aboard wait`, has to survive a restart and a week away.
 - **A browser check that cannot run must FAIL, not skip.** The retired shell suite had ten sections that printed `skip …` and let the run exit 0, so a third of the checks could be absent with nothing to say so. `test/e2e` has no skip path for a missing dependency: `TestMain` installs the driver and fails the run if it cannot, and a fixture that has gone missing is a `t.Fatal` naming what it needed. The one `t.Skip` in the suite names a genuine ambiguity (nowhere empty on the dag canvas to drop on), which is what a skip is for.
 - **The whole browser suite shares ONE temporary board**, so run it shuffled now and then: `go test -tags e2e -count=1 -timeout 10m -shuffle=on ./test/e2e`. Declaration order hides order dependencies, and it hid two: a test helper allocating scratch tab ids from a private counter the board's own allocator walked into (two tabs, one id), and a real shell defect where a tab removed in the browser came back on screen if a reload landed inside the save it was awaiting. Allocate ids from the document's `nextId`, and do any agent-side setup BEFORE `open()` — a write issued after the page is up is a foreign change racing the thing under test.
 - **`make e2e` writes its evidence twice on a failure** — into the temp board it drove, and into `<repo>/.aboard/run/e2e/<TestName>/`, which is gitignored and survives the run. A trace (`npx playwright show-trace`), a full-page screenshot, the board document, and that page's console. **Look at the screenshot.**
+- **A CLI warning can only reach the actor who runs the CLI.** Obvious once said, and it
+  is the reason the write path looks the way it does. `apply` printing a warning on stderr
+  is invisible to a human working in the browser, and invisible to an agent whose stderr
+  nobody read — so for a long time every `ui` mistake was found by the human looking at the
+  board, which is backwards: the agent is the one still holding the context to fix it. That
+  is why **warnings now travel with the WRITE** rather than with the command (the decision
+  above: the journal entry, the POST reply, the SSE frame, the tab's banner and the trace
+  tab), and it is also why a `gate` verdict recorded with no reason grew an *"add why"*
+  affordance in the UI instead of an `apply` warning — the human records verdicts in the
+  browser, where no terminal is listening. **The general form: if the human does it in the
+  UI, the affordance belongs in the UI.** A check nearly got built on the wrong side of
+  this once; it would have fired only on an agent's write, for a mistake only a human can
+  make.
 - **A CLI command in a doc is a claim. Run it.** The spike's resume section said `-journal -l 20` when the flag was `-limit`, so the third command a resuming session ran exited 2. Nothing tests the commands in prose; if you write one, execute it once.
 - **`apply` succeeding is not evidence that anything renders.** It prints `applied` and exits 0 for a document that draws an empty box — `ui` is the worst offender, because an unknown component shows a marker but an unknown PROP shows nothing at all. Read the stderr warnings, then shoot the tab and **look at the picture**.
 - **Screenshots land under the target project's `.aboard/run/shots/`** because a snap-confined chromium cannot write outside `$HOME`. That constraint and `PROJECT=/tmp/...` pull against each other: if `make shot` writes nothing at all against a scratch project under `/tmp`, the confinement is why, and a scratch project under `$HOME` is the way out. `test/shot.sh` exits **1** when no picture was written at all, and clears each shot's previous PNG before taking it — a stale file from an earlier run is indistinguishable from a fresh one, so without that the exit code would still have been lying. A PARTIAL run exits 0 on purpose: one mistyped tab id among five is a typo, not a broken environment.

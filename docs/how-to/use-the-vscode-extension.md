@@ -5,21 +5,26 @@ There are two ways to put a board inside VS Code, and they solve different probl
 - **The Simple Browser** needs nothing installed: paste the board's URL into a built-in webview and it docks as an editor tab. That is [How to run aboard inside VS Code](run-in-vscode.md), and it is what most people should use today.
 - **The extension** adds a sidebar: a tree of the board's tabs, with the board itself in a panel beside your code, and the handful of actions only a human is allowed to take. This page is about that.
 
-> **Status: verified once, partially.** The human ran it in a real Extension Development
-> Host on **2026-08-26**. Observed working: activation, discovery of a board started
-> *after* the window was already open, the tree listing every tab in document order, the
-> panel rendering the board without its own tab strip, and a dot arriving live on an
-> agent's write. Everything else in the extension's `docs/handoff.md` §11 is still
-> unobserved — tab switching without a page reload, the panel surviving a drag to another
-> editor group, `html` tabs painting inside the webview, notify, a forced `409`, and
-> Remote SSH / Codespaces.
+> **Status: verified in a real VS Code on 2026-08-26, twice, and not packaged.** The human
+> worked the extension's hand-verification checklist through in an Extension Development
+> Host over two passes. Observed working: activation and discovery (including a board
+> started *after* the window was open), the tree, the panel rendering the board without its
+> own tab strip, tab switching with no page reload, the panel surviving a drag to another
+> editor group, `html` tabs painting with a clean console, dots arriving live, removal
+> requests answered from the sidebar, rename and set-note, `]` inside the panel moving the
+> sidebar highlight, two viewers disagreeing about chrome, a server restart, a forced `409`,
+> the Start-the-board fallback, and the board following the VS Code theme. **Still
+> unobserved**: the extension's own reconnect backoff against a board that will not come
+> back, the old-binary warning, Remote SSH / Codespaces, and the two fixes that came out of
+> the second pass (the notify bell and Copy Reference) — those are proven by tests, not by
+> eye. The extension's own `README.md` is the live status; there is no `.vsix`.
 >
-> **So: treat it as unverified for everything not in that paragraph.** One run, one
-> board, one machine. Three defects came out of those runs and all three were invisible
-> to a suite that had been green for days — two in the extension (malformed dot SVGs, a
-> stream that died on every string chunk) and one in *this* repository: the board called
-> `window.confirm`, which a webview swallows, so the removal banner's **Remove tab** did
-> nothing at all. That one is fixed here; see [why the board never pops up an OS
+> Six defects came out of those two passes — five by the human looking at the screen and
+> one while reviewing a fix — and every one was invisible to a suite that had been green
+> for days. Five were in the extension; one was in *this* repository, and it is the
+> one worth knowing about here: the board called `window.confirm`, which a webview
+> swallows, so the removal banner's **Remove tab** did nothing at all. That is fixed — see
+> [why the board never pops up an OS
 > dialog](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog). If you want a board
 > in VS Code with nothing installed, the Simple Browser is still the shorter route.
 
@@ -111,8 +116,9 @@ npm run build     # → dist/extension.js
 npm test          # node --test, no framework
 ```
 
-`npm test` should end with `# fail 0` — it reported `# tests 105` across `# suites 31`
-when this page was written, and the counter to read is the failure one, not the total.
+`npm test` should end with `# fail 0` — it reported `# tests 191` across `# suites 49`
+from a clean copy on 2026-08-27, and the counter to read is the failure one, not the
+total.
 Everything with a rule worth arguing about — the discovery walk, the document-to-tree
 mapping, the edits, the SSE frame parsing, the URL construction — lives on the
 non-`vscode` side of the code so that it can be reached without a running editor. That
@@ -125,10 +131,11 @@ editor.
 window with the extension loaded. Open a project that has a board running, and the
 sidebar should populate.
 
-**Expect to find bugs.** That step is milestone M6 in the extension's own handoff
-document and it has never been taken, so you would be the first person to watch any of
-this run. There is no `.vsix` to install and no `vsce` in the dependency list, on purpose:
-packaging comes after somebody has used it, not before.
+**Expect to find bugs.** Two passes through the checklist in a real host produced six of
+them, and none was visible to `node --test`; the extension's failure mode is *silence*, so
+the thing to do is look at the screen rather than at the output channel. There is no
+`.vsix` to install and no `vsce` in the dependency list, on purpose: packaging comes after
+somebody has used it, not before.
 
 If you are *contributing* to aboard rather than using it, note that the extension's own
 `README.md` asks you not to be the one who takes that step: packaging or installing a
