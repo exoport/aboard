@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -165,5 +167,99 @@ func TestRecipesWorkWithNoProject(t *testing.T) {
 	}
 	if !strings.Contains(out, "built-in") {
 		t.Errorf("no built-in recipes reported:\n%s", out)
+	}
+}
+
+// The library in the repository's top-level `recipes/` is used by COPYING a file
+// into one of the project's own recipe directories. That is the whole mechanism,
+// so it is asserted end to end rather than described: copy, list, show
+// --template, apply --check — the four commands `recipes/README.md` tells a
+// reader to run, in that order.
+//
+// It exists because the two files moved OUT of the binary in this change. While
+// they were built-ins the compiler guaranteed they were present and the suite
+// guaranteed they parsed; a file that is only ever `cp`d has neither, and
+// "documented" is not a substitute for "checked".
+func TestALibraryRecipeIsDiscoveredWhenCopiedIn(t *testing.T) {
+	library, err := filepath.Abs(filepath.Join("..", "..", "..", "recipes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(library, "human-checklist.md"))
+	if err != nil {
+		t.Fatalf("the library recipe is not where recipes/README.md says it is: %v", err)
+	}
+
+	// A scratch project, seeded the way `aboard init` seeds one. Never a board
+	// anybody is using: this writes a file into .aboard/recipes/.
+	dir := t.TempDir()
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	recipes := aboard.Root(dir).RecipesDir()
+	if err := os.MkdirAll(recipes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(recipes, "human-checklist.md"), body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Discovered, and reported as the PROJECT's — the directory a reader can go
+	// and edit, not "built-in".
+	list, _, err := run(t, "--cwd", dir, "recipes", "list", "--output-format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []aboard.Recipe
+	if err := json.Unmarshal([]byte(list), &found); err != nil {
+		t.Fatalf("the json listing does not parse: %v\n%s", err, list)
+	}
+	var copied *aboard.Recipe
+	for i := range found {
+		if found[i].Name == "human-checklist" {
+			copied = &found[i]
+		}
+	}
+	if copied == nil {
+		t.Fatalf("the copied recipe was not discovered:\n%s", list)
+	}
+	if copied.Scope != aboard.ScopeDotAboard {
+		t.Errorf("scope = %q, want %q — it is this project's file now", copied.Scope, aboard.ScopeDotAboard)
+	}
+	if !copied.Valid() {
+		t.Fatalf("the copied recipe does not parse: %s", copied.Err)
+	}
+	if len(copied.ShadowedBy) != 0 {
+		t.Errorf("it shadows %v; the library file is not a built-in, so there is nothing under it", copied.ShadowedBy)
+	}
+
+	// And its template applies. --check runs the write path's own warnings and
+	// posts nothing, so it needs no board and cannot touch one.
+	tmpl, _, err := run(t, "--cwd", dir, "recipes", "show", "human-checklist", "--template")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tab map[string]any
+	if err := json.Unmarshal([]byte(tmpl), &tab); err != nil {
+		t.Fatalf("--template printed something that is not json: %v\n%s", err, tmpl)
+	}
+	doc, err := json.Marshal(map[string]any{"tabs": []any{tab}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	root := NewRootCmd(Options{
+		Host: aboard.HostStandalone, Stdout: &out, Stderr: &errOut,
+		Stdin: bytes.NewReader(doc),
+	})
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs([]string{"--cwd", dir, "apply", "--check", "--by", "agent-1"})
+	if code, _ := ExitCode(root.Execute()); code != 0 {
+		t.Fatalf("`recipes show --template | apply --check` exited %d: %s", code, errOut.String()+out.String())
+	}
+	if strings.Contains(errOut.String(), "warning") {
+		t.Errorf("the library recipe's template warns on the write path:\n%s", errOut.String())
 	}
 }

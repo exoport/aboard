@@ -5,9 +5,16 @@ structure, react to the human's edits — written for an agent to follow. It has
 frontmatter an agent can match against, a body it reads, and optionally a JSON tab
 skeleton it can fill in and apply.
 
-Recipes ship with the binary, and a project can add or override its own. Write one when
-your project has a board move that keeps recurring and keeps being done slightly
+Nine recipes ship with the binary, and a project can add or override its own. Write one
+when your project has a board move that keeps recurring and keeps being done slightly
 differently.
+
+**Look in the library first.** aboard's own repository collects further recipes in a
+top-level [`recipes/`](../../recipes/README.md) folder — worth sharing, not worth
+shipping in every binary. They are not compiled in and not discovered: you get one by
+copying the file into one of your project's recipe directories. The move you are about to
+write may already be in there, and one that is already written and already run beats one
+you are about to draft.
 
 ## Where a recipe goes
 
@@ -128,14 +135,15 @@ That prints the JSON and nothing else, so it pipes. A recipe with no template bl
 exits non-zero and names the recipe, rather than printing an empty document that would
 be applied as an empty tab.
 
-Three built-ins carry one, and they are the worked examples of this format:
-`ask-for-a-decision`, a `form`; and the two `ui` tabs,
-`decision-wizard-with-live-summary` and `human-checklist`. Read one before writing your
-first — what their bodies carry is the judgement `aboard capabilities` cannot, such as
-why a summary has to live in the same tab as the fields it summarises, and why a literal
-"3 of 8 done" is the one thing not to put on a checklist when nothing on the board
-computes. This page deliberately keeps no list of the full set: `aboard recipes list` is
-the complete answer, and a hand-maintained copy of what ships is a copy that drifts.
+Three carry one, and they are the worked examples of this format: the built-in
+`ask-for-a-decision`, a `form`; and the two `ui` tabs in the
+[library](../../recipes/README.md), `decision-wizard-with-live-summary` and
+`human-checklist`. Read one before writing your first — what their bodies carry is the
+judgement `aboard capabilities` cannot, such as why a summary has to live in the same tab
+as the fields it summarises, and why a literal "3 of 8 done" is the one thing not to put
+on a checklist when nothing on the board computes. This page deliberately keeps no list
+of the full set: `aboard recipes list` is the complete answer, and a hand-maintained copy
+of what ships is a copy that drifts.
 
 ## Try it
 
@@ -182,8 +190,51 @@ Commit what it writes. From outside the repo you do not need to fork anything �
 file with the same `name` in one of the three project directories and it shadows the
 built-in, visibly.
 
+## Contributing one to the library
+
+If the recipe is general — useful in projects that are nothing like yours — it belongs in
+aboard's [`recipes/`](../../recipes/README.md) rather than only in your own
+`_aboard/recipes/`. Same format, same frontmatter, same one template block; the
+difference is only where it lives and how it travels.
+
+**Built-in or library?** A built-in has to earn its place in every binary the tool ever
+installs, and it can never be edited by the people it reaches — a project can only shadow
+it. The library asks for one `cp` and gives you a file you can then change for the project
+you copied it into. So: put it in the library unless a session would be *wrong* without
+it. Nine are built in and the bar for a tenth is high.
+
+Run it once before proposing it, against a scratch project rather than a board anyone is
+using:
+
+```bash
+mkdir -p /tmp/scratch && cd /tmp/scratch && aboard init   # makes .aboard/recipes/
+cp <aboard-checkout>/recipes/<name>.md .aboard/recipes/
+aboard recipes list
+aboard recipes show <name> --template \
+  | python3 -c 'import json,sys; json.dump({"tabs":[json.load(sys.stdin)]}, sys.stdout)' \
+  | aboard apply --check
+```
+
+The wrapping is not ceremony: `--template` prints a **tab** and `apply` takes a
+**document**, so a bare `--template | apply` exits 1 with *stdin json has no tabs array*.
+That is the right refusal — a document composed from one skeleton would drop every tab
+you were not touching, which is why the real write is read-modify-apply
+(`aboard recipes show apply-a-write`). `--check` needs no board and writes nothing, so it
+is the cheap half you can run on a skeleton alone.
+
+The Go suite walks `recipes/` with the same assertions it applies to the built-ins — every
+file parses, its frontmatter is complete, and any template it carries is a clean tab
+skeleton raising zero write warnings — so a broken library file fails the build. The
+generated index in the skill, though, lists **built-ins only**: it is copied between
+projects, where a path into aboard's own checkout names nothing. `recipes/README.md` is
+the library's index, so **add a row to its table** as part of the same change — nothing
+generates that file, and the suite holds it to the folder rather than trusting it: the
+rows and the recipes must be the same set, and a row's "when to use" must still be the
+recipe's own `when_to_use`.
+
 ## See also
 
 - [The capability manifest](../reference/capabilities.md) — what a recipe body should consult rather than copy.
 - [The state file](../reference/state-file.md) — the document your template block becomes part of.
 - [Why a local, non-authoritative channel](../explanation/why-a-local-non-authoritative-channel.md) — why `.aboard/recipes/` is the private scope and `_aboard/recipes/` the shared one.
+- [The recipe library](../../recipes/README.md) — the recipes collected in this repository but not compiled into the binary.

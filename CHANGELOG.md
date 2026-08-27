@@ -61,7 +61,19 @@ lines and the ones with no user-visible surface — the suite, the extension —
   `history.scrollRestoration` is switched off, because it restores the DOCUMENT on
   whichever tab comes up first — right only by coincidence, and wrong the moment a
   `#tab=` link opens a different one.
-- **feat: two more built-in recipes, both `ui` tabs, both with a template you can apply.**
+- **feat: a recipe LIBRARY in `recipes/`, and two `ui` recipes in it, both with a template
+  you can apply.** Nine recipes are compiled into the binary; these two are not. They are
+  worth sharing and not worth shipping in every binary, so they are files in the
+  repository's top-level `recipes/` folder — with a README that is the library's index —
+  and a project gets one by copying it into `.aboard/recipes/`, `_aboard/recipes/` or
+  `_apex/aboard/recipes/`, where it is discovered like any other recipe. That is the whole
+  mechanism, and it is asserted end to end rather than described: the suite copies one into
+  a scratch project and runs `recipes list`, `recipes show --template` and `apply --check`
+  over it. The library is also walked by the same test that guards the built-in skeletons,
+  because a `cp`-only file has neither the compiler nor the embed to guarantee it is even
+  there. The skill's generated index still lists **built-ins only** and now says the library
+  exists rather than pretending it does not: that file is copied between projects, where a
+  table of paths into aboard's own checkout would name nothing.
   `decision-wizard-with-live-summary` is the spike's shape brought across and reviewed
   against the current renderers: one `ui` tab of internal panels, N of them deciding and a
   Summary panel bound to the same `state.data` the fields write, so it cannot go stale —
@@ -79,9 +91,9 @@ lines and the ones with no user-visible surface — the suite, the extension —
   not to write**, because nothing on the board computes and a typed count is wrong from the
   first tick — the static count is of how many items there ARE, which is the agent's own
   data, and the rest is `{bind}`. Count what was answered when you read the tab back.
-  `TestBuiltinTemplatesAreCleanTabSkeletons` now runs the write path's own checker over
-  every shipped skeleton, so a wrong `ui` prop in a built-in template fails the suite
-  instead of drawing an empty panel in whichever project the binary reached.
+  `TestBuiltinTemplatesAreCleanTabSkeletons` runs the write path's own checker over
+  every skeleton in the tree — built-in and library alike — so a wrong `ui` prop fails
+  the suite instead of drawing an empty panel in whichever project the file reached.
 - **fix: the board never calls a native dialog, so its questions survive a webview.**
   A VS Code webview — and any `<iframe>` whose `sandbox` omits `allow-modals` —
   SUPPRESSES `window.alert`/`confirm`/`prompt`: `confirm()` returns `false`, `prompt()`

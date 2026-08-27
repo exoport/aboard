@@ -228,10 +228,11 @@ Never assume a port: read it from `aboard status` or from this file.
 
 ## Development paths
 
-Two paths exist only inside aboard's own checkout, and their absence elsewhere is
+Three paths exist only inside aboard's own checkout, and their absence elsewhere is
 meaningful rather than an error:
 
 - `pkg/aboard/web/` — the web tree `serve --dev` serves from disk instead of the embedded copy. `--dev-dir` overrides it.
+- `recipes/` at the top level — the recipe **library**: recipes collected in the repository but not compiled into the binary. It is not a discovery tier and nothing reads it at runtime; a project gets one of these by copying the file into `.aboard/recipes/` (or one of the other two directories above). Do not confuse it with `.aboard/recipes/`, which is a real tier and exists in any project.
 - `.claude/skills/aboard/references/reference.generated.md` — the generated half of the committed skill. `aboard capabilities --check` treats a **missing** reference as "nothing to check": a project that never copied the skill has nothing to be out of date.
 
 ## See also

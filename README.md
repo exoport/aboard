@@ -190,9 +190,11 @@ aboard recipes show ask-for-a-decision
 aboard recipes show ask-for-a-decision --template   # just the tab skeleton, ready to edit
 ```
 
-Recipes ship with the binary and a project may add or override its own in
+Nine recipes ship with the binary and a project may add or override its own in
 `_apex/aboard/recipes/`, `_aboard/recipes/` or `.aboard/recipes/` — first match by name
-wins, and a shadowed recipe is always reported rather than hidden. Writing one:
+wins, and a shadowed recipe is always reported rather than hidden. A few more are
+collected in this repository's [`recipes/`](recipes/README.md) library: not compiled in,
+used by copying the file into one of those directories. Writing one:
 [How to write a recipe](docs/how-to/write-a-recipe.md).
 
 ## Inside ape

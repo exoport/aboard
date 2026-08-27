@@ -77,11 +77,15 @@ list left is that plan's §10 — the things gated on the human.
 - NOTICE is added to the release archives (ape ships README + LICENSE only); a `vuln` CI job was kept.
 - ~~The nine built-in recipes carry no `aboard-template` block (the spike wrote them as JS, not JSON);
   only the user example (`testdata/recipes/.aboard/recipes/decision-wizard-with-live-summary.md`) has one.~~
-  **Settled 2026-08-26 by plan-2 item 19**: the staged user example was promoted into
-  `pkg/aboard/recipes/builtin/` and `human-checklist` was written beside it, so three of the
-  eleven built-ins now carry a template and the fixture copy is gone — two copies of one
-  document are two documents that can disagree. The other eight still carry none, and that
-  stands: their bodies are JS helpers rather than tab skeletons.
+  **Settled 2026-08-26 by plan-2 items 19 and 20.** Item 19 promoted the staged user example
+  into `pkg/aboard/recipes/builtin/` and wrote `human-checklist` beside it; item 20 corrected
+  *where*, on the human's call — the two of them are a recipe **library** in the repository's
+  top-level `recipes/`, not built-ins, because they are worth sharing without being worth
+  shipping in every binary. So the built-in floor is back to **nine**, of which
+  `ask-for-a-decision` is the one carrying a template, and the two `ui` skeletons are copied
+  into a project rather than compiled into it. Either way the fixture copy is gone — two
+  copies of one document are two documents that can disagree. The other eight built-ins
+  carry no template and that stands: their bodies are JS helpers rather than tab skeletons.
 
 ## Still unproven, on purpose
 

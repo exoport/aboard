@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -167,23 +168,53 @@ func TestRecipeTemplateExtraction(t *testing.T) {
 		t.Errorf("the error does not name the recipe: %v", err)
 	}
 
-	// And against a file nobody wrote for the test: the decision wizard was
-	// STAGED in this fixture as a project recipe until it earned promotion, and
-	// it is a built-in now. It is read through an empty root on purpose — the
-	// fixture's copy is gone, because two copies of one document are two
-	// documents that can disagree, and the one an agent actually gets is the one
-	// compiled into the binary.
-	wizard, err := FindRecipe(Root(t.TempDir()), "decision-wizard-with-live-summary")
-	if err != nil {
-		t.Fatal(err)
-	}
+	// And against a file nobody wrote for the test: the decision wizard, read out
+	// of the repository's recipe LIBRARY. It was staged in this fixture, then
+	// shipped as a built-in, and is neither now — it is one of the two files in
+	// `recipes/`, which no binary embeds and every project reaches by copying.
+	// Read from there rather than from a second copy, because two copies of one
+	// document are two documents that can disagree.
+	wizard := libraryRecipe(t, "decision-wizard-with-live-summary")
 	got, err := wizard.TemplateJSON()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !json.Valid([]byte(got)) {
-		t.Errorf("the promoted recipe's template is not valid json:\n%s", got)
+		t.Errorf("the library recipe's template is not valid json:\n%s", got)
 	}
+}
+
+// libraryDir is the repository's top-level `recipes/` folder — the library. It
+// is NOT a discovery tier and NOT embedded: a project gets one of these files by
+// copying it into `.aboard/recipes/` (or one of the other two directories), and
+// that copy is what TestALibraryRecipeIsDiscoveredWhenCopiedIn exercises at the
+// CLI boundary.
+func libraryDir(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", "recipes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return abs
+}
+
+// LibraryRecipes parses every file in it, through the same reader the on-disk
+// tiers use, so README.md is skipped and a broken file arrives carrying its
+// reason rather than being dropped.
+func libraryRecipes(t *testing.T) []Recipe {
+	t.Helper()
+	dir := libraryDir(t)
+	found, err := readRecipeFS(os.DirFS(dir), ".", "library",
+		func(_, name string) string { return RecipeFile(dir, name) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	return found
+}
+
+func libraryRecipe(t *testing.T, name string) Recipe {
+	t.Helper()
+	return recipeByName(t, libraryRecipes(t), name)
 }
 
 // requires.min_schema marks a recipe rather than hiding it: the reader can still
@@ -215,8 +246,8 @@ func TestBuiltinRecipesAllParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(built) < 11 {
-		t.Fatalf("%d built-in recipes, want at least the eleven that shipped", len(built))
+	if len(built) < 9 {
+		t.Fatalf("%d built-in recipes, want at least the nine that shipped", len(built))
 	}
 	for _, r := range built {
 		if !r.Valid() {
@@ -522,7 +553,7 @@ func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
 	}
 }
 
-// A built-in recipe's template is a SKELETON an agent hands to `aboard apply`
+// A recipe's template is a SKELETON an agent hands to `aboard apply`
 // after filling it in, and both halves of that are asserted here.
 //
 // It must be a tab skeleton — no `id`, no `rev`, no `updatedAt`: those belong to
@@ -537,48 +568,80 @@ func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
 // human looking at the screen. A skeleton shipped in the binary would spread that
 // mistake to every project the binary reaches, so it is checked by the same
 // function the write path runs.
+//
+// BOTH SOURCES, on the same assertions. The built-ins travel inside the binary;
+// the library in `recipes/` travels by `cp`. Nothing about the second makes a
+// wrong `ui` prop cheaper — it is copied into somebody's project and drawn on
+// somebody's screen either way, and it is checked by NOTHING at runtime, since
+// no compile step ever reads it. Missing this walk was the real cost of moving
+// the two files out: they were covered when they were built-ins, and a move that
+// silently dropped their only check is the failure this repo keeps having.
 func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
 	built, err := BuiltinRecipes()
 	if err != nil {
 		t.Fatal(err)
 	}
+	library := libraryRecipes(t)
+
+	// A floor on the library too, because the assertions below are all "for each
+	// file found": an empty `recipes/` would pass every one of them silently,
+	// which is precisely how a deleted file gets away.
+	if len(library) < 2 {
+		t.Fatalf("%d recipes in the library, want at least the two that live there", len(library))
+	}
 
 	withTemplate := map[string]bool{}
-	for _, r := range built {
-		if !r.HasTemplate {
-			continue
-		}
-		withTemplate[r.Name] = true
-
-		tmpl, err := r.TemplateJSON()
-		if err != nil {
-			t.Errorf("%s: %v", r.Name, err)
-			continue
-		}
-		var tab map[string]any
-		if err := json.Unmarshal([]byte(tmpl), &tab); err != nil {
-			t.Errorf("%s: the template is not a JSON object: %v", r.Name, err)
-			continue
-		}
-		for _, managed := range []string{"id", "rev", "updatedAt", "version", "lastEditedBy", "touched"} {
-			if _, present := tab[managed]; present {
-				t.Errorf("%s: the template sets %q, which the document or the server owns", r.Name, managed)
+	for _, src := range []struct {
+		where   string
+		recipes []Recipe
+	}{
+		{"built-in", built},
+		{"library", library},
+	} {
+		for _, r := range src.recipes {
+			// Frontmatter complete and the file parsed at all. For a built-in
+			// TestBuiltinRecipesAllParse already says so; for a library file this
+			// is the only place that does.
+			if !r.Valid() {
+				t.Errorf("%s %s: %s", src.where, r.Path, r.Err)
+				continue
 			}
-		}
-		if _, ok := tab["type"].(string); !ok {
-			t.Errorf("%s: the template has no `type`, so nothing can render it", r.Name)
-		}
+			if !r.HasTemplate {
+				continue
+			}
+			withTemplate[r.Name] = true
 
-		// Wrapped in a document exactly as `apply` receives one, and checked by
-		// the function the write path itself calls.
-		tab["id"] = "bb1"
-		doc, err := json.Marshal(map[string]any{"tabs": []any{tab}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if warnings := writeWarnings(WebFS(), doc); len(warnings) > 0 {
-			t.Errorf("%s: the shipped template warns on the write path:\n%s",
-				r.Name, strings.Join(warnings, "\n"))
+			tmpl, err := r.TemplateJSON()
+			if err != nil {
+				t.Errorf("%s %s: %v", src.where, r.Name, err)
+				continue
+			}
+			var tab map[string]any
+			if err := json.Unmarshal([]byte(tmpl), &tab); err != nil {
+				t.Errorf("%s %s: the template is not a JSON object: %v", src.where, r.Name, err)
+				continue
+			}
+			for _, managed := range []string{"id", "rev", "updatedAt", "version", "lastEditedBy", "touched"} {
+				if _, present := tab[managed]; present {
+					t.Errorf("%s %s: the template sets %q, which the document or the server owns",
+						src.where, r.Name, managed)
+				}
+			}
+			if _, ok := tab["type"].(string); !ok {
+				t.Errorf("%s %s: the template has no `type`, so nothing can render it", src.where, r.Name)
+			}
+
+			// Wrapped in a document exactly as `apply` receives one, and checked by
+			// the function the write path itself calls.
+			tab["id"] = "bb1"
+			doc, err := json.Marshal(map[string]any{"tabs": []any{tab}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if warnings := writeWarnings(WebFS(), doc); len(warnings) > 0 {
+				t.Errorf("%s %s: the template warns on the write path:\n%s",
+					src.where, r.Name, strings.Join(warnings, "\n"))
+			}
 		}
 	}
 
@@ -586,7 +649,8 @@ func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
 	// have to edit this list. These three are the ones whose whole point is a
 	// tab you can apply, and two of them are `ui` trees, where the write-time
 	// check above is the only thing standing between a wrong prop and a blank
-	// panel on somebody's screen.
+	// panel on somebody's screen. The two `ui` ones are library files now, which
+	// is why the loop above covers both sources rather than the binary alone.
 	for _, name := range []string{
 		"ask-for-a-decision",
 		"decision-wizard-with-live-summary",
@@ -596,4 +660,138 @@ func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
 			t.Errorf("%s ships no `%s` block", name, TemplateFence)
 		}
 	}
+}
+
+// The library is not a discovery tier. Nothing embeds `recipes/`, nothing walks
+// it at runtime, and a project that has not copied a file out of it must not see
+// its recipes — otherwise the split between "compiled in" and "copy it yourself"
+// would exist only in the documentation.
+func TestTheLibraryIsNotADiscoveryTier(t *testing.T) {
+	// A project that looks EXACTLY like aboard's own checkout: a top-level
+	// `recipes/` holding the library, beside a root with no recipe tier of its
+	// own. An empty temp directory would not do — it has no `recipes/` for a
+	// fourth tier to find, so it passes whether or not one exists, and the
+	// assertion below would be about the built-ins rather than about the
+	// library. This is the arrangement the split has to survive, and it is the
+	// one aboard's own repository is in.
+	dir := t.TempDir()
+	beside := filepath.Join(dir, "recipes")
+	if err := os.MkdirAll(beside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range libraryRecipes(t) {
+		body, err := os.ReadFile(r.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(RecipeFile(beside, r.Name+".md"), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	found, err := DiscoverRecipes(Root(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range found {
+		if found[i].Scope != ScopeBuiltin {
+			t.Errorf("%s came from %q in a project whose only recipes are the library beside it",
+				found[i].Name, found[i].Scope)
+		}
+	}
+	for _, name := range []string{"decision-wizard-with-live-summary", "human-checklist"} {
+		for i := range found {
+			if found[i].Name == name {
+				t.Errorf("%s is discoverable without being copied in; it is a library file, not a built-in", name)
+			}
+		}
+	}
+
+	// And the generated index cannot carry them either: it is written into a
+	// skill directory that is copied between projects, where a path into
+	// aboard's own checkout names nothing.
+	index := RecipeIndexMarkdown(func() []Recipe { r, _ := BuiltinRecipes(); return r }())
+	for _, name := range []string{"decision-wizard-with-live-summary", "human-checklist"} {
+		if strings.Contains(index, "| `"+name+"` |") {
+			t.Errorf("the generated index has a table row for the library recipe %s", name)
+		}
+	}
+	// It does say the library exists, though. A library nothing agent-facing
+	// mentions is a library nobody copies from.
+	if !strings.Contains(index, "`recipes/`") {
+		t.Error("the generated index never mentions the repository's recipe library")
+	}
+}
+
+// `recipes/README.md` is the library's INDEX, and it is the only one the library
+// can have: the generated table in the skill is built from the recipes compiled
+// into the binary, and no binary embeds this folder. So the index is written by
+// hand — and a hand-maintained copy of what ships is a copy that drifts. This
+// repository has already paid that bill once: the skill's table went on naming a
+// built-in that had been renamed, and nothing anywhere failed, which is why
+// `capabilities --check` gates that file now. A gate that exists for the
+// generated index and not for the hand-written one is a gate on the safer half.
+//
+// Three claims, and the first is the one that actually goes wrong — somebody
+// adds a third recipe and the table still lists two:
+//
+//   - the table's rows and the folder's recipes are the SAME SET, named in both
+//     directions so the failure says which way round it is;
+//   - every row links to a file that is there, because a row is useless as an
+//     index entry if its link 404s (`make docs-check` only walks `docs/`, so
+//     nothing else checks these);
+//   - every row's "when to use" is still the recipe's own `when_to_use`.
+//
+// Backticks are normalised away and nothing else is. The README is prose and may
+// mark `gate` up as code where YAML frontmatter cannot; it may not paraphrase,
+// because then two documents describe one recipe and a reader picking between
+// them has no way to tell which is current.
+func TestTheLibraryReadmeIsAnIndexOfTheLibrary(t *testing.T) {
+	readme := RecipeFile(libraryDir(t), "README.md")
+	body, err := os.ReadFile(readme)
+	if err != nil {
+		t.Fatalf("the library has no index: %v", err)
+	}
+
+	// A row is `| [`name`](link) | when to use |`. Matched strictly: a loose
+	// pattern that also matched the prose above the table would make an empty
+	// table look full.
+	row := regexp.MustCompile("(?m)^\\|\\s*\\[`([^`]+)`\\]\\(([^)]+)\\)\\s*\\|\\s*(.*?)\\s*\\|\\s*$")
+	listed := map[string]string{} // name -> when to use
+	for _, m := range row.FindAllStringSubmatch(string(body), -1) {
+		name, link, when := m[1], m[2], m[3]
+		if _, dup := listed[name]; dup {
+			t.Errorf("%s is listed twice in the library index", name)
+		}
+		listed[name] = when
+		if _, err := os.Stat(RecipeFile(libraryDir(t), name+".md")); err != nil {
+			t.Errorf("the index row for %s does not name a file in the library: %v", name, err)
+		}
+		if want := name + ".md"; link != want {
+			t.Errorf("the index row for %s links to %q, want %q", name, link, want)
+		}
+	}
+
+	for _, r := range libraryRecipes(t) {
+		when, ok := listed[r.Name]
+		if !ok {
+			t.Errorf("%s is in the library and not in its index — add a row to recipes/README.md", r.Name)
+			continue
+		}
+		delete(listed, r.Name)
+		if normaliseIndexProse(when) != normaliseIndexProse(r.WhenToUse) {
+			t.Errorf("the index row for %s no longer says what its frontmatter says:\n index: %s\n  file: %s",
+				r.Name, when, r.WhenToUse)
+		}
+	}
+	for name := range listed {
+		t.Errorf("the library index lists %s, which is not in recipes/ — remove the row or restore the file", name)
+	}
+}
+
+// normaliseIndexProse drops the backticks a markdown table may add and collapses
+// whitespace a table cell may have re-wrapped. Nothing else: the comparison is
+// meant to catch a paraphrase, so it must not be lenient enough to allow one.
+func normaliseIndexProse(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(s, "`", "")), " ")
 }

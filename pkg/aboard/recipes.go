@@ -48,6 +48,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Nine recipes are compiled in. They are the ones every project needs whatever
+// it is doing, so they travel with the binary and there is no file to copy.
+//
+// A recipe worth sharing but not worth shipping in every binary goes in the
+// repository's top-level `recipes/` folder instead — the library, with its own
+// README — and a project gets one by copying it into a discovery tier below.
+// Nothing here reads that folder: it is not embedded, on purpose, and it cannot
+// be, since //go:embed does not reach above the package directory.
+//
 //go:embed recipes/builtin/*.md
 var builtinRecipes embed.FS
 
@@ -605,8 +614,8 @@ func RecipeListHuman(recipes []Recipe) string {
 			fmt.Fprintf(&b, "%s  shadows %s\n", pad, other)
 		}
 		// The path, but only where it is somewhere a reader can go and edit. A
-		// built-in's path is inside the binary, so printing it on all eleven rows
-		// would be eleven lines of noise around the two that matter.
+		// built-in's path is inside the binary, so printing it on all nine rows
+		// would be nine lines of noise around the ones that matter.
 		if r.Scope != ScopeBuiltin {
 			fmt.Fprintf(&b, "%s  %s\n", pad, r.Path)
 		}
@@ -702,7 +711,13 @@ const recipeIndexParagraph = "**The table above is only the recipes shipped in t
 	"`_aboard/recipes/` → `.aboard/recipes/` → built-in wins, and the winning row\n" +
 	"names the file it shadowed rather than hiding it — a project that overrides a\n" +
 	"built-in recipe is doing something deliberate and you should be able to see\n" +
-	"what it replaced.\n"
+	"what it replaced.\n\n" +
+	"Beyond the built-ins there is a LIBRARY: recipes collected in aboard's own\n" +
+	"repository under `recipes/`, which are not compiled into the binary and are\n" +
+	"used by copying the file into one of the three directories above. This table\n" +
+	"cannot list them — it is generated from the binary, and it ships inside a\n" +
+	"skill directory copied between projects, where a path into somebody else's\n" +
+	"checkout would name nothing. See `recipes/README.md` there if you have it.\n"
 
 // mdCell makes a value safe for a markdown table cell: one line, pipes escaped.
 // Never truncated — a description too long for a table is a description to
