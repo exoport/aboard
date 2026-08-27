@@ -263,6 +263,20 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: the marks table's header sits over its columns again.** Two faults at once, on a
+  `markup` tab with a SINGLE image. Both the header's image cell and each row's were
+  emptied with `hidden` — which is `display: none`, and a display:none grid item is not
+  placed in the grid at all — so every remaining cell slid one column left into a track
+  sized for something else: the id landed in the 22px mark-number track and rendered as
+  `bb`, and the delete button landed in the note track and drew a full-width box with an
+  ✕ adrift in it. An empty cell now keeps its slot and gives up its box
+  (`.markup-row-image:empty`). Separately, each row declared the shared column template
+  itself, and grid aligns tracks *within a container* — so `max-content` on the colour
+  track meant the bulk-recolour button in the header and five 18px swatches in a row, and
+  the `fr` tracks then divided two different remainders. The list is one grid now and the
+  rows take their columns from it with `subgrid`, which keeps each row a box with its own
+  border, background and hover. **The suite could not have caught either**: its fixture
+  gives that tab two images, and with two nothing is hidden and nothing shifts.
 - **fix: an agent's reply to a request gets its own line, instead of shredding the
   request.** A stamped note rendered its reply inside `.ask-meta`, which was
   `flex: 0 0 auto` — correct for the timestamp it was written for, catastrophic for a

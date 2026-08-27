@@ -182,6 +182,137 @@ func TestHidingMarksIsPerViewer(t *testing.T) {
 // markup.spec.json), which is what makes an unknown colour name a warning rather
 // than a mark that renders in no colour at all. Five swatches, and choosing one
 // changes what the NEXT mark is drawn in — a per-viewer preference, never saved.
+// The marks list is a TABLE, so its header has to sit over its columns — with
+// one image on the tab, which is the case the fixture above does not cover.
+//
+// Reported 2026-08-27 from a board with a single pasted screenshot, as "the
+// marks table columns are odd", and it was two faults at once.
+//
+// The first is why the suite never saw it. A row emptied its image cell with
+// `hidden`, and `hidden` is `display: none` — a display:none grid item is not
+// placed in the grid AT ALL, so every remaining cell in that row slid one
+// column left while the header's own image cell stayed put. The id landed in
+// the 22px mark-number track and rendered as "bb"; the delete button landed in
+// the note track and became a full-width box with an ✕ adrift in it. With TWO
+// images nothing is hidden and nothing shifts, and two images is what
+// fixture.json gives `bb22`.
+//
+// The second was there at any image count: each row declared the shared column
+// template itself, and grid aligns tracks within a container. A row was its own
+// container, so `max-content` on the colour track meant the bulk-recolour button
+// in the header and five 18px swatches in a row, and the fr tracks then divided
+// two different remainders. Fixed with one grid on the list and `subgrid` on the
+// rows.
+func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
+	id := makeScratchTab(t, "One image")
+
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{
+			"id": "only", "src": "assets/mock-screen.svg", "caption": "one.svg",
+			"regions": []any{
+				map[string]any{"id": "bb206", "x": 0.04, "y": 0.01, "w": 0.15, "h": 0.93, "color": "danger"},
+				map[string]any{"id": "bb207", "shape": "ellipse", "x": 0.23, "y": 0.77, "w": 0.12, "h": 0.14, "color": "accent"},
+			},
+			"strokes": []any{map[string]any{"id": "bb208", "points": []any{[]any{0.2, 0.7}, []any{0.3, 0.74}}, "color": "focus"}},
+		}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if err := expect.Locator(view.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(3); err != nil {
+		t.Fatalf("the three seeded marks are not listed: %v", err)
+	}
+
+	// Every cell of the header and of the first data row, as {left, width}. The
+	// seven cells are in the same order in both, and the pairs must land on the
+	// same track.
+	type cell struct {
+		X, W float64
+		Text string
+	}
+	var head, body []cell
+	const probe = `(sel) => [...document.querySelector(sel).children].map((el) => {
+		const r = el.getBoundingClientRect();
+		return { X: r.left, W: r.width, Text: (el.textContent || '').trim() };
+	})`
+	s.evalJSON(&head, probe, `[data-tab="`+id+`"] .markup-row-head`)
+	s.evalJSON(&body, probe, `[data-tab="`+id+`"] .markup-row:not(.markup-row-head)`)
+
+	// Same number of cells, which is the `hidden` fault stated directly: a row
+	// with six children against a header with seven cannot line up whatever the
+	// tracks do.
+	if len(head) != len(body) {
+		t.Fatalf("the header has %d cells and a row has %d — a cell is being taken out of the grid flow, not emptied", len(head), len(body))
+	}
+	if len(head) != 7 {
+		t.Fatalf("the header has %d cells, want 7", len(head))
+	}
+
+	names := []string{"image", "index", "id", "summary", "colour", "note", "delete"}
+
+	// LEFT EDGES, not widths. A cell's width is the element's, and two elements
+	// can share a column honestly while differing in size — the header's delete
+	// slot is a 24px spacer and the row's is a 16px button, both correct, both in
+	// the same 24px track. Where a cell STARTS is the column it is in, and "the
+	// header label sits over the column it names" is the whole of what was
+	// reported.
+	for i := range head {
+		if diff := head[i].X - body[i].X; diff > 1 || diff < -1 {
+			t.Errorf("the %s column: header starts at %.1f, the row starts at %.1f — they are not the same column",
+				names[i], head[i].X, body[i].X)
+		}
+	}
+
+	// And nothing spills out of its own column into the next one, which is the
+	// other half of what a shifted grid looked like: the delete button had landed
+	// in the note track and drawn a full-width box.
+	for _, r := range []struct {
+		what  string
+		cells []cell
+	}{{"the header", head}, {"the row", body}} {
+		// Zero-width cells are skipped on both sides. The image column is 0px on
+		// a single-image tab and its cell is deliberately empty — it holds a slot
+		// and occupies nothing, so it can neither overflow nor be overflowed
+		// into, and its neighbour's left edge is not meaningfully "after" it.
+		for i := range r.cells {
+			if r.cells[i].W == 0 {
+				continue
+			}
+			for j := i + 1; j < len(r.cells); j++ {
+				if r.cells[j].W == 0 {
+					continue
+				}
+				if r.cells[i].X+r.cells[i].W > r.cells[j].X+1 {
+					t.Errorf("%s: the %s cell runs from %.1f for %.1fpx, into the %s column at %.1f",
+						r.what, names[i], r.cells[i].X, r.cells[i].W, names[j], r.cells[j].X)
+				}
+				break
+			}
+		}
+	}
+
+	// And the id is READABLE, which is the symptom a human actually reports. It
+	// is the whole point of the column: the id is how a mark is named to an agent.
+	var chip struct {
+		Text           string
+		Scroll, Client float64
+	}
+	s.evalJSON(&chip, `(sel) => {
+		const el = document.querySelector(sel);
+		return { Text: el.textContent.trim(), Scroll: el.scrollWidth, Client: el.clientWidth };
+	}`, `[data-tab="`+id+`"] .markup-row:not(.markup-row-head) .markup-chip`)
+	if chip.Text != "bb206" {
+		t.Errorf("the id cell reads %q, want the mark's own id", chip.Text)
+	}
+	if chip.Scroll > chip.Client+1 {
+		t.Errorf("the id %q is clipped: it needs %.0fpx and has %.0f", chip.Text, chip.Scroll, chip.Client)
+	}
+}
+
 func TestTheSwatchRowComesFromTheDeclaredPalette(t *testing.T) {
 	s := open(t, "tab="+markupTab)
 	view := s.view(markupTab)
@@ -331,7 +462,11 @@ func TestATruncatedImageNameIsReachableOnHover(t *testing.T) {
 	s := open(t, "tab="+markupTab)
 	view := s.view(markupTab)
 
-	cell := view.Locator(".markup-list .markup-row-image").First()
+	// A data row, explicitly. The column header moved INSIDE `.markup-list` on
+	// 2026-08-27 so that it and the rows could share one grid, which made
+	// `.markup-list .markup-row-image` match the header's "Image" LABEL first —
+	// a column label is not a truncated filename and carries no title.
+	cell := view.Locator(".markup-list .markup-row:not(.markup-row-head) .markup-row-image").First()
 	title, err := cell.GetAttribute("title")
 	if err != nil {
 		t.Fatalf("reading the title: %v", err)

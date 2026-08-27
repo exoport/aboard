@@ -147,7 +147,10 @@ export function mountMarkup(root, ctx) {
   // the very same chip/badge classes the data rows use so the columns line up.
   const listColHead = document.createElement('div');
   listColHead.className = 'markup-row markup-row-head';
-  panel.append(listColHead);
+  // Appended to listEl below, not to the panel. The header and the rows have to
+  // be siblings in ONE grid or their columns are only coincidentally the same
+  // width — see the subgrid note in the stylesheet.
+  
 
   const imgHeadCell = document.createElement('span');
   imgHeadCell.className = 'mono markup-row-image';
@@ -187,7 +190,6 @@ export function mountMarkup(root, ctx) {
   const bulkPanelEl = document.createElement('div');
   bulkPanelEl.className = 'markup-bulk-panel';
   bulkPanelEl.hidden = true;
-  panel.append(bulkPanelEl);
 
   const bulkScopeLabel = document.createElement('span');
   bulkScopeLabel.className = 'toolbar-label';
@@ -219,6 +221,10 @@ export function mountMarkup(root, ctx) {
   const listEl = document.createElement('div');
   listEl.className = 'markup-list';
   panel.append(listEl);
+  // Order preserved from when these were three siblings of the panel: the column
+  // header, then the bulk-recolour panel it opens, then the rows.
+  listEl.append(listColHead);
+  listEl.append(bulkPanelEl);
 
   /* ---------- shared modal confirm (bulk recolour / clear marks) ---------- */
 
@@ -1290,11 +1296,19 @@ export function mountMarkup(root, ctx) {
 
   function renderList(state) {
     const showImageTag = state.images.length > 1;
-    imgHeadCell.hidden = !showImageTag; // mirror the per-row image tag's own visibility
-    // The grid column collapses with the cell, or every row keeps a gap where
-    // the image name would have been.
+    // EMPTIED, never hidden — here and in the rows. This was `hidden` on both,
+    // which is `display: none`, and a display:none grid item is not placed in
+    // the grid at all: with a single image every cell slid one column left into
+    // a track sized for something else. The id landed in the 22px mark-number
+    // track and rendered as "bb"; the delete button landed in the note track and
+    // became a full-width box with an ✕ adrift in it. Reported 2026-08-27 as
+    // "the marks table columns are odd", which was exactly right.
+    //
+    // The column is 0px when there is one image, and `.markup-row-image:empty`
+    // drops its own padding and border, so the cell holds its place and occupies
+    // no space.
     listEl.style.setProperty('--markup-img-col', showImageTag ? 'minmax(6ch, 18ch)' : '0px');
-    listColHead.style.setProperty('--markup-img-col', showImageTag ? 'minmax(6ch, 18ch)' : '0px');
+    imgHeadCell.textContent = showImageTag ? 'Image' : '';
     const entries = [];
     // Numbered across the whole tab, not per image. Restarting at 1 for every
     // image meant "mark 1" named two different things as soon as a second image
@@ -1425,7 +1439,16 @@ export function mountMarkup(root, ctx) {
 
   function updateRow(row, entry, showImageTag) {
     const imgTag = row.querySelector('.markup-row-image');
-    imgTag.hidden = !showImageTag;
+    // EMPTIED, never hidden. `hidden` is `display: none`, and a display:none grid
+    // item is not placed in the grid at all — so with a single image every cell
+    // in this row slid one column left while the header's own image cell stayed
+    // put. The id landed in the 22px mark-number track and rendered as "bb"; the
+    // delete button landed in the note track and became a full-width box with an
+    // ✕ floating in the middle of it. Reported 2026-08-27 as "the marks table
+    // columns are odd", which was exactly right.
+    //
+    // The column is 0px when there is one image, so an empty cell costs nothing
+    // and keeps the row seven cells wide whatever is on screen.
     imgTag.textContent = showImageTag ? entry.imageLabel : '';
     // The column is capped and ellipsised, so the full name has to be reachable
     // somewhere — three screenshots all called "image.png" are otherwise
@@ -1778,12 +1801,25 @@ function ensureStyles() {
 [data-view="markup"] .markup-bulk-panel[hidden] { display: none; }
 [data-view="markup"] .markup-dialog p { margin: 0 0 14px; }
 [data-view="markup"] .markup-caption-input { font-size: 0.83rem; max-width: 34ch; }
-[data-view="markup"] .markup-list { display: flex; flex-direction: column; gap: 6px; }
-[data-view="markup"] .markup-row {
-  /* A grid, not flex: with flex each row sized its own columns, so a long image
-     caption in one row pushed its cells out of line with every other row. The
-     image column is capped and ellipsised for the same reason — a caption is a
-     label here, not the content. */
+/* ONE grid for the header and every row, which is the only way their columns can
+   be the same width rather than coincidentally similar.
+
+   Each row used to declare this same template itself. Grid aligns tracks within
+   a container and a row was its own container, so max-content on the colour
+   track resolved to the bulk-recolour BUTTON in the header and to five 18px
+   swatches in a row, and the fr tracks then split whatever was left of two
+   different remainders. The COLOUR label sat over empty space and NOTE sat to
+   the left of the note it labelled. Reported 2026-08-27.
+
+   subgrid is what makes a row a box -- border, background, hover, the selected
+   left rule -- while still taking its columns from the list. A row of
+   display:contents would have shared the tracks too and thrown all of that
+   away.
+
+   No backticks in here, deliberately: this stylesheet is a template literal and
+   one backtick in a comment ends it, which takes the whole shell down rather
+   than the styling. See CLAUDE.md. */
+[data-view="markup"] .markup-list {
   display: grid;
   grid-template-columns:
     var(--markup-img-col, 0px)   /* image name, 0 when there is only one image */
@@ -1793,8 +1829,16 @@ function ensureStyles() {
     max-content                   /* colour swatches */
     minmax(10ch, 2fr)             /* note */
     24px;                         /* delete */
+  column-gap: 8px;
+  row-gap: 6px;
+}
+/* The two full-width children of the list that are not rows. */
+[data-view="markup"] .markup-list > .markup-bulk-panel { grid-column: 1 / -1; }
+[data-view="markup"] .markup-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 8px;
   padding: 6px 8px;
   border: 1px solid var(--line);
   border-left: 3px solid transparent;
@@ -1840,6 +1884,10 @@ function ensureStyles() {
   border-radius: 3px;
   font-size: 0.79rem;
 }
+/* An empty image cell keeps its grid slot and gives up its box. See the note at
+   the showImageTag assignment: taking it out of the flow instead is what shifted
+   every column left. */
+[data-view="markup"] .markup-row-image:empty { padding: 0; border: 0; }
 [data-view="markup"] .markup-row-image {
   min-width: 0;
   max-width: 100%;
