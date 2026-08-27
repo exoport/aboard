@@ -15,6 +15,7 @@ For aboard, reference is the surface area: every command, every route, every pat
 - [state-file.md](state-file.md) — the schema v3 essentials: the document's server-managed fields, the id invariant, the shape of a tab, and where per-type state is documented in full.
 - [http-api.md](http-api.md) — every route the server answers, with parameters, bodies and status codes, including the compare-and-set contract and the SSE frames.
 - [capabilities.md](capabilities.md) — the capability manifest: what it contains, what `capsHash` fingerprints, what `--check` gates, and the declared command table.
+- [theme.md](theme.md) — colour: the 21 tokens and their roles, both built-in variants with their measured contrast ratios, the `.aboard/theme.json` schema, the switch, and the theme message an embedder may send.
 
 ## Planned reference
 

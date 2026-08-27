@@ -9,6 +9,74 @@
      --base-path. Must stay on one line and byte-identical: serveShell
      replaces exactly this text, and warns loudly when it cannot find it. -->
 <script>window.ABOARD_BASE = "";</script>
+<!-- The project's own palette, read from .aboard/theme.json and SPLICED here by
+     the server (serveShell). Must stay on one line and byte-identical, exactly
+     like the base path above: spliceTheme replaces this text and warns loudly
+     when it cannot find it. `null` means the project has no theme file, which is
+     the normal case — the built-in palettes are in app.css. -->
+<script>window.ABOARD_THEME = null;</script>
+<!-- Which theme this VIEWER is looking at, stamped before anything paints.
+     In <head> and classic, not in the module below, for the same reason the
+     ?chrome= stamp is at the top of <body>: a module is deferred, so the page
+     would paint the default theme and then visibly correct itself on every
+     single load. A flash of the wrong colours is the one bug a theme switch
+     cannot ship with.
+
+     Per viewer, so it never goes near the state file — two people can look at
+     one board in the same second and must disagree about theme while agreeing
+     about content, which is the rule that already keeps scroll, zoom and chrome
+     out of the document. Storage is guarded because a third-party frame can be
+     refused it outright, and a refusal is a thrown SecurityError rather than a
+     null: unguarded, that would take the whole page down to save a preference.
+
+     Dark unless something says otherwise, and there are exactly two things that
+     may: the viewer's own stored choice, which wins, and the project's
+     theme.json `default`, which decides for a viewer who has never chosen. -->
+<script>
+(function () {
+  var theme = window.ABOARD_THEME;
+  var stored = null;
+  try { stored = localStorage.getItem('aboard.theme'); } catch (e) {}
+  var kind = stored === 'light' || stored === 'dark' ? stored
+    : (theme && theme.default === 'light' ? 'light' : 'dark');
+  document.documentElement.setAttribute('data-theme', kind);
+
+  // A project's overrides, as declarations layered over app.css. Appended as a
+  // <style> in <head> by a blocking script, which is what makes them part of the
+  // first paint rather than a correction to it.
+  //
+  // Specificity does the merging, and it is worth stating because it is the
+  // whole design: the dark patch is written at `:root`, which ties it with
+  // app.css's own dark block and wins by coming later; the light patch is
+  // written at `:root[data-theme="light"]`, which outranks any `:root` rule, so
+  // a dark override cannot leak into the light theme. Nothing has to be
+  // subtracted, and a token the file does not mention keeps its built-in value.
+  if (!theme) return;
+  var css = '';
+  function block(selector, tokens) {
+    if (!tokens) return '';
+    var out = '';
+    for (var name in tokens) {
+      if (Object.prototype.hasOwnProperty.call(tokens, name)) out += name + ':' + tokens[name] + ';';
+    }
+    return out ? selector + '{' + out + '}' : '';
+  }
+  css += block(':root', theme.dark);
+  css += block(':root[data-theme="light"]', theme.light);
+  if (css) {
+    var el = document.createElement('style');
+    el.id = 'project-theme';
+    el.textContent = css;
+    document.head.appendChild(el);
+  }
+  // The server validated the file and dropped what it could not use. Saying so
+  // here as well as in the serve log and in `aboard status`, because the person
+  // editing theme.json is often looking at the board and not at a terminal.
+  if (theme.warnings && theme.warnings.length) {
+    for (var i = 0; i < theme.warnings.length; i++) console.warn('aboard: ' + theme.warnings[i]);
+  }
+})();
+</script>
 </head>
 <body>
 
@@ -44,6 +112,12 @@
   <span class="spacer"></span>
   <span class="meta" id="save-state"></span>
   <span class="meta version-badge" id="version" title="the binary serving this board"></span>
+  <!-- The theme switch. Chrome, not a declared control: it belongs to no
+       renderer and there is no shell spec to declare it in, which is the case
+       views/controls.js documents for a plain button — the same footing as the
+       notify button and the + beside the tabs. Its label says which theme is on,
+       and its tooltip says what pressing it does. -->
+  <button type="button" class="icon-btn theme-btn" id="theme" aria-live="polite"></button>
   <!-- The acknowledgement of a press, and nothing else. The BUTTON tells the
        truth about live state and repaints itself the moment the poke changes
        the waiter count, so anything written into its label is gone in a few
@@ -696,6 +770,175 @@ async function showVersion() {
   }
 }
 
+/* ---------- the theme ---------- */
+
+// Two palettes, one token set, and the choice belongs to the VIEWER.
+//
+// Everything visible is already a custom property (app.css declares both
+// variants), so switching is one attribute on <html> — nothing here knows a
+// colour. Three things need telling beyond that attribute, and each is told
+// because it is a SEPARATE DOCUMENT or a BAKED-IN value that CSS cannot reach:
+// an html tab's sandboxed frame (views/html.js posts to it), a rendered mermaid
+// diagram (views/diagram.js re-renders), and a markdown fence (views/markdown.js
+// does the same). They all listen for the one `aboard:theme` event dispatched
+// here, rather than being called by name from the shell: the shell has no
+// business knowing which renderers care.
+//
+// The stamp itself happened before this module ran — see the classic script in
+// <head>, which is what makes the first paint the right colour instead of a
+// correction to the wrong one.
+
+const $theme = document.getElementById('theme');
+
+// Glyph plus word. The glyph alone reads as a riddle (does the moon mean "you
+// are in dark" or "press for dark"?), so the label states the CURRENT theme and
+// the tooltip states what pressing it does. That is the pair of sentences a
+// toggle needs, and neither of them alone is enough.
+const THEME_LABEL = { dark: '☾ dark', light: '☀ light' };
+
+function themeKind() {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+function paintTheme() {
+  const kind = themeKind();
+  $theme.textContent = THEME_LABEL[kind];
+  $theme.title = `theme: ${kind} — switch to the ${kind === 'dark' ? 'light' : 'dark'} one`;
+}
+
+// setTheme is the only writer of the attribute after the first paint.
+//
+// `remember` is false for a theme that was not the viewer's decision — a
+// project's theme.json default arriving over the stream. Storing that would turn
+// somebody else's default into this viewer's permanent choice, and the next time
+// the project changed it nothing would follow.
+function setTheme(kind, { remember = true } = {}) {
+  const want = kind === 'light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', want);
+  if (remember) {
+    try { localStorage.setItem('aboard.theme', want); } catch {}
+  }
+  paintTheme();
+  // Dispatched even when the attribute did not move: a listener that re-renders
+  // is idempotent, and the alternative — comparing first — silently swallows the
+  // case where a token VALUE changed under an unchanged variant, which is exactly
+  // what a theme.json edit does.
+  document.dispatchEvent(new CustomEvent('aboard:theme', { detail: { kind: want } }));
+}
+
+$theme.addEventListener('click', () => {
+  // An explicit press also drops whatever an embedder handed us. A human
+  // pressing a switch and nothing happening is worse than a panel that stops
+  // matching its host until the host speaks again — and the host speaks on its
+  // own theme change, so it is a temporary disagreement either way.
+  clearEmbedderTheme();
+  setTheme(themeKind() === 'light' ? 'dark' : 'light');
+});
+
+paintTheme();
+
+// A project's theme.json changed on disk. The server pushes a signature on the
+// same stream the state changes ride (see watchTheme); the page re-reads the
+// file rather than trusting anything in the frame, which is the same discipline
+// every other ping here follows.
+async function refreshTheme() {
+  let theme = null;
+  try {
+    const res = await fetch(api('/theme.json'), { cache: 'no-store' });
+    if (res.ok) theme = await res.json();
+    else if (res.status !== 404) return;   // 404 means the file went away
+  } catch {
+    return;   // the board is fine on the palette it already has
+  }
+  window.ABOARD_THEME = theme;
+  applyProjectTheme(theme);
+  for (const warning of (theme && theme.warnings) || []) console.warn('aboard: ' + warning);
+  // A viewer who has chosen keeps their choice; one who has not follows the
+  // project's default, which is the whole point of the field.
+  let stored = null;
+  try { stored = localStorage.getItem('aboard.theme'); } catch {}
+  if (stored === 'dark' || stored === 'light') setTheme(stored);
+  else setTheme(theme && theme.default === 'light' ? 'light' : 'dark', { remember: false });
+}
+
+// The same <style id="project-theme"> the head script builds, rebuilt. Replaced
+// wholesale rather than patched: a token REMOVED from theme.json has to go back
+// to its built-in value, and patching leaves it behind.
+function applyProjectTheme(theme) {
+  document.getElementById('project-theme')?.remove();
+  if (!theme) return;
+  const block = (selector, tokens) => {
+    const body = Object.entries(tokens || {}).map(([k, v]) => `${k}:${v};`).join('');
+    return body ? `${selector}{${body}}` : '';
+  };
+  const css = block(':root', theme.dark) + block(':root[data-theme="light"]', theme.light);
+  if (!css) return;
+  const el = document.createElement('style');
+  el.id = 'project-theme';
+  el.textContent = css;
+  document.head.append(el);
+}
+
+/* ---------- a theme handed to us by an embedder ---------- */
+
+// A host that frames the board may hand it a palette: VS Code's panel derives
+// one from the editor's own theme, so the board belongs in the window instead of
+// being a dark rectangle inside a light IDE.
+//
+// Three rules, and each is a refusal:
+//
+//   - AUTHENTICATED BY SOURCE, never by origin. `e.source === window.parent` is
+//     the same test the bridge in an html frame makes, and the mirror of the
+//     `active` message going the other way. A webview's origin is a uuid nobody
+//     can know in advance, so comparing origins would mean comparing to '*'.
+//   - PER VIEWER, and written NOWHERE. Not to the state file (it is not content),
+//     not to localStorage (it is the host's opinion, not the human's), so closing
+//     the panel leaves nothing behind.
+//   - VALIDATED against the token names this board actually declares, exactly as
+//     `.aboard/theme.json` is. An unknown name is dropped rather than set: a
+//     custom property the board never reads is invisible, so an accepted typo
+//     would look like the message not arriving at all.
+//
+// It sets INLINE custom properties on <html>, which outrank every stylesheet
+// rule in both variants — so a host palette does not have to know whether the
+// viewer is in dark or light, only what the colours are.
+
+let THEME_TOKENS = null;          // the declared set, from /capabilities
+let pendingEmbedderTheme = null;  // a message that arrived before it
+const embedderTokens = new Set(); // what we have set, so it can be taken back off
+
+// The same grammar the server accepts in theme.json: a hex colour, a CSS colour
+// keyword, or a function call of numbers and separators. Stricter than CSS on
+// purpose — a value that cannot be one of these is a mistake, and setProperty
+// would swallow it in silence.
+const THEME_VALUE = /^(#[0-9A-Fa-f]{3,8}|[A-Za-z][A-Za-z0-9-]{0,31}|[a-z-]{1,20}\([A-Za-z0-9 ,./%+-]{0,100}\))$/;
+
+function clearEmbedderTheme() {
+  for (const name of embedderTokens) document.documentElement.style.removeProperty(name);
+  embedderTokens.clear();
+}
+
+function applyEmbedderTheme(msg) {
+  if (!THEME_TOKENS) { pendingEmbedderTheme = msg; return; }
+  clearEmbedderTheme();
+  const tokens = msg.tokens && typeof msg.tokens === 'object' ? msg.tokens : {};
+  for (const [name, value] of Object.entries(tokens)) {
+    if (!THEME_TOKENS.has(name)) { console.warn(`aboard: the embedder set ${name}, which is not a token this board has`); continue; }
+    if (typeof value !== 'string' || !THEME_VALUE.test(value)) { console.warn(`aboard: the embedder set ${name} to a value this board will not use`); continue; }
+    document.documentElement.style.setProperty(name, value);
+    embedderTokens.add(name);
+  }
+  if (msg.kind === 'dark' || msg.kind === 'light') setTheme(msg.kind, { remember: false });
+  else document.dispatchEvent(new CustomEvent('aboard:theme', { detail: { kind: themeKind() } }));
+}
+
+addEventListener('message', (e) => {
+  if (window.parent === window || e.source !== window.parent) return;
+  const msg = e.data;
+  if (!msg || typeof msg !== 'object' || msg.__aboard !== 'theme') return;
+  applyEmbedderTheme(msg);
+});
+
 /* ---------- what a tab is FOR ---------- */
 
 // A tab's contents say what is on it; they do not say why it exists. "Is this a
@@ -901,6 +1144,21 @@ async function loadCapabilities() {
       };
     }
     HELP = next;
+    // The declared palette, for the embedder message's validation. It comes from
+    // the same manifest and the same fetch as the help panel, so there is no
+    // second list of token names anywhere in this page.
+    if (manifest.theme && Array.isArray(manifest.theme.tokens) && manifest.theme.tokens.length) {
+      THEME_TOKENS = new Set(manifest.theme.tokens);
+      // A host that framed the board and posted its palette immediately would
+      // otherwise have spoken before this page could check a single name. The
+      // message is held rather than dropped, because a panel whose theme depends
+      // on how fast a fetch came back is a panel that is wrong at random.
+      if (pendingEmbedderTheme) {
+        const held = pendingEmbedderTheme;
+        pendingEmbedderTheme = null;
+        applyEmbedderTheme(held);
+      }
+    }
   } catch {
     // Keep the fallback: an empty help panel is worse than a slightly stale one.
   }
@@ -997,6 +1255,7 @@ function openHelp() {
     ['notes for the agent', 'ask for something to be fixed here. A session picks it up and ticks it off; ✕ removes yours'],
     ['reload', 'the page reloads itself when its own code changes — no need to reload webviews'],
     ['version', 'which binary is serving — the commit it was built from, +dirty if uncommitted'],
+    ['☾ / ☀', 'switch between the dark and light themes. Yours alone — it is remembered in this browser and changes nothing for anyone else'],
   ], true));
 
   if (!$help.open) $help.showModal();
@@ -1801,8 +2060,9 @@ $views.addEventListener('click', (ev) => {
 // is partitioned and, in some configurations, refused outright — and a refusal
 // is a thrown SecurityError, not a null. Thrown from inside activate() it took
 // tab switching down with it, which is the one gesture an embedder depends on.
-// These are the UI's only two localStorage call sites; guarding both turns a
-// total failure into a forgotten preference. (views/ui.js reaches for
+// Every localStorage call site in this page is guarded for that reason — these
+// two, and the three that carry the theme choice — which turns a total failure
+// into a forgotten preference. (views/ui.js reaches for
 // sessionStorage to remember which panel of a `tabs` component was open, and it
 // has been guarded since it was written — same reason, same shape.)
 function rememberTab(id) {
@@ -2218,11 +2478,12 @@ if (!new URLSearchParams(location.search).has('nosse')) {
   stream.addEventListener('message', (e) => {
     let payload = {};
     try { payload = JSON.parse(e.data) || {}; } catch {}
-    // Three kinds of ping on one stream, told apart by which key is present: a
+    // Four kinds of ping on one stream, told apart by which key is present: a
     // state change carries `origin`, a change in who is waiting carries
-    // `waiters`, and the code this page should be running carries `ui`. Only the
-    // first is a document reload.
+    // `waiters`, the code this page should be running carries `ui`, and the
+    // project's palette carries `theme`. Only the first is a document reload.
     if ('ui' in payload) { onUiSignature(payload.ui); return; }
+    if ('theme' in payload) { refreshTheme(); return; }
     if ('waiters' in payload) { refreshWaiters(); return; }
     if (payload.origin === CLIENT_ID) return;   // our own write echoing back (its
                                                 // warnings came back in the reply)

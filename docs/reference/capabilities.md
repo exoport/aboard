@@ -29,6 +29,7 @@ do before deciding to use it.
 | `commands`  | The declared command table.                                                                     |
 | `rootFlags` | The flags on the root command, inherited by every subcommand.                                   |
 | `routes`    | Every HTTP route, with its method and purpose.                                                  |
+| `theme`     | The palette: every token name, the two variants, which is the default, and where a project puts its own overrides. Parsed out of `app.css` rather than listed in Go, so the manifest cannot disagree with the stylesheet — and so adding a token moves `capsHash`, which is correct: the palette is part of the surface. |
 
 ### A type entry
 
@@ -41,7 +42,7 @@ do before deciding to use it.
 | `controls`                  | Every button the renderer draws, **in toolbar order** — a list, not a map.                |
 | `gestures`                  | What is left once controls carry themselves: drag, drop, wheel, double-click, right-click, type-and-it-saves. |
 | `components`, `commonProps` | For a renderer whose state is a tree of nodes (`ui`): the catalog and the props every node takes. A component also declares which of its props carry its **display text** (`text`, in reading order — `a\|b` is "the first of these that is set", `=p` is "the value in `state.data` at the path prop `p` names") and whether it draws content at all (`layout`). `aboard export` reads both to print a `ui` tab as an outline, so the catalog is not copied into Go. |
-| `tones`, `colors`           | The palettes this renderer accepts **by name**.                                           |
+| `tones`, `colors`           | The palettes this renderer accepts **by name** — token names with the `--` stripped. Checked against `theme.tokens` rather than duplicating it: a name that resolves to nothing renders as no colour at all, with no error anywhere. |
 | `keys`, `notes`             | Key bindings, and anything else worth stating.                                            |
 
 Each entry comes from `pkg/aboard/web/views/<type>.spec.json`, which the renderer is
@@ -135,4 +136,5 @@ warning. See
 
 - [CLI reference](cli.md) — the generated page the command table backs.
 - [HTTP API](http-api.md) — the declared route list, in full.
+- [Colour and themes](theme.md) — the token list the manifest reports, and what a project may do with it.
 - [Why the manifest is declared](../explanation/why-the-manifest-is-declared.md) — the argument, and what `gestures` costs.

@@ -75,7 +75,7 @@ aboard status              # running? which URL? the caps beacon, and how many o
 aboard requests            # what they have ASKED FOR, oldest first, naming the tab
 aboard capabilities        # what this board can actually do — every type, every
                            # state field, every control in toolbar order, every
-                           # colour name, every gesture, endpoint, command and flag
+                           # colour token, every gesture, endpoint, command and flag
 aboard journal --limit 20  # who changed what recently, including other sessions
 ```
 
@@ -542,6 +542,27 @@ any project you drop the binary into, with no skill and no server. Built-in
 recipes travel the same way. `.aboard/aboard.json` is that project's content and
 travels with nothing. This skill travels only if copied in, which is why
 `aboard status` warns when its generated half no longer matches the binary.
+
+## Colour
+
+**Name a colour, never pick one.** Everywhere a colour is yours to set — a `ui`
+node's `tone`, a `markup` mark's `color`, a `diagram` `classDef`, a widget's own
+CSS — you write a token NAME (`accent`, `mark`, `agent`, `focus`, `danger`) or
+`var(--token)`. `aboard capabilities` lists them under `theme`, and `aboard apply`
+warns when a write names one the board does not have.
+
+The reason is not tidiness. There are **two themes** — dark, the default, and
+light, which the human switches to in the topbar — and a project may patch either
+from `.aboard/theme.json`. A hex you chose is a colour that is right in one of
+those and wrong in the others, and nothing will tell you: an unknown token name
+warns, but a perfectly valid `#a4bd00` renders exactly as asked, illegibly, on
+somebody's light board.
+
+So: **do not read `.aboard/theme.json` before naming a colour.** The names are
+yours and the values are the theme's — that split is the whole point, and looking
+up what `--accent` currently resolves to is how an agent talks itself into
+hard-coding it. The one thing worth knowing about a project's theme file is that
+it exists, which `aboard status` tells you without being asked.
 
 ## Ids
 

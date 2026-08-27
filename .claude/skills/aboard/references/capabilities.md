@@ -206,10 +206,17 @@ readings of one dataset.
 `radar-beta`, `sankey-beta`, `treemap-beta`, `mindmap`, `gitGraph`, `block-beta`,
 `packet-beta`, `architecture-beta`. Only `zenuml` is unavailable.
 
-Colours come from the board tokens automatically. **Add colours** in the toolbar
-appends `classDef` classes built from the live palette — prefer the ring form
-(dark fill, coloured border) over solid fills on this dark theme. Chart types
-(`pie`, `xychart`, `radar`) ignore `classDef`.
+Colours come from the board tokens automatically, and a diagram RE-RENDERS when
+the human switches theme — mermaid bakes literal colours into the SVG, so nothing
+else could reach it. **Add colours** in the toolbar appends `classDef` classes
+built from the live palette — prefer the ring form (surface fill, coloured border)
+over solid fills, which reads better in both themes. Chart types (`pie`,
+`xychart`, `radar`) ignore `classDef`.
+
+The block it writes carries the token values as they stand when the button is
+pressed, so a diagram whose source was hand-coloured on a dark board keeps those
+hexes on a light one. That is the one place a `classDef` is worth re-running the
+button on rather than editing by hand.
 
 Hovering a node shows `key — label`, where `key` is the mermaid node id you need
 in order to edit the source.
@@ -260,9 +267,11 @@ The human can answer, and Reset answers.
 - `annotatable: false` → a reference image with no overlay and no tools.
 - `shape`: `"ellipse"`, or absent/`"rect"` for a rectangle.
 - `color`: a token **name** (`mark`, `accent`, `focus`, `agent`, `danger`), never
-  a hex, so it survives a retheme. Absent means the default. The palette is
-  declared, so `aboard apply` warns when a write names a colour the board does not
-  have, and prints the ones it does.
+  a hex, so it survives a retheme — and there are now two themes plus whatever a
+  project's `.aboard/theme.json` says, so a hex is a colour that is wrong for
+  somebody. Absent means the default. The palette is declared, so `aboard apply`
+  warns when a write names a colour the board does not have, and prints the ones
+  it does.
 - `strokes[].points` is one `"x,y x,y"` string. Keep the compact form.
 - Images the human pastes or drops land in `.aboard/uploads/` and are served from
   `/uploads/<file>`; images you ship with the binary live in its embedded
@@ -352,8 +361,17 @@ It inherits the board palette as CSS custom properties; override freely. Plain
 HTML — no build step, no imports, no framework. The palette is `app.css`'s own
 `:root`, parsed and injected — **every** token the board has, not a subset that
 was accurate once — so `var(--status-doing)` or `var(--accent-dim)` resolves in a
-widget exactly as it does in a renderer. `aboard capabilities` does not list the
-token names; `app.css` is where they are stated, once.
+widget exactly as it does in a renderer. `aboard capabilities` lists the token
+names under `theme`; `app.css` is where they are stated, once, and the manifest
+reads them from there.
+
+**Both themes are injected**, not just the one in force, and the parent flips
+`data-theme` on the frame when the human switches (and re-sends the project's own
+overrides when `.aboard/theme.json` changes) — so a widget that colours from
+tokens follows the board with no work, and one that hard-codes a hex is the only
+thing on the page that will look wrong in the other theme. If your widget needs
+to KNOW, read `document.documentElement.dataset.theme` (`dark` or `light`); do not
+sniff a colour.
 
 Inside the frame:
 
@@ -591,10 +609,14 @@ you `state` (this tab's slice), `tab`, `save()`, `nextId()`, and — for a compo
 renderer — `types()`, `initFor()`, `mountType()`.
 
 Rules that keep the board coherent: colour only from the tokens in `app.css`
-(never a hex), keep per-viewer UI state in local JS (never in the state
+(never a hex) **and declare every one of them in both variants** — a token missing
+from `:root[data-theme="light"]` silently inherits the dark value, which renders
+as no error at all; keep per-viewer UI state in local JS (never in the state
 document), never `innerHTML` with state values, never assign to `ctx.state` (it is
 a getter — mutate in place), and in `refresh()` never clobber an input the human
-has focus in.
+has focus in. Anything that BAKES a token value into its output rather than
+referencing it — a rendered SVG, a canvas — has to re-render on the
+`aboard:theme` event, because no cascade can reach it.
 
 The web tree is compiled into the binary, so after editing anything under
 `pkg/aboard/web/`, rebuild and restart — or run `aboard serve --dev` to serve it

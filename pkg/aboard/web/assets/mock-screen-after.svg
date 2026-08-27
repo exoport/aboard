@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" role="img" aria-label="Mock application screen, after state">
-  <!-- Dark mock UI, coloured from the FireFly Pro neutral-black palette so it belongs in the board -->
+  <!-- Dark mock UI, coloured from the board’s own neutral near-black palette so it belongs here -->
   <rect width="900" height="560" fill="#000000"/>
 
   <!-- top chrome -->

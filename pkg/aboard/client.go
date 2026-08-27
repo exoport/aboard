@@ -382,6 +382,15 @@ type StatusReport struct {
 	// every board would be one more thing to read past.
 	Requests int `json:"requests,omitempty" yaml:"requests,omitempty"`
 
+	// ThemeFile is the project's own palette, when it has one, and ThemeDefault
+	// the variant it boots a fresh viewer into. Reported because a house style is
+	// invisible from the terminal and very visible on screen: "why is this board
+	// green" is a question status should be able to answer without anyone
+	// guessing which of two checkouts they are in.
+	ThemeFile     string   `json:"themeFile,omitempty"     yaml:"themeFile,omitempty"`
+	ThemeDefault  string   `json:"themeDefault,omitempty"  yaml:"themeDefault,omitempty"`
+	ThemeWarnings []string `json:"themeWarnings,omitempty" yaml:"themeWarnings,omitempty"`
+
 	CapsHash string `json:"capsHash" yaml:"capsHash"`
 	// Skill is SkillCurrent, SkillStale or SkillAbsent. Absent is not drift: a
 	// project that never copied the skill has nothing to be out of date.
@@ -397,6 +406,11 @@ func Status(ctx context.Context, root Root, name string, assets fs.FS) StatusRep
 		InstanceFile: root.InstanceFile(name),
 		Skill:        SkillAbsent,
 		Requests:     PendingRequests(root, name),
+	}
+	if theme := LoadTheme(root, assets); theme != nil {
+		rep.ThemeFile = root.ThemeFile()
+		rep.ThemeDefault = theme.DefaultKind()
+		rep.ThemeWarnings = theme.Warnings
 	}
 	if m, err := buildManifest(assets); err == nil {
 		rep.CapsHash = m.Hash
@@ -468,6 +482,17 @@ func (r StatusReport) Human() string {
 	if r.Requests > 0 {
 		fmt.Fprintf(&b, "  asked   %d request%s waiting — `aboard requests%s`\n",
 			r.Requests, plural(r.Requests), nameFlagFor(r.Name))
+	}
+	// A house style, when the project has one. Before the caps beacon and after
+	// the requests, in the same column as everything else: it is a fact about the
+	// project rather than about the machinery, and its warnings are the only
+	// place a misspelt token name reaches somebody who is not watching a serve
+	// log — which is most people, most of the time.
+	if r.ThemeFile != "" {
+		fmt.Fprintf(&b, "  theme   %s (default %s)\n", r.ThemeFile, r.ThemeDefault)
+		for _, warning := range r.ThemeWarnings {
+			fmt.Fprintf(&b, "          ⚠ %s\n", warning)
+		}
 	}
 	// The skill is an open page that loaded a document: same problem the browser
 	// has after a rebuild, so it gets the same treatment — a signature, and a

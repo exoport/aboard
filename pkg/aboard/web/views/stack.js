@@ -217,13 +217,23 @@ export function mountStack(root, ctx) {
     mountedBlocks.set(block.id, { handle, body, type: block.type });
   }
 
+  // A block's renderer may hold a timer or a listener on window/document — an
+  // `html` block registers both — and neither is torn down by dropping the DOM.
+  // Every path that stops minding a block goes through here.
+  function dropBlock(id) {
+    const entry = mountedBlocks.get(id);
+    if (!entry) return;
+    try { entry.handle?.destroy?.(); } catch { /* a block must not stop the stack */ }
+    mountedBlocks.delete(id);
+  }
+
   function render() {
     const list = blocks();
 
     // Drop anything whose block disappeared or changed type.
     for (const [id, entry] of [...mountedBlocks]) {
       const still = list.find((b) => b.id === id);
-      if (!still || still.type !== entry.type) mountedBlocks.delete(id);
+      if (!still || still.type !== entry.type) dropBlock(id);
     }
 
     if (!list.length) {
@@ -252,6 +262,13 @@ export function mountStack(root, ctx) {
         return;
       }
       for (const entry of mountedBlocks.values()) entry.handle?.refresh?.();
+    },
+    // The shell calls this when the tab is torn down. Without it an `html` block
+    // left its window `message` and document `aboard:theme` listeners behind for
+    // the life of the page — the leak html.js's own destroy() fixes for a
+    // top-level html TAB, and which nothing was calling for a block.
+    destroy() {
+      for (const id of [...mountedBlocks.keys()]) dropBlock(id);
     },
   };
 }

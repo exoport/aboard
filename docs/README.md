@@ -43,6 +43,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [The state file](reference/state-file.md) — the schema v3 essentials: the document, ids, a tab, per-type state
 - [HTTP API](reference/http-api.md) — every route the server answers, with its parameters and status codes
 - [The capability manifest](reference/capabilities.md) — what `aboard capabilities` prints, `capsHash`, `--check`, and the declared command table
+- [Colour and themes](reference/theme.md) — the 21 tokens and their roles, both variants with measured contrast, `.aboard/theme.json`, the switch, and the embedder message — plus [how to give a project a house style](how-to/give-a-project-a-house-style.md)
 
 ### Explanation — _the why and the what_
 

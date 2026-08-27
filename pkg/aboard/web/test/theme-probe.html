@@ -8,9 +8,26 @@
 <body>
 <div id="out">pending</div>
 <script>
+// ?theme=light probes the OTHER variant. A probe that can only ever report the
+// default one is the "demonstrated only in the case that works" trap: the light
+// theme's whole failure mode is a token that was forgotten and therefore
+// inherits, and this page could not have shown it.
+const kind = new URLSearchParams(location.search).get('theme') === 'light' ? 'light' : 'dark';
+document.documentElement.setAttribute('data-theme', kind);
+
+// Every token, read from the stylesheet rather than listed here — a list in this
+// file is a second declaration of the palette, which is the mistake the whole
+// theme parser exists to avoid, and it had already lost --accent-dim and
+// --danger by the time anybody looked.
+const names = [...document.styleSheets]
+  .flatMap((sheet) => { try { return [...sheet.cssRules]; } catch (e) { return []; } })
+  .filter((rule) => rule.selectorText === ':root')
+  .flatMap((rule) => [...rule.style])
+  .filter((name) => name.startsWith('--'))
+  .sort();
+
 const css = getComputedStyle(document.documentElement);
-const names = ['--bg','--surface','--sunken','--raised','--text','--muted','--dim','--line','--line-strong','--accent','--accent-ink','--mark','--agent','--edge','--focus','--drop','--status-todo','--status-doing','--status-done'];
-const out = {};
+const out = { theme: kind };
 for (const n of names) out[n] = css.getPropertyValue(n).trim();
 out.colorScheme = css.getPropertyValue('color-scheme').trim();
 document.getElementById('out').textContent = 'PALETTE ' + JSON.stringify(out);

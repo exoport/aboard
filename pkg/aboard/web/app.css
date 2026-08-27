@@ -1,23 +1,42 @@
 /* Shared shell + view styling.
  *
- * Palette from the FireFly Pro VS Code theme (ankitcode.firefly), using that
- * theme's NEUTRAL black family rather than its blue-tinted editor chrome, so
- * the board reads as black with lighter blacks layered on top:
- *   #000000  titleBar / input.background   -> page ground
- *   #0a0a0a  list.hoverBackground          -> recessed wells
- *   #151515  dropdown.background           -> raised cards and panels
- *   #2a2a2a  scrollbarSlider.background    -> hairlines
- *   #343434  tab.activeBackground          -> stronger borders
- *   #ccd4e0  brightened editor.foreground  -> body text (AAA on every ground)
- *   #a4bd00  button / badge / string       -> the one accent
- * Depth runs upward from black: bg -> sunken -> surface -> raised. Deliberately
- * single-theme, so every colour is stated once and `color-scheme: dark` lets
- * native controls render dark too.
+ * TWO THEMES, ONE TOKEN SET. Every colour on this board is a custom property
+ * declared here and nowhere else — no hex in any view — and each one is stated
+ * twice: once under `:root`, which is the DARK theme and the default, and once
+ * under `:root[data-theme="light"]`. The shell stamps `data-theme` on <html>
+ * (per-viewer, localStorage `aboard.theme`); a project may patch either variant
+ * from `.aboard/theme.json`. A token declared in one variant and forgotten in
+ * the other is drift, and TestBothThemesDeclareTheSameTokens refuses it.
  *
- * Text colours are pinned to WCAG AAA (>=7:1) on surface, sunken and black,
- * because most type here is small: --dim carries .hint at 0.83rem and was the
- * one that failed. Hierarchy is carried by size and weight, not by fading the
- * colour toward the background.
+ * The DARK palette is a neutral near-black surface ramp — black ground with
+ * lighter blacks layered on top, no blue tint in the chrome — plus one olive
+ * accent, a periwinkle for everything an agent says, and an orange for
+ * everything the human asks for:
+ *   #000000  page ground
+ *   #0a0a0a  recessed wells (inputs, strips)
+ *   #151515  raised cards and panels
+ *   #2a2a2a  hairlines
+ *   #3d3d3d  stronger borders
+ *   #ccd4e0  body text (AAA on every ground)
+ *   #a4bd00  the one accent
+ * Depth runs upward from black: bg -> sunken -> surface -> raised.
+ *
+ * The LIGHT palette mirrors it rather than inverting it by formula: the same
+ * semantic roles, the same ordering of depth (now running DOWNWARD from white,
+ * so each layer sits further from the ground), and the same hues turned dark
+ * enough to carry small text on a pale ground — the periwinkle stays a
+ * periwinkle, the accent stays the same olive.
+ *
+ * Text colours are pinned to WCAG AAA (>=7:1) on surface, sunken and the page
+ * ground, because most type here is small: --dim carries .hint at 0.83rem and
+ * was the one that failed. --accent, --agent, --mark and --focus carry small
+ * text too and are held to the same bar. --edge, --line, --line-strong and
+ * --accent-dim are structure rather than prose — strokes, hairlines, lane dots
+ * — and are matched to their dark counterparts instead. Hierarchy is carried by
+ * size and weight, not by fading the colour toward the background.
+ *
+ * The measured ratios for both variants are in the commit that added the light
+ * theme, and docs/reference/theme.md carries the table.
  */
 
 :root {
@@ -49,6 +68,53 @@
   --status-todo: #6b6b6b;
   --status-doing: #a4bd00;
   --status-done: #3d3d3d;
+}
+
+/* The light variant: the same 21 tokens, the same roles, none of them missing.
+ *
+ * `:root[data-theme="light"]` and not `@media (prefers-color-scheme: light)`,
+ * because the choice is the VIEWER'S and it is made in the page — the topbar
+ * switch writes localStorage and the shell stamps the attribute before first
+ * paint. A media query would take the decision away from them, and it would
+ * also take it away from an embedder handing the board its host's theme.
+ *
+ * Depth runs downward from white here: bg -> sunken -> surface -> raised, each
+ * a little further from the ground, which is the same sentence the dark theme
+ * makes in the other direction.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --sunken: #f6f7f9;
+  --surface: #f0f2f6;
+  --raised: #e6e9ef;
+
+  --text: #141a24;
+  --muted: #3a4250;
+  --dim: #464f5e;
+
+  --line: #d7dae2;
+  --line-strong: #b2b8c4;
+
+  /* The accent keeps its hue and swaps its role with its ink: a lime that is
+     legible ON a black ground is invisible on a white one, and --accent is
+     drawn as TEXT in thirty places as well as being the primary button's
+     ground. So it darkens and --accent-ink becomes the light half. */
+  --accent: #454f00;
+  --accent-ink: #ffffff;
+  --accent-dim: #67780e;
+
+  --mark: #763e00;
+  --agent: #363ba3;
+  --edge: #8a919f;
+  --focus: #0d4f66;
+  --danger: #a30040;
+  --drop: #ebf1d2;
+
+  --status-todo: #767d8a;
+  --status-doing: #454f00;
+  --status-done: #b2b8c4;
 }
 
 * { box-sizing: border-box; }
@@ -444,6 +510,14 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
      an absolutely positioned box outpaints an in-flow sibling today, and stops
      the day somebody gives .version-badge a position of its own. */
   z-index: 1;
+}
+
+/* The theme switch. A fixed minimum width so the label swapping between "dark"
+   and "light" does not shuffle the buttons beside it under the cursor — the same
+   reason the notify acknowledgement is positioned out of the flow. */
+.theme-btn {
+  min-width: 7.5ch;
+  text-align: center;
 }
 
 .tab-add {

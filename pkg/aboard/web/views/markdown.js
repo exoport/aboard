@@ -105,12 +105,31 @@ function codeBlock(body) {
 function mermaidBlock(source) {
   const figure = document.createElement('div');
   figure.className = 'md-mermaid';
+  figure.dataset.mermaid = source;
   figure.append(codeBlock(source));
   if (source.trim()) {
     renderMermaidInto(figure, source).catch(() => { /* the verbatim source stays */ });
   }
   return figure;
 }
+
+// A fence renders to an SVG with the token values baked into it, so a theme
+// switch cannot reach it by changing a custom property — the same problem the
+// diagram TAB has, in a place with no mount and no handle for the shell to call.
+//
+// Hence one document-level listener for the whole module rather than one per
+// figure: a notes tab can hold a dozen fences, they come and go on every
+// re-render of the markdown, and a listener per figure would be a leak per
+// figure. It walks what is ON SCREEN when the theme changes, which is the only
+// set that matters — the source is kept on the element, so nothing has to be
+// remembered anywhere else.
+document.addEventListener('aboard:theme', () => {
+  for (const figure of document.querySelectorAll('.md-mermaid[data-mermaid]')) {
+    const source = figure.dataset.mermaid || '';
+    if (!source.trim()) continue;
+    renderMermaidInto(figure, source).catch(() => { /* leave the last good render */ });
+  }
+});
 
 /** Build a fragment for `text`. Block-level scan, line by line. */
 export function renderMarkdown(text) {

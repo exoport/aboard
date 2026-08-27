@@ -6,6 +6,53 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **feat: a dark/light switch, a project house style, and no product name in the palette.**
+  `app.css` used to describe its colours as coming from a named VS Code theme; it now
+  describes them by what they are — a neutral near-black surface ramp, one olive accent,
+  a periwinkle for everything an agent says, an orange for everything the human asks for
+  — and the name is gone from the tree. No colour changed in that step.
+  **Two variants of the same 21 tokens.** `:root` is dark and remains the default;
+  `:root[data-theme="light"]` is a light theme designed to the same rules rather than
+  inverted by formula: the same semantic roles, depth running downward from white
+  instead of upward from black, and every text/ground pair measured rather than
+  eyeballed (`--text` 15.6:1, `--muted` 9.0:1, `--dim` 7.4:1 on `--surface`; `--accent`,
+  `--agent`, `--mark` and `--focus` all above 7:1; `--danger` reaches 7.1:1 on light
+  where dark manages 4.7:1). The table for both variants, and the three honest
+  exceptions, are in `docs/reference/theme.md`.
+  The switch is a topbar button and is **per viewer** — `localStorage`, stamped on
+  `<html>` by a classic script in the head so the first paint is already right, never in
+  the board document. Three things a custom property cannot reach are told instead: an
+  `html` tab's frame (both variants are spliced into it and the parent posts a theme
+  message carrying the variant and the project's overrides, so it flips an attribute
+  rather than reloading and losing what the widget held), a `diagram` (mermaid writes
+  literal colours into its SVG, so it re-renders), and a mermaid fence in markdown (the
+  same, with no mount to call). The diagram's **Add colours** button stopped choosing
+  its own near-blacks for solid fills and takes `--accent-ink` instead: the four it had
+  were correct on a dark board and produced a black label on a dark olive box on a light
+  one, from the board's own button.
+  **`.aboard/theme.json`** gives a project a house style: `{version, default, dark, light}`,
+  a PATCH over the built-ins so a file written today does not lose a token added
+  tomorrow. It is content rather than runtime — meant to be committed, the one path
+  under `.aboard/` worth un-ignoring — and it is validated against the declared token
+  names in the same voice `apply` uses for a colour name. Nothing in it can blank a
+  board: an unknown token, an unusable value, an unknown `default` and a file that is
+  not JSON at all are each dropped with a warning that names what is available, and the
+  built-in palette applies. The warnings reach three audiences deliberately (the serve
+  log, `aboard status`, the browser console), because the person who can fix it is not
+  always the one watching a terminal. The file is spliced into the shell before first
+  paint — a fetch would flash the built-in palette on every load — and watched, so an
+  edit reaches an open page over SSE with no reload.
+  `GET /theme.json` serves the validated file (`404` when there is none, `ETag` like the
+  document); `aboard capabilities` gains a `theme` section listing the token names,
+  parsed out of `app.css` rather than restated in Go — so `tones` and `colors` in the
+  renderer specs are now CHECKED against the palette instead of duplicating it, and
+  `capsHash` moves when the palette does, which is correct. `aboard status` prints
+  `theme   <path> (default light)` when a project has one.
+  And the hook the VS Code panel needs: an embedder may post
+  `{__aboard:'theme', tokens, kind}` from `window.parent`, authenticated by
+  `event.source` exactly like the `active` message going the other way, validated the
+  same way, applied as inline custom properties and stored nowhere.
+
 - **feat: the human can leave notes for an agent on a tab, and an agent ticks them off.**
   A tab's `note` and "what the human wants done about it" were one field, and the merge
   was lossy both ways: a purpose rewritten into a to-do stops being a purpose, and a

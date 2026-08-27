@@ -14,6 +14,7 @@ opinion about it.
   .aboard/
     aboard.json            the board document — the thing a human curates
     aboard.<name>.json     a second, named board in the same project
+    theme.json             the project's house style: a patch over the palette
     uploads/               images the human pasted or dropped
     recipes/               this checkout's own recipes (project scope)
     run/                   machine-local runtime; true for this machine, now
@@ -29,8 +30,8 @@ opinion about it.
 ```
 
 The split is between **content** and **machine-local runtime**. `aboard.json`,
-`uploads/` and `recipes/` are content: a `markup` tab references an upload by name and
-would break without it. Everything under `run/` is true only for this machine and this
+`theme.json`, `uploads/` and `recipes/` are content: a `markup` tab references an upload
+by name and would break without it. Everything under `run/` is true only for this machine and this
 moment — including `rendered.json`, which is per-VIEWER as well: it says what a browser
 drew, which is the same class of fact as selection, zoom and a chat draft, and is
 therefore exactly as unwelcome in the board document.
@@ -45,6 +46,12 @@ ignores **one** path and loses nothing it wanted to keep:
 ```gitignore
 .aboard/
 ```
+
+`theme.json` is the one file under here a project may want to keep, since a house style
+describes the project rather than this machine — see
+[how to give a project a house style](../how-to/give-a-project-a-house-style.md) for the
+two-line ignore rule that does it. It is per PROJECT and not per board: two boards in
+one checkout are two conversations, not two brands.
 
 `aboard init --gitignore` adds that line for you. The reasoning behind ignoring it at
 all is [why a local, non-authoritative channel](../explanation/why-a-local-non-authoritative-channel.md).
@@ -238,6 +245,7 @@ meaningful rather than an error:
 ## See also
 
 - [The state file](state-file.md) — what is inside `aboard.json`.
+- [Colour and themes](theme.md) — what `theme.json` may contain, and what happens to what it may not.
 - [HTTP API](http-api.md) — the routes that read and write these paths.
 - [How aboard runs](../explanation/how-aboard-runs.md) — the same parts as a mental model rather than a tree.
 - [How to run a second board in one project](../how-to/run-a-second-board.md) — the named-board table above, with its consequences worked through.

@@ -72,4 +72,5 @@ const msgTabPlainID = "tab must be a plain id"
 const (
 	routeState = "/aboard.json"
 	routeLog   = "/log"
+	routeTheme = "/theme.json"
 )

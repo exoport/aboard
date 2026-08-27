@@ -18,6 +18,7 @@ prints the same table; the browser suite asserts that every declared path answer
 | GET    | `/events`           | SSE: state changes, waiter count, and the UI signature.                   |
 | GET    | `/health`           | Who owns this port, and which binary is serving.                          |
 | GET    | `/capabilities`     | The capability manifest.                                                  |
+| GET    | `/theme.json`       | The project's `.aboard/theme.json`, validated; `404` when it has none.    |
 | GET    | `/tab/<id>/html`    | One `html` tab as a standalone sandboxed document.                        |
 | GET    | `/wait`             | Long poll: block until poked or until a predicate matches.                |
 | POST   | `/poke`             | Release every waiting session.                                            |
@@ -164,6 +165,56 @@ it has not moved.
 **Nothing else travels this way.** The tab list, the document and the notices are read
 from `/aboard.json` and `/events` like every other client; a second, weaker channel
 for the same data is a bug factory.
+
+### What an embedder may post to the shell
+
+One message, in the other direction: a palette. A host that owns the window — a VS Code
+panel deriving colours from the editor's own theme — hands the board its colours so it
+belongs there instead of being a dark rectangle inside a light IDE.
+
+```js
+frame.contentWindow.postMessage({
+  __aboard: 'theme',
+  kind: 'light',                                   // optional: which variant to switch to
+  tokens: { '--bg': '#fffdf7', '--text': '#1a1a1a' },
+}, '*');
+```
+
+**Authenticated by `event.source === window.parent`**, the mirror of the rule the
+`active` message above asks its receiver to apply, and the same rule an `html` tab's
+bridge uses on messages from ITS parent. A message from any other window — a sibling
+frame, an opener, a script in the console — is ignored.
+
+`tokens` keys must be among the token names `aboard capabilities` reports under `theme`;
+values must be a hex colour, a CSS colour keyword or a function call such as
+`rgb(10 10 10 / 0.6)`. Anything else is dropped with a console warning rather than set,
+because a custom property the board never reads is indistinguishable from the message
+never arriving.
+
+It is applied as inline custom properties on the root element — outranking both
+variants, so a host need not know which one the viewer is in — and is written **nowhere**:
+not the board document, not `localStorage`. See
+[colour and themes](theme.md#a-theme-from-an-embedder).
+
+### `GET /theme.json`
+
+The project's house style, validated: unknown token names and unusable values are
+already gone, and the `warnings` array carries the sentences that say so. `404` when the
+project has no `.aboard/theme.json`, which the page reads as "use the built-in palettes"
+— an empty object would have meant something different, since a theme file that
+overrides nothing is a thing a project can legitimately have.
+
+```json
+{ "version": 1, "default": "light", "light": { "--accent": "#1f5f8b" } }
+```
+
+`ETag` over the served bytes with `Cache-Control: no-cache`, like the document: send the
+tag back as `If-None-Match` and an unchanged theme answers `304`.
+
+The shell does not normally fetch it. The server SPLICES the same object into
+`aboard.html` before the page paints, because a fetch is asynchronous and would mean a
+visible flash of the built-in palette on every load. This route is what the page re-reads
+when the `{"theme": …}` frame says the file changed, and what any other client asks.
 
 ## `GET /aboard.json`
 
@@ -339,6 +390,7 @@ Server-sent events. Each frame is a JSON object in `data:`, distinguished by its
 | `{"origin": "…"}`      | The state file changed; the value is the writer's client id (`null` if unknown), so a browser can ignore its own write. |
 | `{"checked": […], "warnings": {…}}` | Carried on that same change frame: the tabs the write-time checks ran over, and what they said, keyed by tab. This is how a warning from an `apply` on somebody else's terminal reaches the human's screen — and how a banner comes down when the next write to that tab is clean. Both are omitted when there is nothing to say. |
 | `{"waiters": N}`       | How many sessions are blocked on `/wait` right now — this is what enables the notify button. |
+| `{"theme": "…"}`       | The project's `.aboard/theme.json` changed on disk; the value is a signature, not the file. The page re-reads `/theme.json` rather than trusting the frame — the same discipline every other ping here follows. |
 
 The stream never closes. That matters for tooling: a headless browser will never reach
 network-idle, so add `?nosse=1` to the page URL when scripting screenshots.
@@ -371,6 +423,18 @@ Serves one `html` tab as a standalone document: the widget's HTML, its data inje
 a global, and the `aboard.*` bridge. `<id>` may be a compound `<tab>/<block>` path, which
 resolves to an `html` block inside a `stack` tab and serves that block's own html, data
 and title — with a byte-identical CSP.
+
+`?theme=dark|light` says which variant the frame should paint FIRST. Both variants are
+spliced into the document — the built-in palette plus whatever `.aboard/theme.json`
+overrides — so a theme switch afterwards is a `postMessage`, not a reload. An absent or
+unrecognised value falls back to the board's own default, exactly as `?chrome=` does.
+
+The parent posts `{__aboard: 'theme', kind, tokens}` into the frame on a switch and
+whenever `.aboard/theme.json` changes: `kind` sets `data-theme` on the frame's root, and
+`tokens` — that variant's project overrides — is applied as inline custom properties,
+which outrank both spliced blocks. The second half exists because the spliced blocks are
+a snapshot: an edit to theme.json cannot reach a document that is already open, and
+reloading the frame to deliver it would throw away whatever the widget was holding.
 
 Response headers: the sandbox CSP (`sandbox allow-scripts`, `connect-src 'none'`,
 `frame-ancestors` listing `'self'` plus VS Code's webview origins),
@@ -597,3 +661,4 @@ tabs that mention each file and can prune the ones nothing does.
 - [The state file](state-file.md) — the document these routes read and write.
 - [The `.aboard/` layout](layout.md) — the paths behind `/log`, `/uploads` and the instance record.
 - [The capability manifest](capabilities.md) — where this route table is declared.
+- [Colour and themes](theme.md) — `/theme.json`, `?theme=`, and the theme message across the frame boundary.

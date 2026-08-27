@@ -237,6 +237,17 @@ func (r Root) UploadsDir() string { return filepath.Join(r.Dir(), uploadDir) }
 // to a base already; this only joins.
 func (r Root) UploadFile(base string) string { return filepath.Join(r.UploadsDir(), base) }
 
+// ThemeFile is the project's house style: `<root>/.aboard/theme.json`, a patch
+// over the built-in palettes (see theme.go).
+//
+// CONTENT, not runtime, and that is the whole placement decision. It sits beside
+// the board document and `uploads/` rather than under `run/` because a house
+// style is meant to be COMMITTED by the projects that want one — it describes
+// the project, not this machine or this moment. Per PROJECT and not per board,
+// unlike the journal and the receipts: two boards in one checkout are two
+// conversations, not two brands.
+func (r Root) ThemeFile() string { return filepath.Join(r.Dir(), "theme.json") }
+
 // RecipesDir is this checkout's own recipes: the lowest-precedence directory of
 // the three on disk, and the one that ships with `aboard init`. Content, not
 // runtime — a recipe is a document somebody wrote.

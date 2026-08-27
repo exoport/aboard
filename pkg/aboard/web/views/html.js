@@ -166,10 +166,39 @@ export function mountHtml(root, ctx) {
     }
   }
 
+  // Which theme the board is showing. The frame is a separate document with its
+  // own :root, so it cannot inherit the attribute — it is told, twice: in the
+  // URL when it loads (so it never paints the wrong theme and corrects itself)
+  // and by postMessage when the human switches (so switching does not reload the
+  // frame and throw away whatever the widget was holding).
+  function themeKind() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  }
+
+  // The project's own overrides for the variant now in force, when there is a
+  // .aboard/theme.json. The two built-in blocks were spliced into the frame when
+  // it loaded and a switch only has to name one of them — but an EDIT to
+  // theme.json changes VALUES inside those blocks, and the frame is holding the
+  // copy the server served it. Without this a house style stops at the widget
+  // boundary the moment anybody iterates on it, which is the only time anybody
+  // is looking.
+  function projectTokens(kind) {
+    const theme = window.ABOARD_THEME;
+    const tokens = theme && theme[kind];
+    return tokens && typeof tokens === 'object' ? tokens : null;
+  }
+
+  function pushTheme() {
+    if (!frame.contentWindow) return;
+    const kind = themeKind();
+    frame.contentWindow.postMessage({ __aboard: 'theme', kind, tokens: projectTokens(kind) }, '*');
+  }
+
   // Cache-bust so a reload after an edit actually fetches the new document.
   function loadFrame() {
     lastLoadedHtml = ctx.state.html;
-    frame.src = api(`/tab/${encodeURIComponent(tabId)}/html`) + `?v=${Date.now()}`;
+    frame.src = api(`/tab/${encodeURIComponent(tabId)}/html`)
+      + `?v=${Date.now()}&theme=${encodeURIComponent(themeKind())}`;
     showData();
   }
 
@@ -204,6 +233,7 @@ export function mountHtml(root, ctx) {
   }
 
   window.addEventListener('message', onMessage);
+  document.addEventListener('aboard:theme', pushTheme);
 
   reload.addEventListener('click', loadFrame);
 
@@ -245,6 +275,14 @@ export function mountHtml(root, ctx) {
       if (frame.contentWindow) {
         frame.contentWindow.postMessage({ __aboard: 'data', data: ctx.state.data }, '*');
       }
+    },
+    // Both listeners are on WINDOW and DOCUMENT, so nothing removes them when
+    // the view's own root is dropped: a tab mounted and unmounted a dozen times
+    // left a dozen handlers posting into frames that no longer exist. The theme
+    // one made that visible; the message one had been there all along.
+    destroy() {
+      window.removeEventListener('message', onMessage);
+      document.removeEventListener('aboard:theme', pushTheme);
     },
   };
 }

@@ -177,6 +177,29 @@ type manifest struct {
 	Commands []Command   `json:"commands"`
 	Root     []Flag      `json:"rootFlags,omitempty"`
 	Routes   []routeSpec `json:"routes"`
+	// Theme is the palette itself: the token names every renderer draws from,
+	// and the two variants they are declared in.
+	//
+	// Reported because it is a VOCABULARY agents write, exactly like the
+	// component catalog and the `tones`/`colors` lists — a `.aboard/theme.json`
+	// names these, and so does anyone reading a widget's CSS. It is derived from
+	// app.css rather than listed here, so the manifest cannot disagree with the
+	// stylesheet; `tones` and `colors` stay where they are and are checked
+	// AGAINST this set rather than duplicating it (TestEveryDeclaredColourNameIsAToken).
+	Theme themeSpec `json:"theme"`
+}
+
+// themeSpec is what `aboard capabilities` says about colour.
+type themeSpec struct {
+	// Tokens are the custom-property names, sorted. The `--` prefix is part of
+	// the name: it is what a theme.json and a widget's CSS both write.
+	Tokens []string `json:"tokens"`
+	// Variants are the theme names, and Default is the one a viewer with nothing
+	// stored boots into unless a project's theme.json says otherwise.
+	Variants []string `json:"variants"`
+	Default  string   `json:"default"`
+	// File is where a project puts its own overrides, relative to the root.
+	File string `json:"file"`
 }
 
 // SchemaVersion is the board-document layout the renderers are written against.
@@ -193,6 +216,7 @@ var declaredRoutes = []routeSpec{
 	{http.MethodGet, "/events", "SSE: state changes, waiter count, and the UI signature"},
 	{http.MethodGet, "/health", "who owns this port, and which binary is serving"},
 	{http.MethodGet, "/capabilities", "this manifest"},
+	{http.MethodGet, routeTheme, "the project's .aboard/theme.json, validated; 404 when it has none and the built-in palettes apply"},
 	{http.MethodGet, "/tab/<id>/html", "one html tab as a standalone sandboxed document"},
 	{http.MethodGet, "/wait", "long poll: block until poked or until a predicate matches"},
 	{http.MethodPost, "/poke", "release every waiting session"},
@@ -252,6 +276,12 @@ func buildManifest(assets fs.FS) (manifest, error) {
 		Commands: Commands(),
 		Root:     RootFlags(),
 		Routes:   declaredRoutes,
+		Theme: themeSpec{
+			Tokens:   themeTokenNames(assets),
+			Variants: []string{ThemeDark, ThemeLight},
+			Default:  ThemeDark,
+			File:     DirName + "/theme.json",
+		},
 	}
 	m.Hash = capsHash(m)
 	return m, nil
@@ -475,6 +505,16 @@ func manifestMarkdown(m manifest) string {
 		if len(t.Notes) > 0 {
 			b.WriteString("\n")
 		}
+	}
+
+	if len(m.Theme.Tokens) > 0 {
+		fmt.Fprintf(&b, "## Colour\n\nEvery colour on this board is one of these %d tokens, and nothing else. "+
+			"A renderer that takes a colour by NAME (`ui`'s `tone`, `markup`'s `color`) takes the name "+
+			"without the `--`; a widget's own CSS writes `var(--name)`.\n\n", len(m.Theme.Tokens))
+		fmt.Fprintf(&b, "`%s`\n\n", strings.Join(m.Theme.Tokens, "` · `"))
+		fmt.Fprintf(&b, "Two variants — %s — defaulting to `%s`, chosen per viewer and never stored in the board. "+
+			"A project may patch either from `%s`; the VALUES are the theme's business, the NAMES are yours.\n\n",
+			"`"+strings.Join(m.Theme.Variants, "`, `")+"`", m.Theme.Default, m.Theme.File)
 	}
 
 	fmt.Fprintf(&b, "## Endpoints\n\n| route | purpose |\n|---|---|\n")

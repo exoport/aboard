@@ -203,6 +203,15 @@ type server struct {
 	// them that the warnings exist to end, only pointing the other way.
 	pendingChecked []string
 
+	// The project's theme file as this process last read it, or nil when there
+	// is none. Atomic because the watcher goroutine replaces it while handlers
+	// read it, and a Theme is never mutated after it is published — the same
+	// discipline as `live` above.
+	themeCur atomic.Pointer[Theme]
+	// The signature of theme.json as the watcher last saw it. Watcher-only, like
+	// `sig` above.
+	themeSig string
+
 	// The renderer declarations, read once from the assets this server serves.
 	// The write path asks for them on every accepted write, and re-reading and
 	// re-parsing fifteen spec files per write would be the same mistake
@@ -227,6 +236,43 @@ func (s *server) specs() map[string]typeSpec {
 		s.specTypes = byType
 	})
 	return s.specTypes
+}
+
+// theme is the project's `.aboard/theme.json`, or nil for the built-in palettes.
+// Every reader takes it through here, so nobody has to know it can be nil for
+// two different reasons (no file, or a file this process has not read yet).
+func (s *server) theme() *Theme { return s.themeCur.Load() }
+
+// reloadTheme re-reads the theme file and reports what was wrong with it.
+//
+// The warnings go to the SERVE LOG as well as to `aboard status` and
+// `GET /theme.json`, because the three audiences are different people at
+// different moments: whoever started the board sees them now, whoever runs
+// status sees them later, and the page can say so in a console. A house style
+// with a misspelt token is the kind of mistake that otherwise announces itself
+// as "one colour looks wrong" a week afterwards.
+func (s *server) reloadTheme() {
+	theme := LoadTheme(s.root, s.assets)
+	s.themeCur.Store(theme)
+	if theme == nil {
+		return
+	}
+	for _, warning := range theme.Warnings {
+		s.opts.Log().Printf("warning: %s", warning)
+	}
+}
+
+// themeSignature is one watcher tick on the theme file. The whole file is
+// hashed rather than stat-gated like the state document: it is under a kilobyte
+// and usually absent, so the read costs what the stat would have, and a content
+// hash means a rewrite with identical bytes wakes nobody.
+func (s *server) themeSignature() string {
+	body, err := os.ReadFile(s.root.ThemeFile())
+	if err != nil {
+		return "none"
+	}
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:16])
 }
 
 // NormalizeBasePath reduces a --base-path to the one form the router and the
@@ -357,6 +403,10 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		journal:   newJournal(cfg.Root, cfg.Name),
 		receipts:  newReceiptStore(cfg.Root, cfg.Name),
 	}
+	// Before the first request, so the shell's very first paint carries the
+	// project's own colours: the theme is SPLICED into aboard.html rather than
+	// fetched, which is the only way there is no flash of the built-in palette.
+	srv.reloadTheme()
 
 	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name)
 	if err != nil {
@@ -787,6 +837,8 @@ func (s *server) routeAPI(w http.ResponseWriter, r *http.Request, upath string) 
 		s.handleWaiters(w, r)
 	case upath == "/capabilities" && r.Method == http.MethodGet:
 		s.handleCapabilities(w, r)
+	case upath == routeTheme && r.Method == http.MethodGet:
+		s.handleTheme(w, r)
 	case upath == "/upload" && r.Method == http.MethodPost:
 		s.handleUpload(w, r)
 	case upath == "/uploads" && r.Method == http.MethodGet:
@@ -1612,8 +1664,10 @@ func (s *server) guard(name string, fn func()) {
 // file, which a rename-based save does.
 func (s *server) watch() {
 	var lastSig string
+	s.themeSig = s.themeSignature()
 	for {
 		time.Sleep(200 * time.Millisecond)
+		s.watchTheme()
 		sig := s.stateSignature()
 		if sig == "" || sig == lastSig {
 			continue
@@ -1622,6 +1676,27 @@ func (s *server) watch() {
 			s.broadcast()
 		}
 		lastSig = sig
+	}
+}
+
+// watchTheme notices an edit to `.aboard/theme.json` and pushes it, on the same
+// tick and the same stream as a state change.
+//
+// Pushed rather than left for the next reload, because a house style is
+// something a person iterates on: they change a hex value, alt-tab, and the
+// board is either wrong or right in front of them. It rides the SSE stream under
+// its own key, exactly as the UI signature does — three kinds of ping on one
+// connection, told apart by which key is present, and the page re-reads
+// /theme.json rather than trusting anything in the frame.
+func (s *server) watchTheme() {
+	sig := s.themeSignature()
+	if sig == s.themeSig {
+		return
+	}
+	s.themeSig = sig
+	s.reloadTheme()
+	if payload, err := json.Marshal(map[string]string{"theme": sig}); err == nil {
+		s.fanout(string(payload))
 	}
 }
 
@@ -1785,7 +1860,78 @@ func (s *server) serveShell(w http.ResponseWriter, r *http.Request) {
 		body = bytes.Replace(body, want,
 			[]byte(`window.ABOARD_BASE = "`+s.base+`";`), 1)
 	}
+	body = s.spliceTheme(body)
 	s.writeAsset(w, r, "aboard.html", body)
+}
+
+// themePlaceholder is the second line serveShell rewrites. Same marker
+// discipline as the base path: one line, byte-identical, warned about loudly if
+// it goes missing.
+const themePlaceholder = `window.ABOARD_THEME = null;`
+
+// spliceTheme hands the shell the project's theme file before its first paint.
+//
+// SPLICED, not fetched, and that is the whole point: a fetch is asynchronous, so
+// the page would paint the built-in palette and then correct itself — a flash of
+// the wrong theme on every load, which is precisely the thing a house style is
+// bought to avoid. It is the same discipline as the `?chrome=` stamp, which also
+// runs in a classic script before the module that would otherwise repaint.
+//
+// The value goes through encoding/json, whose HTML escaping is on by default, so
+// a token name copied verbatim into a warning cannot close the script element it
+// lands in. The token VALUES cannot either — validThemeValue refuses anything
+// with a `<` in it — but the warnings quote what the file said, and quoting user
+// input is exactly where that assumption would have failed.
+func (s *server) spliceTheme(body []byte) []byte {
+	want := []byte(themePlaceholder)
+	if !bytes.Contains(body, want) {
+		s.opts.Log().Printf("warning: aboard.html has no %s marker — a project theme cannot be applied before first paint", themePlaceholder)
+		return body
+	}
+	theme := s.theme()
+	if theme == nil {
+		return body
+	}
+	encoded, err := json.Marshal(theme)
+	if err != nil {
+		s.opts.Log().Printf("warning: the theme file will not encode (%v) — serving the built-in palette", err)
+		return body
+	}
+	return bytes.Replace(body, want, []byte(`window.ABOARD_THEME = `+string(encoded)+`;`), 1)
+}
+
+// handleTheme serves the project's theme file, normalised and validated.
+//
+// 404 when there is none, which the page reads as "use the built-in palette" —
+// an empty object would have been the other option and it says something
+// different, since a theme file that overrides nothing is a thing a project can
+// legitimately have.
+//
+// What is served is the VALIDATED value, not the bytes on disk: unknown tokens
+// and unusable colours are already gone, and the warnings that say so ride along
+// so a reader of the API sees the same sentences `aboard status` prints.
+func (s *server) handleTheme(w http.ResponseWriter, r *http.Request) {
+	theme := s.theme()
+	if theme == nil {
+		http.Error(w, "no "+DirName+"/theme.json in this project", http.StatusNotFound)
+		return
+	}
+	body, err := json.Marshal(theme)
+	if err != nil {
+		http.Error(w, "the theme will not encode", http.StatusInternalServerError)
+		return
+	}
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 // writeAsset sends one asset with the caching rules that suit how it can change.

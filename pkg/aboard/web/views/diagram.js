@@ -139,8 +139,12 @@ export function mermaidThemeConfig() {
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
     flowchart: { curve: 'basis', useMaxWidth: true, padding: 14 },
     themeVariables: {
-      // The board is single-theme dark, so this is a constant, not a probe.
-      darkMode: true,
+      // Mermaid derives a handful of its own shades from this — it is not a
+      // colour, it is which DIRECTION to move one. It used to be a constant
+      // ("the board is single-theme dark"), which on a light board made every
+      // derived shade go the wrong way while the tokens above were all correct:
+      // the classic bug of a theme that is 90% variables and 10% assumption.
+      darkMode: document.documentElement.getAttribute('data-theme') !== 'light',
       background: bg,
       fontSize: '14px',
 
@@ -375,24 +379,33 @@ export function mountDiagram(root, ctx) {
 
   // Colour classes resolved from the live tokens, so a hand-coloured node still
   // belongs to the board's palette instead of fighting it. Two families: `ring`
-  // keeps the dark surface and colours only the border (quiet, reads best on
-  // black), `fill` is solid with dark ink for the one node that must shout.
+  // keeps the panel surface and colours only the border (quiet, and the one that
+  // reads well in both themes), `fill` is solid for the one node that must shout.
+  //
+  // The ink on a solid fill is `--accent-ink` and NOT a literal. It used to be
+  // four hand-picked near-blacks, one per hue, which was correct exactly once:
+  // on a light board every hue darkens and the four inks did not, so `accentFill`
+  // came out #151515 on #454f00 — 1.5:1, a black label on a dark olive box, from
+  // the board's own button. `--accent-ink` is the token whose whole job is "text
+  // ON a saturated ground of this theme", and it clears 7.7:1 against all four
+  // hues in both variants. It is also the last hex this file was choosing.
   function paletteBlock() {
     const css = getComputedStyle(document.documentElement);
     const t = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
     const surface = t('--surface', '#151515');
     const text = t('--text', '#ccd4e0');
+    const ink = t('--accent-ink', '#151515');
     const hues = [
-      ['accent', t('--accent', '#a4bd00'), '#151515'],
-      ['info', t('--focus', '#39bae6'), '#08141a'],
-      ['warn', t('--mark', '#fb8c00'), '#1a0f00'],
-      ['agent', t('--agent', '#a7adf4'), '#12142b'],
+      ['accent', t('--accent', '#a4bd00')],
+      ['info', t('--focus', '#39bae6')],
+      ['warn', t('--mark', '#fb8c00')],
+      ['agent', t('--agent', '#a7adf4')],
     ];
     const lines = ['', '%% palette from the board tokens'];
     for (const [name, hue] of hues) {
       lines.push(`classDef ${name} fill:${surface},stroke:${hue},stroke-width:2px,color:${text}`);
     }
-    for (const [name, hue, ink] of hues) {
+    for (const [name, hue] of hues) {
       lines.push(`classDef ${name}Fill fill:${hue},stroke:${hue},color:${ink}`);
     }
     lines.push(`classDef quiet fill:${surface},stroke:${t('--line-strong', '#3d3d3d')},color:${t('--muted', '#b4b4b4')}`);
@@ -416,6 +429,14 @@ export function mountDiagram(root, ctx) {
   });
 
 
+  // A rendered diagram is an SVG with the token values BAKED IN — mermaid reads
+  // them once, at render time, and writes literal colours into the markup. So it
+  // is the one thing on the board a theme switch cannot reach by changing a
+  // custom property, and the only fix is to render it again. `force`, because
+  // the source has not changed and renderNow() is a no-op otherwise.
+  function onTheme() { renderNow(true); }
+  document.addEventListener('aboard:theme', onTheme);
+
   $source.value = getDiagram().source;
   renderNow();
 
@@ -425,5 +446,6 @@ export function mountDiagram(root, ctx) {
       if ($source.value !== diagram.source) $source.value = diagram.source;
       renderNow();
     },
+    destroy() { document.removeEventListener('aboard:theme', onTheme); },
   };
 }

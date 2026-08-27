@@ -77,8 +77,20 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 		srv.route(rec, req)
 		cancel()
 
-		// A missing route is 404 or 405; that is the failure this catches. The
-		// uploads path is the one legitimate 404, because nothing was uploaded.
+		// A missing route is 404 or 405; that is the failure this catches. Two
+		// paths answer 404 legitimately, because the RESOURCE is absent rather
+		// than the route: nothing was uploaded, and this board has no theme file.
+		//
+		// The theme one is distinguished by its body, not waved through by its
+		// path. An unrouted path answers the router's own "not found", so a
+		// handler that named what was missing is the evidence that the handler
+		// ran at all — which is the whole question this test asks.
+		if rec.Code == http.StatusNotFound && route.Path == routeTheme {
+			if !strings.Contains(rec.Body.String(), "theme.json") {
+				t.Errorf("%s answered the router's 404, not the handler's: %s", key, strings.TrimSpace(rec.Body.String()))
+			}
+			continue
+		}
 		if rec.Code == http.StatusNotFound && !strings.Contains(route.Path, "<file>") {
 			t.Errorf("%s is in the manifest and answers 404 — it is advertised and not routed", key)
 			continue

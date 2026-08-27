@@ -22,6 +22,7 @@ unlike [Reference](../reference/), they're goal-oriented rather than exhaustive.
 
 - [How to promote a board tab into a document](promote-a-tab-into-a-document.md) — `aboard export`, what to rewrite, and demoting the tab
 - [How to write a recipe](write-a-recipe.md)
+- [How to give a project a house style](give-a-project-a-house-style.md) — `.aboard/theme.json`, and the one path worth un-ignoring
 
 **Building on it**
 

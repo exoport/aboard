@@ -105,8 +105,45 @@ const bridgeScript = `<script>
       post({ __aboard: 'height', height: h });
     }
   };
+  // The project's theme.json overrides, as inline custom properties. Inline wins
+  // over both spliced blocks, so the parent need not say which variant they are
+  // for; the previous set is taken off first, so a token dropped from the file
+  // goes back to its built-in value instead of sticking.
+  //
+  // setProperty is CSSOM, not string splicing, so nothing here can leave the
+  // property it lands in — which is why this is the one place a value crossing
+  // the bridge is not re-validated. The server validated it before it was ever
+  // written into a document.
+  var themed = [];
+  function applyThemeTokens(tokens) {
+    var root = document.documentElement;
+    for (var i = 0; i < themed.length; i++) root.style.removeProperty(themed[i]);
+    themed = [];
+    if (!tokens || typeof tokens !== 'object') return;
+    for (var name in tokens) {
+      if (!Object.prototype.hasOwnProperty.call(tokens, name)) continue;
+      if (name.slice(0, 2) !== '--' || typeof tokens[name] !== 'string') continue;
+      root.style.setProperty(name, tokens[name]);
+      themed.push(name);
+    }
+  }
   window.addEventListener('message', function (e) {
-    if (e.source !== parent || !e.data || e.data.__aboard !== 'data') return;
+    if (e.source !== parent || !e.data) return;
+    // The board switched theme, or the project's theme.json changed. The frame is
+    // a separate document, so it has to be handed both halves: WHICH variant (the
+    // stylesheet spliced into this page carries both, exactly as app.css does, so
+    // that is one attribute) and, when the project has a house style, the token
+    // values — because those were spliced in when this document LOADED, and an
+    // edit to theme.json does not reach a document that is already open.
+    // Authenticated by e.source, like the data message beside it and like the
+    // 'active' message going the other way.
+    if (e.data.__aboard === 'theme') {
+      var kind = e.data.kind === 'light' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', kind);
+      applyThemeTokens(e.data.tokens);
+      return;
+    }
+    if (e.data.__aboard !== 'data') return;
     current = e.data.data || {};
     listeners.forEach(function (fn) { try { fn(window.aboard.get()); } catch (err) {} });
   });
@@ -169,7 +206,7 @@ func htmlBlock(parent *tab, blockID string) (struct {
 // frame, with the static markup absent and no error anywhere. Everything else
 // about a block already worked: the bridge writes through the block's own ctx,
 // so aboard.set() lands in blocks[].state.data on its own.
-func (s *server) serveTabHTML(w http.ResponseWriter, _ *http.Request, tabID string) {
+func (s *server) serveTabHTML(w http.ResponseWriter, r *http.Request, tabID string) {
 	raw, err := os.ReadFile(s.stateFile)
 	if err != nil {
 		http.Error(w, "cannot read state", http.StatusInternalServerError)
@@ -234,15 +271,28 @@ func (s *server) serveTabHTML(w http.ResponseWriter, _ *http.Request, tabID stri
 
 	// Inherit the board's palette so a widget looks native without the agent
 	// having to restate the theme. It can override any of it.
+	//
+	// BOTH variants are spliced, not just the one in force. The alternative —
+	// serving the current theme only — makes a theme switch a frame RELOAD, and a
+	// reload throws away whatever the widget was holding in memory: a half-drawn
+	// canvas stroke, a scroll position, a simulation mid-run. With both blocks
+	// here the parent posts one message and the frame flips an attribute, which
+	// is the same cost the board itself pays.
+	//
+	// The initial value comes from the URL rather than from a message, so a frame
+	// on a light board does not paint dark and then correct itself. views/html.js
+	// appends it; a frame opened by hand at /tab/<id>/html gets the board's
+	// default.
+	theme := themeKindOf(r, s.theme())
 	page := `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en" data-theme="` + theme + `"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>` + html.EscapeString(name) + `</title>
 <style>
   :root {
-` + rootDeclarations(s.assets) + `
+` + rootDeclarations(s.assets, s.theme()) + `
   }
-  html,body { margin:0; padding:0; }
+` + lightRootBlock(s.assets, s.theme()) + `  html,body { margin:0; padding:0; }
   body {
     background:var(--bg); color:var(--text);
     font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -293,53 +343,73 @@ const fallbackRootDeclarations = `    color-scheme: dark;
 // colour, no fallback and no warning of any kind. The board's colour rule is
 // "tokens only, stated once"; this makes the html tab obey it rather than
 // re-state it.
-func rootDeclarations(assets fs.FS) string {
-	block, ok := parseRootBlock(assets)
+func rootDeclarations(assets fs.FS, override *Theme) string {
+	dark, _, ok := parseThemeVariants(assets)
 	if !ok {
 		return fallbackRootDeclarations
 	}
-	return block
+	if override == nil {
+		return dark.body
+	}
+	return themeDeclarations(dark, override.Dark)
 }
 
-// parseRootBlock finds `:root { … }` in app.css and returns what is between the
-// braces. It FAILS CLOSED — reports false and leaves the caller on the literal —
-// rather than returning a partial block, because the failure it is guarding
-// against is a widget rendering on no ground at all.
+// lightRootBlock is the frame's second palette: the whole
+// `:root[data-theme="light"] { … }` rule, ready to splice, or "" when app.css
+// has no light variant.
 //
-// Deliberately not a CSS parser. It wants one block out of one stylesheet this
-// repo owns, so it looks for `:root` followed by `{`, takes everything to the
-// next `}`, and refuses anything surprising: a nested brace (an at-rule crept
-// into the block), no custom properties at all, or a missing --bg/--text (the
-// ground and the ink — without those there is nothing to inherit and the
-// fallback is strictly better).
+// Empty is a real answer and not a failure. A board whose stylesheet declares
+// one theme is the board this project had until the switch existed; a frame with
+// no light block simply stays dark, which is visible and correct rather than
+// blank. What is NOT acceptable is a light block missing tokens the dark one
+// has, and that is a stylesheet-level mistake — TestBothThemesDeclareTheSameTokens
+// catches it where it is made.
+func lightRootBlock(assets fs.FS, override *Theme) string {
+	_, light, ok := parseThemeVariants(assets)
+	if !ok || len(light.order) == 0 {
+		return ""
+	}
+	return "  " + lightSelector + " {\n" + themeDeclarations(light, override.lightOverride()) + "\n  }\n"
+}
+
+// lightOverride is Theme.Light on a value that may be nil, because "no theme
+// file" and "a theme file with no light section" are the same instruction here.
+func (t *Theme) lightOverride() map[string]string {
+	if t == nil {
+		return nil
+	}
+	return t.Light
+}
+
+// themeKindOf is which variant a frame should PAINT FIRST: what the parent asked
+// for in the URL, and the board's own default when nobody asked.
+//
+// An unrecognised value falls back to the default rather than being refused —
+// the same call `?chrome=` makes, and for the same reason: a typo that renders
+// the board in the wrong theme is a nuisance, and a typo that refuses to render
+// a widget is a bug report.
+func themeKindOf(r *http.Request, theme *Theme) string {
+	if r != nil && r.URL.Query().Get("theme") == ThemeLight {
+		return ThemeLight
+	}
+	if r != nil && r.URL.Query().Get("theme") == ThemeDark {
+		return ThemeDark
+	}
+	return theme.DefaultKind()
+}
+
+// parseRootBlock returns app.css's dark `:root` body — what the frame splices,
+// and what several tests read the palette out of.
+//
+// A thin wrapper over parseThemeVariants since the light variant arrived: there
+// were two hand-rolled block finders in this package for about an hour, which is
+// exactly the duplication this file's own comment warns about.
 func parseRootBlock(assets fs.FS) (string, bool) {
-	body, err := fs.ReadFile(assets, "app.css")
-	if err != nil {
+	dark, _, ok := parseThemeVariants(assets)
+	if !ok {
 		return "", false
 	}
-	css := stripCSSComments(string(body))
-
-	rest := css
-	for {
-		at := strings.Index(rest, ":root")
-		if at < 0 {
-			return "", false
-		}
-		after := strings.TrimLeft(rest[at+len(":root"):], " \t\r\n")
-		if !strings.HasPrefix(after, "{") {
-			// `:root:not([data-theme])` and friends: not the block we want.
-			rest = rest[at+len(":root"):]
-			continue
-		}
-		inner, _, closed := strings.Cut(after[1:], "}")
-		if !closed || strings.Contains(inner, "{") {
-			return "", false
-		}
-		if !declaresToken(inner, "--bg") || !declaresToken(inner, "--text") {
-			return "", false
-		}
-		return strings.TrimRight(strings.TrimLeft(inner, "\r\n"), " \t\r\n"), true
-	}
+	return dark.body, true
 }
 
 // declaresToken reports whether the block assigns the named custom property.
