@@ -263,6 +263,19 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: an agent's reply to a request gets its own line, instead of shredding the
+  request.** A stamped note rendered its reply inside `.ask-meta`, which was
+  `flex: 0 0 auto` — correct for the timestamp it was written for, catastrophic for a
+  sentence. It refused to shrink, so it claimed its whole max-content width and ran off
+  the right edge, and the request beside it was squeezed to almost nothing, where
+  `overflow-wrap: anywhere` — there so a pasted URL cannot overflow — wrapped the human's
+  own words **one character per line**, a vertical column of struck letters down the page.
+  Measured after the fact at a 380px panel width: the request had 13px of a 344px strip.
+  Fixed as structure rather than more CSS, because the layout was describing the wrong
+  thing: a reply is not metadata about a request, it is an answer to it, so it now sits
+  under the request at full width and wraps. `.ask-meta` keeps who and when. Found by
+  writing a 250-character `aboard requests done --note`, which is an ordinary thing for an
+  agent to say.
 - **fix: a tab's purpose strip is no longer dressed as a notification.** "THIS TAB IS
   FOR" carried a fill, a coloured left bar and a rounded box — the same three things
   `.tab-asks` and the change banner carry — so all three read as notices stacked on each

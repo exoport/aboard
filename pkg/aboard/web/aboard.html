@@ -1064,17 +1064,13 @@ function askRow(tab, ask) {
   text.textContent = ask.text || '';
   li.append(text);
 
+  // Who acted and when — bounded, monospace, and it sits on the request's own
+  // line. What they SAY they did does not go here; see below.
   const meta = document.createElement('span');
   meta.className = 'ask-meta';
-  if (ask.done) {
-    // Who acted, when, and what they say they did. The one-line reply is the
-    // half worth having: "done" tells the human nothing they could not have
-    // guessed from the strike-through.
-    meta.textContent = ['✓ ' + (ask.done.by || 'an agent'), shortTime(ask.done.at), ask.done.note]
-      .filter(Boolean).join(' · ');
-  } else {
-    meta.textContent = shortTime(ask.at);
-  }
+  meta.textContent = ask.done
+    ? ['✓ ' + (ask.done.by || 'an agent'), shortTime(ask.done.at)].filter(Boolean).join(' · ')
+    : shortTime(ask.at);
   li.append(meta);
 
   // No confirmation, deliberately: it is the human's own note and deleting one
@@ -1086,6 +1082,28 @@ function askRow(tab, ask) {
   drop.classList.add('ask-drop');
   drop.addEventListener('click', () => removeAsk(tab.id, ask.id));
   li.append(drop);
+
+  // The agent's reply, on its own line under the request it answers.
+  //
+  // It used to be joined onto `.ask-meta`, which is `flex: 0 0 auto` because a
+  // timestamp is a fixed width — and a reply is a SENTENCE, of any length. The
+  // two facts together broke the strip on 2026-08-27, in a way worth keeping in
+  // mind because neither element looked wrong on its own: a meta that cannot
+  // shrink claims its whole max-content width, so it ran off the right edge,
+  // and `.ask-text` beside it was squeezed to nearly nothing — where
+  // `overflow-wrap: anywhere` (there so a pasted URL cannot overflow) wrapped
+  // the human's sentence ONE CHARACTER PER LINE, a vertical column of struck
+  // letters down the page.
+  //
+  // Structure rather than more CSS, because the layout was describing the wrong
+  // thing: a reply is not metadata about a request, it is an answer to it, and
+  // an answer belongs under the question at full width.
+  if (ask.done && ask.done.note) {
+    const reply = document.createElement('p');
+    reply.className = 'ask-reply';
+    reply.textContent = ask.done.note;
+    li.append(reply);
+  }
   return li;
 }
 

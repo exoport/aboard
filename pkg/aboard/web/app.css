@@ -603,14 +603,18 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .ask-list { list-style: none; margin: 0 0 4px; padding: 0; }
 .ask-list[hidden] { display: none; }
 
+/* `flex-wrap` so `.ask-reply` can take a line of its own below the request, and
+   `min-width: 0` on the text so nothing in this row can be squeezed below the
+   width at which `overflow-wrap: anywhere` starts breaking mid-word. */
 .ask {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 9px;
+  gap: 2px 9px;
   padding: 2px 0;
 }
 
-.ask-text { color: var(--text); flex: 1 1 auto; overflow-wrap: anywhere; }
+.ask-text { color: var(--text); flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
 
 /* Struck through AND faded, because either alone is ambiguous at this size: a
    strike-through on one line of small type is easy to miss, and a fade on its
@@ -620,15 +624,36 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   color: var(--dim);
 }
 
+/* `0 1 auto`, not `0 0 auto`: it holds an actor name and a timestamp, which is
+   bounded but not fixed, and a panel can be narrower than both. It must give way
+   before the request text does — a strip that cannot shrink is what tore this
+   row apart when the agent's reply was still joined onto it. */
 .ask-meta {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .ask[data-done="yes"] .ask-meta { color: var(--accent); }
 
 .ask-drop { flex: 0 0 auto; padding: 0 6px; }
+
+/* What the agent says it did: a full-width line under the request it answers.
+   `100%` basis forces the wrap, so it is a line of its own however wide the
+   strip is — the one thing that must stay true when the board is a 300px panel
+   beside an editor. */
+.ask-reply {
+  flex: 1 0 100%;
+  margin: 1px 0 3px;
+  padding-left: 13px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
 
 .ask-add { display: flex; align-items: center; gap: 9px; }
 .ask-add .icon-btn { flex: 0 0 auto; }

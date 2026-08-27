@@ -89,11 +89,17 @@ func TestTheHumanAsksAnAgentForSomethingOnATab(t *testing.T) {
 	if err := expect.Locator(row).ToHaveAttribute("data-done", "yes"); err != nil {
 		t.Fatalf("a stamped note does not render as done: %v", err)
 	}
-	if err := expect.Locator(row.Locator(".ask-meta")).ToContainText("flipped it"); err != nil {
+	// Two elements, not one, and that split is the fix for the 2026-08-27 break
+	// below: `.ask-meta` carries who and when — bounded — and `.ask-reply`
+	// carries the sentence.
+	if err := expect.Locator(row.Locator(".ask-reply")).ToContainText("flipped it"); err != nil {
 		t.Errorf("the agent's one-line reply is not shown: %v", err)
 	}
 	if err := expect.Locator(row.Locator(".ask-meta")).ToContainText(agentActor); err != nil {
 		t.Errorf("the stamp does not say which session acted: %v", err)
+	}
+	if err := expect.Locator(row.Locator(".ask-meta")).Not().ToContainText("flipped it"); err != nil {
+		t.Errorf("the reply is back inside .ask-meta, which cannot hold a sentence: %v", err)
 	}
 	// Struck through, and it is a CSS rule rather than a character in the text —
 	// so it is asserted as the computed style, which is the only thing a reader
@@ -129,6 +135,129 @@ func TestTheHumanAsksAnAgentForSomethingOnATab(t *testing.T) {
 // The strip belongs to the tab you are looking at, exactly as the purpose strip
 // does. A note that stayed on screen while you switched tabs would be the worst
 // version of this feature: an ask attached to the wrong thing.
+// A long reply must reflow, and it must not squeeze the request into a column of
+// single letters. Both were true on 2026-08-27, in a VS Code panel, from a stamp
+// this session wrote — 250 characters of "what I did", which is a perfectly
+// ordinary thing for an agent to say.
+//
+// The cause was one declaration: `.ask-meta` was `flex: 0 0 auto`, correct for
+// the timestamp it was written for and catastrophic for a sentence. It refused
+// to shrink, so it claimed its whole max-content width and ran off the right
+// edge, and `.ask-text` next to it was squeezed to nearly nothing — where
+// `overflow-wrap: anywhere`, which exists so a pasted URL cannot overflow,
+// wrapped the human's own sentence one character per line.
+//
+// Measured rather than eyeballed, because "it looks wrong" is not a test: the
+// request keeps a usable share of the strip, nothing overflows it horizontally,
+// and the reply is on a line of its own BELOW the request rather than beside it.
+func TestALongReplyReflowsInsteadOfShreddingTheRequest(t *testing.T) {
+	id := makeScratchTab(t, "Long reply")
+
+	d := readDoc(t)
+	tab := d.tab(t, id)
+	tab["requests"] = []any{map[string]any{
+		"id":   "bb9001",
+		"at":   "2026-08-27T10:00:00Z",
+		"by":   "human",
+		"text": "add the first note to the agent, include an example in the ui panel",
+	}}
+	applyAsHuman(t, d)
+
+	d = readDoc(t)
+	stamp(t, d.tab(t, id), "Filled bb199 with a three-panel ui example. Try it has four bound fields, "+
+		"a six-item checklist and three intent buttons; How it works shows the JSON behind them "+
+		"and four rules; Tones shows all seven tones, which are now the part of the palette a VS "+
+		"Code theme may never repaint.")
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	row := s.page.Locator("#tab-asks .ask").First()
+	if err := expect.Locator(row).ToHaveAttribute("data-done", "yes"); err != nil {
+		t.Fatalf("the seeded stamp did not render as done: %v", err)
+	}
+
+	type box struct{ X, Y, W, H float64 }
+	var strip, text, reply box
+	// Presence first, and named. Without this the reply's absence surfaces as a
+	// TypeError inside an evaluate — "evaluating (sel) => …", which says nothing
+	// about what is missing — and the first thing this test is for is that the
+	// reply has an element of its own at all.
+	read := func(out *box, sel string) {
+		t.Helper()
+		if n, err := s.page.Locator(sel).Count(); err != nil || n != 1 {
+			t.Fatalf("%s matched %d elements (err %v) — the strip is not built the way this test measures", sel, n, err)
+		}
+		s.evalJSON(out, `(sel) => {
+			const r = document.querySelector(sel).getBoundingClientRect();
+			return { X: r.left, Y: r.top, W: r.width, H: r.height };
+		}`, sel)
+	}
+	read(&strip, "#tab-asks")
+	read(&text, "#tab-asks .ask .ask-text")
+	read(&reply, "#tab-asks .ask .ask-reply")
+
+	// The shredding, as a number. At the default 1400px viewport the request had
+	// collapsed to roughly one character wide; a third of the strip is far below
+	// what the layout gives it and far above what the bug left.
+	if text.W < strip.W/3 {
+		t.Errorf("the request is %.0fpx wide inside a %.0fpx strip — it is being squeezed to a column, not laid out",
+			text.W, strip.W)
+	}
+	// And it is one line, not sixty-seven.
+	if text.H > 4*reply.H {
+		t.Errorf("the request is %.0fpx tall against a %.0fpx reply — it is wrapping mid-word", text.H, reply.H)
+	}
+
+	// Below, not beside: the reply gets the full width because it is an answer to
+	// the request rather than a fact about it.
+	if reply.Y <= text.Y {
+		t.Errorf("the reply is on the request's own line (reply top %.0f, request top %.0f)", reply.Y, text.Y)
+	}
+	if reply.W < strip.W/2 {
+		t.Errorf("the reply is only %.0fpx of a %.0fpx strip — it did not take a line of its own", reply.W, strip.W)
+	}
+
+	// Nothing runs off the right edge, which is the half the human reported as
+	// "not reflowing". Half a pixel of slack for sub-pixel layout.
+	for _, c := range []struct {
+		what string
+		b    box
+	}{{"the request", text}, {"the reply", reply}} {
+		if c.b.X+c.b.W > strip.X+strip.W+0.5 {
+			t.Errorf("%s overflows the strip: ends at %.1f, strip ends at %.1f", c.what, c.b.X+c.b.W, strip.X+strip.W)
+		}
+	}
+
+	// And again at the width it was REPORTED at. The board was a sidebar panel
+	// beside an editor when this broke, which is both the narrowest it is ever
+	// asked to be and the case least likely to be looked at — the suite's own
+	// viewport is 1400px, where a shrinkable meta would have hidden the bug for
+	// another month.
+	if err := s.page.SetViewportSize(380, 900); err != nil {
+		t.Fatalf("narrowing the viewport: %v", err)
+	}
+	read(&strip, "#tab-asks")
+	read(&text, "#tab-asks .ask .ask-text")
+	read(&reply, "#tab-asks .ask .ask-reply")
+
+	// No mid-word shredding: `overflow-wrap: anywhere` is allowed to break a
+	// pasted URL, and must never be reached by ordinary prose. Two characters of
+	// a 0.85rem font is about 14px, so anything under a third of the strip at
+	// this width is the column again.
+	if text.W < strip.W/3 {
+		t.Errorf("at 380px the request is %.0fpx wide inside a %.0fpx strip", text.W, strip.W)
+	}
+	for _, c := range []struct {
+		what string
+		b    box
+	}{{"the request", text}, {"the reply", reply}} {
+		if c.b.X+c.b.W > strip.X+strip.W+0.5 {
+			t.Errorf("at 380px %s overflows the strip: ends at %.1f, strip ends at %.1f",
+				c.what, c.b.X+c.b.W, strip.X+strip.W)
+		}
+	}
+}
+
 func TestTheNotesStripFollowsTheActiveTab(t *testing.T) {
 	mine := makeScratchTab(t, "Has a note")
 	other := makeScratchTab(t, "Has none")
