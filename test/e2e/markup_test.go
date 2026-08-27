@@ -182,6 +182,39 @@ func TestHidingMarksIsPerViewer(t *testing.T) {
 // markup.spec.json), which is what makes an unknown colour name a warning rather
 // than a mark that renders in no colour at all. Five swatches, and choosing one
 // changes what the NEXT mark is drawn in — a per-viewer preference, never saved.
+// An image uses the width it is given. `.markup-stage` was capped at 900px, so
+// on a wide board or a maximised panel most of the row sat empty while the thing
+// you are trying to POINT AT was drawn small — reported 2026-08-27 with a
+// screenshot of a 1600px panel half full.
+//
+// Marks are stored as fractions of the image, so nothing about them depends on
+// the scale; the cap bought a smaller picture and nothing else.
+func TestAMarkupImageUsesTheWidthItIsGiven(t *testing.T) {
+	id := makeScratchTab(t, "Wide image")
+
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "only", "src": "assets/mock-screen.svg", "caption": "wide.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	var stage, view float64
+	s.evalJSON(&stage, `(q) => document.querySelector(q).getBoundingClientRect().width`,
+		`[data-tab="`+id+`"] .markup-stage`)
+	s.evalJSON(&view, `(q) => document.querySelector(q).getBoundingClientRect().width`,
+		`[data-tab="`+id+`"] .markup-images`)
+
+	// The suite runs at 1400px, so a 900px cap is unmissable here. Compared
+	// against the row it sits in rather than a constant: the assertion is "it uses
+	// what it is given", not "it is at least N pixels".
+	if stage < view-2 {
+		t.Errorf("the image stage is %.0fpx inside a %.0fpx row — something is still capping it", stage, view)
+	}
+}
+
 // The marks list is a TABLE, so its header has to sit over its columns — with
 // one image on the tab, which is the case the fixture above does not cover.
 //

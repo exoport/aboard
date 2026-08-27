@@ -200,12 +200,19 @@
       <span>Type</span>
       <select id="new-tab-type"></select>
     </label>
+    <!-- The chosen type's one-line description, and it belongs HERE. It used to
+         sit after the note field at the bottom of the sheet, where it read as a
+         hint about the note rather than about the type — so choosing a renderer
+         showed you nothing but its name, which is what was reported on
+         2026-08-27. It is the same string `aboard capabilities` prints as
+         `blurb`, and for fifteen types whose names include "Stack", "UI" and
+         "Markup", the name alone is not a choice anybody can make. -->
+    <p class="hint new-tab-blurb" id="new-tab-hint"></p>
     <label class="field">
       <span>What is it for? <em>(optional)</em></span>
       <textarea id="new-tab-note" rows="2" maxlength="400"
         placeholder="Context an agent cannot infer from the contents — why this tab exists, what you want done with it."></textarea>
     </label>
-    <p class="hint" id="new-tab-hint"></p>
     <div class="dialog-actions">
       <button type="button" class="icon-btn" id="new-tab-cancel">Cancel</button>
       <button type="submit" class="primary-btn">Create</button>

@@ -263,6 +263,16 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: the new-tab sheet says what each type IS, next to the type.** It already computed
+  the one-line blurb `aboard capabilities` prints — and rendered it at the BOTTOM of the
+  sheet, under the note field, where it read as a hint about the note. So choosing between
+  fifteen renderers called things like "Stack", "UI" and "Markup" showed you nothing but
+  the names. The description now sits directly under the select it describes.
+- **fix: a markup image uses the width it is given.** `.markup-stage` was capped at 900px,
+  so on a wide board or a maximised editor panel most of the row sat empty while the thing
+  you are pointing AT was drawn small. Marks are stored as fractions of the image, so the
+  cap bought a smaller picture and nothing else. `side-by-side` still constrains through
+  its own grid column.
 - **fix: the marks table's header sits over its columns again.** Two faults at once, on a
   `markup` tab with a SINGLE image. Both the header's image cell and each row's were
   emptied with `hidden` — which is `display: none`, and a display:none grid item is not

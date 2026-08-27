@@ -1648,7 +1648,12 @@ function ensureStyles() {
 [data-view="markup"] .markup-stage {
   position: relative;
   width: 100%;
-  max-width: 900px;
+  /* No max-width. It was 900px, which on a wide board or a maximised panel left
+     most of the row empty while the thing you are trying to point AT was
+     rendered small -- reported 2026-08-27. Marks are stored as fractions of the
+     image, so every one of them survives any scale; the only thing a cap bought
+     was a smaller picture. side-by-side still constrains through its grid
+     column. */
   background: var(--sunken);
   border: 1px solid var(--line);
   border-radius: 4px;

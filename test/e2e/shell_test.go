@@ -328,6 +328,58 @@ func TestANewTabStartsWithItsDeclaredState(t *testing.T) {
 	}
 }
 
+// Choosing a renderer needs more than its name. Fifteen types are called things
+// like "Stack", "UI" and "Markup", and the sheet showed only the label — the
+// blurb it already computed sat at the BOTTOM of the sheet, under the note
+// field, where it read as a hint about the note. Reported 2026-08-27.
+//
+// Position is the whole fix, so position is what is asserted: between the type
+// select and the note field, and non-empty for whatever type is selected.
+func TestTheNewTabSheetSaysWhatEachTypeIs(t *testing.T) {
+	s := open(t, "")
+
+	if err := s.page.Locator("#add-tab").Click(); err != nil {
+		t.Fatalf("opening the new-tab dialog: %v", err)
+	}
+	blurb := s.page.Locator("#new-tab-hint")
+	if err := expect.Locator(blurb).ToBeVisible(); err != nil {
+		t.Fatalf("the sheet shows no description at all: %v", err)
+	}
+
+	type box struct{ Y, H float64 }
+	var sel, hint, note box
+	read := func(out *box, sel string) {
+		t.Helper()
+		s.evalJSON(out, `(q) => {
+			const r = document.querySelector(q).getBoundingClientRect();
+			return { Y: r.top, H: r.height };
+		}`, sel)
+	}
+	read(&sel, "#new-tab-type")
+	read(&hint, "#new-tab-hint")
+	read(&note, "#new-tab-note")
+
+	if !(hint.Y > sel.Y && hint.Y < note.Y) {
+		t.Errorf("the type description is at y=%.0f, outside the select (%.0f) and the note field (%.0f) it has to sit between",
+			hint.Y, sel.Y, note.Y)
+	}
+
+	// It says something, and it changes with the choice — otherwise a stale
+	// string in the right place would pass this.
+	first, err := blurb.TextContent()
+	if err != nil || strings.TrimSpace(first) == "" {
+		t.Fatalf("the description is empty for the default type (err %v)", err)
+	}
+	if _, err := s.page.Locator("#new-tab-type").SelectOption(playwright.SelectOptionValues{
+		Values: &[]string{"markup"},
+	}); err != nil {
+		t.Fatalf("choosing another type: %v", err)
+	}
+	if err := expect.Locator(blurb).ToContainText("image"); err != nil {
+		t.Errorf("the description did not follow the choice to markup: %v", err)
+	}
+}
+
 // Making a tab and then having to go and find it is the wrong end of the
 // gesture: you made it because you want to put something on it.
 //

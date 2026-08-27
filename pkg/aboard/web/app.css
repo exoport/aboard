@@ -785,6 +785,17 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 
 .sheet-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
 
+/* The chosen type's blurb, pulled up tight under the select it describes. The
+   form's 12px gap would otherwise leave it floating between two fields, which is
+   how it came to read as a hint about the wrong one. */
+.new-tab-blurb {
+  margin: -7px 0 0;
+  min-height: 1.4em;
+  color: var(--muted);
+  border-left: 2px solid var(--agent);
+  padding-left: 9px;
+}
+
 .sheet-dialog form { display: flex; flex-direction: column; gap: 12px; }
 
 .field { display: flex; flex-direction: column; gap: 5px; }
