@@ -197,6 +197,34 @@ the viewer is in. Pressing the board's own switch clears them: a human pressing 
 and nothing happening is worse than a panel that stops matching its host until the host
 speaks again, which it does on its own next theme change.
 
+### Send the neutrals, not the voices
+
+The board accepts all 21 names, and a host should not send all 21. This is guidance
+rather than a rule the server enforces, and it was learned by shipping the other thing
+first — the VS Code extension mapped every token from the editor's theme in August 2026,
+and both halves of what went wrong are worth a host knowing before it starts.
+
+**The ten neutrals are safe to send**: `--bg`, `--sunken`, `--surface`, `--raised`,
+`--text`, `--muted`, `--dim`, `--line`, `--line-strong`, `--edge`. They are what make a
+framed board belong in its window, and they carry no meaning that can be lost.
+
+**The eleven voices are better left alone**: `--accent`, `--accent-ink`, `--accent-dim`,
+`--mark`, `--agent`, `--focus`, `--danger`, `--drop`, `--status-todo`, `--status-doing`,
+`--status-done`. They are a vocabulary this documentation teaches and every agent reads —
+periwinkle is what an agent says, orange is what the human asks for — and they are chosen
+so that no two can be mistaken for each other.
+
+Two properties, and a host's own palette is unlikely to have either. **The four depth
+tokens are an ORDER** (`bg → sunken → surface → raised`, upward from black in dark,
+downward from white in light), so send `--bg` and derive the rest from it rather than
+mapping four unrelated colours onto four layers. **The voices are a SET whose members
+must stay distinguishable** — `views/markup.spec.json` lets a mark take any of `mark`,
+`accent`, `focus`, `agent`, `danger`, drawn as five swatches side by side, and a host
+palette that happens to use one colour for both its links and its buttons collapses two
+of those to one while a subtle border colour makes a third invisible. Measured, on a real
+editor theme, and the board says nothing when it happens: every value was individually
+valid.
+
 ## Asking the binary
 
 ```console

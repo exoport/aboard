@@ -307,6 +307,17 @@ Four things, and the first is the one worth keeping.
 - **"Creating a tab must switch to it" was already true.** `TestCreatingATabSwitchesToIt`
   passed on its first run, including the deep-link case that could plausibly have broken
   it — which is now the case it covers, because that is the shape the panel always uses.
+- **And a second round on the palette, from the installed build: the VOICES were wrong
+  too** (aboard_vscode `b725834`). The ramp fixed the surfaces; the semantic colours were
+  still mapped, and `views/markup.spec.json`'s five mark swatches are where that shows.
+  On FireFly Pro: `mark` ← `editorWarning.foreground` amber, `accent` ← `button.background`
+  olive, `focus` ← `focusBorder` `#292d36` (invisible), `agent` ← `textLink.foreground`
+  `#a4bd00` — **the same olive as `accent`** — and `danger` ← VS Code's default salmon.
+  Five choices, three usable colours, one repeat, one unusable. The rule now: **follow the
+  editor's neutrals, keep the board's voices**, ten mapped and eleven not.
+  `docs/reference/theme.md` carries it as guidance for any embedder, because the board
+  accepts all 21 names and cannot enforce this — every one of those values was valid on
+  its own, which is exactly why nothing warned.
 
 ### 10. Gated on the human — do not start without an answer
 
