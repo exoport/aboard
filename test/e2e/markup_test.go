@@ -3,13 +3,15 @@
 package e2e
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxschmitt/playwright-go"
 )
 
-// Markup: twelve declared controls and five pointer-capture tools. It is the
+// Markup: nineteen declared controls and six pointer-capture tools. It is the
 // renderer with the largest gap between "it mounted" and "it works", because
 // every mark it stores comes from a drag on an <svg> overlay.
 //
@@ -182,6 +184,266 @@ func TestHidingMarksIsPerViewer(t *testing.T) {
 // markup.spec.json), which is what makes an unknown colour name a warning rather
 // than a mark that renders in no colour at all. Five swatches, and choosing one
 // changes what the NEXT mark is drawn in — a per-viewer preference, never saved.
+// A slice per image: caption and buttons, the picture, then THAT picture's own
+// marks. Reported 2026-08-27 — with several screenshots on a tab, one table at
+// the bottom meant scrolling past every other image to read a note and back up
+// to see what it was about, and a row said which image it came from only through
+// a caption column.
+//
+// The numbering stays global across the tab, and that is asserted here because
+// it is the thing a reasonable person would "fix" while splitting the table:
+// restarting at 1 per image made "mark 1" name two different things, which is
+// the one thing this view exists to prevent.
+func TestEachImageGetsItsOwnMarksTable(t *testing.T) {
+	covers(t, "markup", "each image is its own slice — caption, buttons, the picture, then that image's own marks")
+
+	id := makeScratchTab(t, "Two images")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{
+			map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "first.svg", "regions": []any{
+				map[string]any{"id": "bb301", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2},
+				map[string]any{"id": "bb302", "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.2},
+			}},
+			map[string]any{"id": "two", "src": "assets/mock-screen-after.svg", "caption": "second.svg", "regions": []any{
+				map[string]any{"id": "bb303", "x": 0.1, "y": 0.5, "w": 0.2, "h": 0.2},
+			}},
+		},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+
+	// Two figures, two tables — not one table for the tab.
+	if err := expect.Locator(view.Locator(".markup-figure")).ToHaveCount(2); err != nil {
+		t.Fatalf("want a slice per image: %v", err)
+	}
+	if err := expect.Locator(view.Locator(".markup-list")).ToHaveCount(2); err != nil {
+		t.Fatalf("want a marks table per image: %v", err)
+	}
+
+	// Each table holds only its own image's marks, and the table is INSIDE the
+	// slice — which is what makes "scroll to the note, scroll back to the
+	// picture" impossible by construction rather than by luck.
+	first := view.Locator(`.markup-figure[data-image-id="one"]`)
+	second := view.Locator(`.markup-figure[data-image-id="two"]`)
+	if err := expect.Locator(first.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(2); err != nil {
+		t.Errorf("the first image's table does not hold its two marks: %v", err)
+	}
+	if err := expect.Locator(second.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(1); err != nil {
+		t.Errorf("the second image's table does not hold its one mark: %v", err)
+	}
+	if err := expect.Locator(first.Locator(".markup-chip").Filter(playwright.LocatorFilterOptions{HasText: "bb303"})).ToHaveCount(0); err != nil {
+		t.Errorf("the second image's mark is listed under the first image: %v", err)
+	}
+
+	// Numbering runs 1,2,3 ACROSS the tab. A per-image restart would make this
+	// 1,2 then 1.
+	var nums []string
+	s.evalJSON(&nums, `(q) => [...document.querySelectorAll(q)].map((el) => el.textContent.trim())`,
+		`[data-tab="`+id+`"] .markup-row:not(.markup-row-head) .markup-index`)
+	if strings.Join(nums, ",") != "1,2,3" {
+		t.Errorf("mark numbers are %v — they are numbered across the tab, not restarted per image", nums)
+	}
+}
+
+// Zoom, and the two things about it that are not obvious: it is per IMAGE, and
+// it is per VIEWER. A zoom that reached the document would move somebody else's
+// view of the same board, which is the rule that already keeps scroll, theme and
+// the selection out of it.
+func TestZoomingAMarkupImageIsPerImageAndNeverStored(t *testing.T) {
+	covers(t, "markup", "Ctrl/Cmd+wheel over an image to zoom it; drag with Move to pan a zoomed one")
+
+	id := makeScratchTab(t, "Zoom me")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{
+			map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"},
+			map[string]any{"id": "two", "src": "assets/mock-screen-after.svg", "caption": "b.svg"},
+		},
+	}
+	apply(t, d)
+	before := readDoc(t).state(t, id)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	first := view.Locator(`.markup-figure[data-image-id="one"]`)
+
+	if err := first.Locator(`[data-gesture="zoom-in"]`).Click(); err != nil {
+		t.Fatalf("clicking zoom in: %v", err)
+	}
+	if err := first.Locator(`[data-gesture="zoom-in"]`).Click(); err != nil {
+		t.Fatalf("clicking zoom in again: %v", err)
+	}
+
+	transform := func(imageID string) string {
+		var out string
+		s.evalJSON(&out, `(q) => getComputedStyle(document.querySelector(q)).transform`,
+			`[data-tab="`+id+`"] .markup-figure[data-image-id="`+imageID+`"] .markup-zoom`)
+		return out
+	}
+	if transform("one") == "none" {
+		t.Error("zooming in left the first image untransformed")
+	}
+	// The OTHER image is untouched. One zoom for the tab would mean zooming a
+	// screenshot to read it and losing your place in every other one.
+	if got := transform("two"); got != "none" && got != "matrix(1, 0, 0, 1, 0, 0)" {
+		t.Errorf("zooming one image also zoomed the other (transform %q)", got)
+	}
+
+	if err := expect.Locator(first.Locator(".markup-zoom-label")).ToContainText("%"); err != nil {
+		t.Errorf("no zoom readout: %v", err)
+	}
+
+	// Ctrl+wheel, which is the gesture people will actually reach for. Plain
+	// wheel deliberately still scrolls the page: a tall markup tab that trapped
+	// the wheel would be unscrollable exactly where it is longest.
+	stage := first.Locator(".markup-stage")
+	sbox, err := stage.BoundingBox()
+	if err != nil || sbox == nil {
+		t.Fatalf("no stage to point at: %v", err)
+	}
+	if err := s.page.Mouse().Move(sbox.X+sbox.Width/2, sbox.Y+sbox.Height/2); err != nil {
+		t.Fatalf("moving onto the image: %v", err)
+	}
+	beforeWheel, _ := first.Locator(".markup-zoom-label").TextContent()
+	if err := s.page.Mouse().Wheel(0, 120); err != nil {
+		t.Fatalf("plain wheel: %v", err)
+	}
+	if after, _ := first.Locator(".markup-zoom-label").TextContent(); after != beforeWheel {
+		t.Errorf("a plain wheel zoomed the image (%s -> %s) — it has to scroll the page", beforeWheel, after)
+	}
+	if err := s.page.Keyboard().Down("Control"); err != nil {
+		t.Fatalf("holding Control: %v", err)
+	}
+	if err := s.page.Mouse().Wheel(0, -120); err != nil {
+		t.Fatalf("ctrl+wheel: %v", err)
+	}
+	if err := s.page.Keyboard().Up("Control"); err != nil {
+		t.Fatalf("releasing Control: %v", err)
+	}
+	if after, _ := first.Locator(".markup-zoom-label").TextContent(); after == beforeWheel {
+		t.Errorf("Ctrl+wheel did not zoom (still %s)", after)
+	}
+
+	// Fit puts it back.
+	if err := first.Locator(`[data-gesture="zoom-fit"]`).Click(); err != nil {
+		t.Fatalf("clicking fit: %v", err)
+	}
+	if err := expect.Locator(first.Locator(".markup-zoom-label")).ToHaveText("100%"); err != nil {
+		t.Errorf("Fit did not return to 100%%: %v", err)
+	}
+
+	// And none of it reached the server. Compared as JSON against the state we
+	// seeded, so a zoom field appearing anywhere in it fails.
+	time.Sleep(settle)
+	after := readDoc(t).state(t, id)
+	if fmt.Sprint(before) != fmt.Sprint(after) {
+		t.Errorf("zooming changed the document:\n before %v\n after  %v", before, after)
+	}
+}
+
+// The crop tool selects; it does not mark. The distinction matters because
+// everything else you can drag on this image is stored, and a rectangle that
+// looked like a mark but vanished on reload would be the worst of both.
+func TestTheCropToolSelectsWithoutMarking(t *testing.T) {
+	covers(t, "markup", "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks")
+
+	id := makeScratchTab(t, "Crop me")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+
+	// Granted HERE, in setup, and not beside the click it enables. It WAS beside
+	// the click and this test failed roughly one run in four with an empty
+	// status: granting is a round trip to the browser and the press beat it, so
+	// the handler ran against a clipboard that was not permitted yet. A
+	// permission is a fact about the context, so it belongs where the context is.
+	//
+	// Not a cheat either: a real browser asks the human once and remembers, and
+	// what is under test is the canvas path, not the prompt.
+	if err := s.ctx.GrantPermissions([]string{"clipboard-read", "clipboard-write"}); err != nil {
+		t.Fatalf("granting clipboard permission: %v", err)
+	}
+
+	// Both copy buttons are dead until there is something to copy, and say why.
+	region := view.Locator(`[data-gesture="copy-region"]`)
+	if err := expect.Locator(region).ToBeDisabled(); err != nil {
+		t.Errorf("Copy region is live with nothing selected: %v", err)
+	}
+
+	if err := view.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	svg := view.Locator(".markup-svg").First()
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	s.dragPointer(
+		point{box.X + box.Width*0.2, box.Y + box.Height*0.2},
+		point{box.X + box.Width*0.6, box.Y + box.Height*0.6},
+	)
+
+	if err := expect.Locator(view.Locator(".markup-crop")).ToHaveCount(1); err != nil {
+		t.Fatalf("the crop tool drew no selection: %v", err)
+	}
+	if err := expect.Locator(region).ToBeEnabled(); err != nil {
+		t.Errorf("Copy region is still disabled with a selection drawn: %v", err)
+	}
+
+	// It is NOT a mark: no row, and nothing in the document.
+	if err := expect.Locator(view.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(0); err != nil {
+		t.Errorf("the crop rectangle was listed as a mark: %v", err)
+	}
+	time.Sleep(settle)
+	st := readDoc(t).state(t, id)
+	images, _ := st["images"].([]any)
+	im, _ := images[0].(map[string]any)
+	if regions, _ := im["regions"].([]any); len(regions) != 0 {
+		t.Errorf("the crop rectangle was stored as a region: %v", regions)
+	}
+
+	// And the copy actually reaches the clipboard. This is the half that could
+	// only be reasoned about otherwise, and the reasoning has one load-bearing
+	// step: the image is served from the board's OWN origin, so the canvas it is
+	// drawn into is not tainted and toBlob() returns. A cross-origin image would
+	// fail here with a SecurityError and no amount of care in this code would
+	// help.
+	if err := region.Click(); err != nil {
+		t.Fatalf("clicking Copy region: %v", err)
+	}
+	status := view.Locator(".markup-copy-status")
+	if err := expect.Locator(status).ToContainText("copied"); err != nil {
+		got, _ := status.TextContent()
+		t.Fatalf("the copy did not reach the clipboard (status: %q): %v", got, err)
+	}
+	// It says WHAT it copied, because "copied" alone cannot be checked by the
+	// person who pressed it until they paste somewhere else.
+	if err := expect.Locator(status).ToContainText("×"); err != nil {
+		t.Errorf("the confirmation does not give the size of what it copied: %v", err)
+	}
+	var bad bool
+	s.evalJSON(&bad, `(q) => document.querySelector(q).classList.contains('is-bad')`,
+		`[data-tab="`+id+`"] .markup-copy-status`)
+	if bad {
+		got, _ := status.TextContent()
+		t.Errorf("the copy reported a failure: %q", got)
+	}
+}
+
 // An image uses the width it is given. `.markup-stage` was capped at 900px, so
 // on a wide board or a maximised panel most of the row sat empty while the thing
 // you are trying to POINT AT was drawn small — reported 2026-08-27 with a
@@ -281,11 +543,15 @@ func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
 	if len(head) != len(body) {
 		t.Fatalf("the header has %d cells and a row has %d — a cell is being taken out of the grid flow, not emptied", len(head), len(body))
 	}
-	if len(head) != 7 {
-		t.Fatalf("the header has %d cells, want 7", len(head))
+	if len(head) != 6 {
+		t.Fatalf("the header has %d cells, want 6", len(head))
 	}
 
-	names := []string{"image", "index", "id", "summary", "colour", "note", "delete"}
+	// Six, not seven: the image-name column went with the restructure. Every row
+	// in this table belongs to the image directly above it, so a caption repeated
+	// down a column was noise — and it was the cell whose `hidden` caused the
+	// shift this test was written for.
+	names := []string{"index", "id", "summary", "colour", "note", "delete"}
 
 	// LEFT EDGES, not widths. A cell's width is the element's, and two elements
 	// can share a column honestly while differing in size — the header's delete
@@ -486,28 +752,11 @@ func TestRightClickingAMarkRowOffersItsId(t *testing.T) {
 	}
 }
 
-// The image column in the marks list is capped and ellipsised, so the full name
-// has to be reachable — three screenshots all called "image.png" are otherwise
-// indistinguishable in the list that names them.
-func TestATruncatedImageNameIsReachableOnHover(t *testing.T) {
-	covers(t, "markup", "hover a truncated image name in the marks list to see it in full")
-
-	s := open(t, "tab="+markupTab)
-	view := s.view(markupTab)
-
-	// A data row, explicitly. The column header moved INSIDE `.markup-list` on
-	// 2026-08-27 so that it and the rows could share one grid, which made
-	// `.markup-list .markup-row-image` match the header's "Image" LABEL first —
-	// a column label is not a truncated filename and carries no title.
-	cell := view.Locator(".markup-list .markup-row:not(.markup-row-head) .markup-row-image").First()
-	title, err := cell.GetAttribute("title")
-	if err != nil {
-		t.Fatalf("reading the title: %v", err)
-	}
-	if strings.TrimSpace(title) == "" {
-		t.Error("the image column carries no title, so a truncated name is unreadable")
-	}
-}
+// TestATruncatedImageNameIsReachableOnHover lived here and was DELETED on
+// 2026-08-27 with the column it covered. The marks list is per image now — each
+// table sits inside the slice for its own picture — so no row can belong to a
+// different image from the one above it and there is no caption to truncate.
+// The caption is still on screen, once, in the slice head, where it is renamed.
 
 /* ---------- helpers ---------- */
 

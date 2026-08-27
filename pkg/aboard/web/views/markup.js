@@ -53,6 +53,66 @@ export function mountMarkup(root, ctx) {
   const rowEls = new Map();      // mark key -> list row element, kept across renders
   const imageRecords = new Map(); // image id -> persistent DOM record
   const hiddenOverlay = new Map(); // image id -> marks hidden? (view-only, never saved)
+  // Zoom and pan, per image: { z, tx, ty } with tx/ty in STAGE pixels.
+  //
+  // Per viewer and never saved, exactly like the hidden-marks toggle, the
+  // selection and the drawing tool. Two people can read one board in the same
+  // second and must disagree about zoom while agreeing about content — the same
+  // rule that keeps scroll and theme out of the document.
+  const zoomState = new Map();
+  // The crop tool's transient rectangle, per image: {x,y,w,h} in image
+  // fractions. NOT a mark: it is never given an id, never written, and never
+  // survives a click elsewhere. It exists to be copied.
+  const cropSel = new Map();
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 8;
+
+  function zoomOf(imageId) {
+    return zoomState.get(imageId) || { z: 1, tx: 0, ty: 0 };
+  }
+
+  // Clamp the pan so the image can never be dragged off its own stage: at z=1
+  // there is nowhere to go, and at any z the visible window stays inside the
+  // picture. Without this, panning a zoomed image ends with an empty box and no
+  // way back but Fit.
+  function clampPan(rec, view) {
+    const w = rec.stageEl.clientWidth;
+    const h = rec.stageEl.clientHeight;
+    const maxX = w * (view.z - 1);
+    const maxY = h * (view.z - 1);
+    view.tx = Math.min(0, Math.max(-maxX, view.tx));
+    view.ty = Math.min(0, Math.max(-maxY, view.ty));
+    return view;
+  }
+
+  function applyZoom(rec) {
+    const view = clampPan(rec, zoomOf(rec.id));
+    zoomState.set(rec.id, view);
+    rec.zoomEl.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
+    rec.stageEl.dataset.zoomed = view.z > 1 ? 'yes' : 'no';
+    if (rec.zoomLabel) rec.zoomLabel.textContent = Math.round(view.z * 100) + '%';
+  }
+
+  // Zoom about a point, so the pixel under the cursor stays under the cursor.
+  // Zooming about the corner instead is the thing that makes a viewer feel like
+  // it is fighting you.
+  function zoomAt(rec, factor, px, py) {
+    const view = zoomOf(rec.id);
+    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.z * factor));
+    if (next === view.z) return;
+    const k = next / view.z;
+    view.tx = px - k * (px - view.tx);
+    view.ty = py - k * (py - view.ty);
+    view.z = next;
+    zoomState.set(rec.id, view);
+    applyZoom(rec);
+  }
+
+  function resetZoom(imageId) {
+    zoomState.set(imageId, { z: 1, tx: 0, ty: 0 });
+    const rec = imageRecords.get(imageId);
+    if (rec) applyZoom(rec);
+  }
 
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -96,7 +156,22 @@ export function mountMarkup(root, ctx) {
   moveBtn.setAttribute('aria-pressed', 'false');
   const resizeBtn = ctl('resize');
   resizeBtn.setAttribute('aria-pressed', 'false');
-  toolbarEl.append(regionBtn, ellipseBtn, penBtn, moveBtn, resizeBtn);
+  const cropBtn = ctl('crop');
+  cropBtn.setAttribute('aria-pressed', 'false');
+  toolbarEl.append(regionBtn, ellipseBtn, penBtn, moveBtn, resizeBtn, cropBtn);
+
+  // The two copies, next to the tool that makes a selection for them. Disabled
+  // until there IS one, because a button that silently does nothing is the thing
+  // this board keeps being caught by.
+  const copyRegionBtn = ctl('copy-region');
+  copyRegionBtn.addEventListener('click', () => copyCrop(false));
+  const copySeenBtn = ctl('copy-seen');
+  copySeenBtn.addEventListener('click', () => copyCrop(true));
+  toolbarEl.append(copyRegionBtn, copySeenBtn);
+
+  const copyStatusEl = document.createElement('span');
+  copyStatusEl.className = 'hint markup-copy-status';
+  toolbarEl.append(copyStatusEl);
 
   const resizeHintEl = document.createElement('p');
   resizeHintEl.className = 'hint markup-resize-hint';
@@ -137,56 +212,11 @@ export function mountMarkup(root, ctx) {
   imagesWrapEl.className = 'markup-images';
   panel.append(imagesWrapEl);
 
-  const listHead = document.createElement('p');
-  listHead.className = 'panel-head';
-  listHead.textContent = 'Marks';
-  panel.append(listHead);
-
-  // A table-like header above the list. Its colour cell is the bulk-recolour
-  // control (see #5): everything else is a plain column label, styled from
-  // the very same chip/badge classes the data rows use so the columns line up.
-  const listColHead = document.createElement('div');
-  listColHead.className = 'markup-row markup-row-head';
-  // Appended to listEl below, not to the panel. The header and the rows have to
-  // be siblings in ONE grid or their columns are only coincidentally the same
-  // width — see the subgrid note in the stylesheet.
-  
-
-  const imgHeadCell = document.createElement('span');
-  imgHeadCell.className = 'mono markup-row-image';
-  imgHeadCell.textContent = 'Image';
-  listColHead.append(imgHeadCell);
-
-  const idxHeadCell = document.createElement('span');
-  idxHeadCell.className = 'markup-index';
-  idxHeadCell.textContent = '#';
-  listColHead.append(idxHeadCell);
-
-  const chipHeadCell = document.createElement('span');
-  chipHeadCell.className = 'mono markup-chip';
-  chipHeadCell.textContent = 'Id';
-  listColHead.append(chipHeadCell);
-
-  const summaryHeadCell = document.createElement('span');
-  summaryHeadCell.className = 'markup-summary';
-  summaryHeadCell.textContent = 'Mark';
-  listColHead.append(summaryHeadCell);
-
-  const colorHeadBtn = ctl('bulk-colour', { className: 'markup-bulk-color-btn', onClick: toggleBulkColorPanel });
-  listColHead.append(colorHeadBtn);
-
-  const noteHeadCell = document.createElement('span');
-  noteHeadCell.className = 'markup-note';
-  noteHeadCell.textContent = 'Note';
-  listColHead.append(noteHeadCell);
-
-  const delHeadCell = document.createElement('span');
-  delHeadCell.className = 'markup-row-head-spacer';
-  listColHead.append(delHeadCell);
-
-  // The bulk-recolour picker: scope first (one image, or explicitly "all
-  // images" — never a bare default), then a colour, which opens the modal
-  // confirmation before anything actually changes.
+  // The bulk-recolour picker, and there is ONE of it. Each image slice has its
+  // own marks table, so this panel is MOVED into whichever slice's colour header
+  // opened it — appending a node relocates it — rather than built fifteen times.
+  // Its scope select still offers "all images", which is the whole reason it is
+  // not simply per-image state.
   const bulkPanelEl = document.createElement('div');
   bulkPanelEl.className = 'markup-bulk-panel';
   bulkPanelEl.hidden = true;
@@ -212,19 +242,6 @@ export function mountMarkup(root, ctx) {
 
   const bulkCancelBtn = button('Cancel', '', { onClick: closeBulkColorPanel });
   bulkPanelEl.append(bulkCancelBtn);
-
-  const listEmptyEl = document.createElement('p');
-  listEmptyEl.className = 'hint';
-  listEmptyEl.textContent = 'No marks yet — draw a region or a pen stroke on an image above.';
-  panel.append(listEmptyEl);
-
-  const listEl = document.createElement('div');
-  listEl.className = 'markup-list';
-  panel.append(listEl);
-  // Order preserved from when these were three siblings of the panel: the column
-  // header, then the bulk-recolour panel it opens, then the rows.
-  listEl.append(listColHead);
-  listEl.append(bulkPanelEl);
 
   /* ---------- shared modal confirm (bulk recolour / clear marks) ---------- */
 
@@ -284,6 +301,24 @@ export function mountMarkup(root, ctx) {
   penBtn.addEventListener('click', () => setTool('pen'));
   moveBtn.addEventListener('click', () => setTool('move'));
   resizeBtn.addEventListener('click', () => setTool('resize'));
+  cropBtn.addEventListener('click', () => setTool('crop'));
+
+  // The crop rectangle, drawn straight into the image's svg. It is not a mark and
+  // is not in the document — a separate element with its own class, rebuilt on
+  // every render from cropSel.
+  function renderCropSelection(imageId, rec) {
+    const existing = rec.svgEl.querySelector('.markup-crop');
+    const sel = tool === 'crop' ? cropSel.get(imageId) : null;
+    if (!sel) { if (existing) existing.remove(); return; }
+    const el = existing || document.createElementNS(SVG_NS, 'rect');
+    el.setAttribute('class', 'markup-crop');
+    el.setAttribute('vector-effect', 'non-scaling-stroke');
+    el.setAttribute('x', String(sel.x));
+    el.setAttribute('y', String(sel.y));
+    el.setAttribute('width', String(sel.w));
+    el.setAttribute('height', String(sel.h));
+    if (!existing) rec.svgEl.append(el);
+  }
 
   function setTool(next) {
     tool = next;
@@ -292,6 +327,7 @@ export function mountMarkup(root, ctx) {
     penBtn.setAttribute('aria-pressed', String(tool === 'pen'));
     moveBtn.setAttribute('aria-pressed', String(tool === 'move'));
     resizeBtn.setAttribute('aria-pressed', String(tool === 'resize'));
+    cropBtn.setAttribute('aria-pressed', String(tool === 'crop'));
     render(); // handle visibility, the pen-not-resizable hint and the svg cursor all key off the active tool
   }
 
@@ -501,10 +537,18 @@ export function mountMarkup(root, ctx) {
     );
   }
 
-  function toggleBulkColorPanel() {
-    bulkPanelOpen = !bulkPanelOpen;
-    bulkPanelEl.hidden = !bulkPanelOpen;
-    if (bulkPanelOpen) renderBulkColorScope(readState());
+  function toggleBulkColorPanel(imageId) {
+    const rec = imageRecords.get(imageId);
+    if (!rec) return;
+    const already = bulkPanelOpen && bulkPanelEl.parentElement === rec.listEl;
+    if (already) { closeBulkColorPanel(); return; }
+    // Relocated, not rebuilt. Appending an existing node moves it, so the panel
+    // always opens inside the slice whose header was pressed and there is never
+    // a second one open somewhere off screen.
+    rec.listEl.insertBefore(bulkPanelEl, rec.colHeadEl.nextSibling);
+    bulkPanelOpen = true;
+    bulkPanelEl.hidden = false;
+    renderBulkColorScope(readState(), imageId);
   }
 
   function closeBulkColorPanel() {
@@ -514,9 +558,11 @@ export function mountMarkup(root, ctx) {
 
   // Same per-image-or-all scope choice the old toolbar dropdown offered,
   // just anchored to the marks list's colour header instead.
-  function renderBulkColorScope(state) {
+  function renderBulkColorScope(state, imageId) {
     const annotatables = state.images.filter((im) => im.annotatable);
-    const prev = bulkScopeSelect.value;
+    // The slice it was opened from leads, because that is the one the human was
+    // looking at when they pressed it.
+    const prev = imageId || bulkScopeSelect.value;
     bulkScopeSelect.replaceChildren();
     for (const im of annotatables) {
       const opt = document.createElement('option');
@@ -689,7 +735,31 @@ export function mountMarkup(root, ctx) {
       if (tool === 'move') startMoveDrag(imageId, key.slice(imageId.length + 2), svgEl, evt);
       return;
     }
-    if (tool !== 'region' && tool !== 'ellipse' && tool !== 'pen') return; // move/resize only ever act on an existing mark
+    // Move on empty canvas pans a zoomed image. It is the only tool whose verb
+    // already means "reposition", and the alternative — a sixth tool that does
+    // nothing until you have zoomed — is a button that is dead most of the time.
+    // At z=1 clampPan pins it, so the gesture is harmless rather than absent.
+    if (tool === 'move') {
+      const rec = imageRecords.get(imageId);
+      if (!rec || zoomOf(imageId).z <= 1) return;
+      evt.preventDefault();
+      svgEl.setPointerCapture(evt.pointerId);
+      const view = zoomOf(imageId);
+      drag = {
+        type: 'pan', pointerId: evt.pointerId, imageId,
+        startX: evt.clientX, startY: evt.clientY, tx0: view.tx, ty0: view.ty,
+      };
+      return;
+    }
+    if (tool === 'crop') {
+      evt.preventDefault();
+      svgEl.setPointerCapture(evt.pointerId);
+      const [cx, cy] = pointerToNorm(svgEl, evt);
+      drag = { type: 'crop', pointerId: evt.pointerId, imageId, x0: cx, y0: cy, x1: cx, y1: cy };
+      updateDragPreview(svgEl);
+      return;
+    }
+    if (tool !== 'region' && tool !== 'ellipse' && tool !== 'pen') return; // resize only ever acts on an existing mark
     evt.preventDefault();
     svgEl.setPointerCapture(evt.pointerId);
     const [x, y] = pointerToNorm(svgEl, evt);
@@ -770,7 +840,23 @@ export function mountMarkup(root, ctx) {
 
   function onPointerMove(svgEl, evt) {
     if (!drag || evt.pointerId !== drag.pointerId) return;
+    if (drag.type === 'pan') {
+      const rec = imageRecords.get(drag.imageId);
+      if (!rec) return;
+      const view = zoomOf(drag.imageId);
+      view.tx = drag.tx0 + (evt.clientX - drag.startX);
+      view.ty = drag.ty0 + (evt.clientY - drag.startY);
+      zoomState.set(drag.imageId, view);
+      applyZoom(rec);
+      return;
+    }
     const [x, y] = pointerToNorm(svgEl, evt);
+    if (drag.type === 'crop') {
+      drag.x1 = x;
+      drag.y1 = y;
+      updateDragPreview(svgEl);
+      return;
+    }
     if (drag.type === 'region') {
       drag.x1 = x;
       drag.y1 = y;
@@ -801,6 +887,20 @@ export function mountMarkup(root, ctx) {
   }
 
   function commitDrag() {
+    // A pan changed nothing that is written down, and a crop is a SELECTION —
+    // it is copied, never stored. Both stop here, before ensureImage(), which
+    // would otherwise mark the document dirty for a gesture that did not touch
+    // it.
+    if (drag.type === 'pan') return;
+    if (drag.type === 'crop') {
+      const x = Math.min(drag.x0, drag.x1);
+      const y = Math.min(drag.y0, drag.y1);
+      const w = Math.abs(drag.x1 - drag.x0);
+      const h = Math.abs(drag.y1 - drag.y0);
+      if (w < MIN_REGION_SIZE || h < MIN_REGION_SIZE) cropSel.delete(drag.imageId);
+      else cropSel.set(drag.imageId, { x, y, w, h });
+      return;
+    }
     const im = ensureImage(drag.imageId);
     if (!im) return;
     if (drag.type === 'region') {
@@ -896,7 +996,7 @@ export function mountMarkup(root, ctx) {
   }
 
   function dragPreviewBox() {
-    if (drag.type === 'region') {
+    if (drag.type === 'region' || drag.type === 'crop') {
       return {
         x: Math.min(drag.x0, drag.x1), y: Math.min(drag.y0, drag.y1),
         w: Math.abs(drag.x1 - drag.x0), h: Math.abs(drag.y1 - drag.y0),
@@ -960,14 +1060,31 @@ export function mountMarkup(root, ctx) {
     for (const rec of imageRecords.values()) {
       if (rec.svgEl) rec.svgEl.dataset.tool = tool; // cursor (grab/resize/crosshair) keys off this
     }
-    renderBulkColorScope(state);
-    const totalMarks = state.images
-      .filter((im) => im.annotatable)
-      .reduce((n, im) => n + im.regions.length + im.strokes.length, 0);
-    colorHeadBtn.disabled = totalMarks === 0;
+    // The bulk panel's scope select is only meaningful while the panel is open,
+    // and it is now attached to whichever slice opened it.
+    if (bulkPanelOpen) renderBulkColorScope(state);
     renderList(state);
+    // Per slice, because each colour header now belongs to one image.
+    for (const im of state.images) {
+      if (!im.annotatable) continue;
+      const rec = imageRecords.get(im.id);
+      const btn = rec && rec.colHeadEl ? rec.colHeadEl.querySelector('.markup-bulk-color-btn') : null;
+      if (btn) btn.disabled = im.regions.length + im.strokes.length === 0;
+    }
     updateResizeHint(state);
+    updateCopyButtons();
     applyHighlightClasses();
+  }
+
+  // A copy button with nothing selected is a press that does nothing, so it says
+  // so before it is pressed rather than after.
+  function updateCopyButtons() {
+    const has = tool === 'crop' && cropSel.size > 0;
+    copyRegionBtn.disabled = !has;
+    copySeenBtn.disabled = !has;
+    const why = tool === 'crop' ? 'Draw a rectangle with the crop tool first.' : 'Choose the crop tool and draw a rectangle first.';
+    copyRegionBtn.title = has ? 'Copy just the pixels inside the rectangle' : why;
+    copySeenBtn.title = has ? 'Copy the rectangle with its marks drawn on' : why;
   }
 
   function updateResizeHint(state) {
@@ -1005,9 +1122,11 @@ export function mountMarkup(root, ctx) {
       }
       updateFigure(rec, im);
       if (rec.svgEl) {
-        renderShapesForImage(im, rec);
+        renderShapesForImage(im, rec); // replaceChildren()s the svg...
         renderHandlesForImage(im, rec);
+        renderCropSelection(im.id, rec); // ...so the crop rectangle is re-added after it
       }
+      applyZoom(rec);
       imagesWrapEl.append(rec.figureEl); // re-appending an existing node moves it, keeping order in sync
     }
     for (const [id, rec] of imageRecords) {
@@ -1058,6 +1177,39 @@ export function mountMarkup(root, ctx) {
       headRow.append(clearBtn);
     }
 
+    // Zoom lives on the image's own head row rather than the tab toolbar,
+    // because with a slice per image there is no such thing as "the" image any
+    // more — each one is zoomed on its own.
+    let zoomLabel = null;
+    if (annotatable) {
+      const outBtn = ctl('zoom-out');
+      outBtn.addEventListener('click', () => {
+        const rec = imageRecords.get(imageId);
+        if (rec) zoomAt(rec, 1 / 1.25, rec.stageEl.clientWidth / 2, rec.stageEl.clientHeight / 2);
+      });
+      headRow.append(outBtn);
+
+      zoomLabel = document.createElement('span');
+      zoomLabel.className = 'hint markup-zoom-label';
+      zoomLabel.textContent = '100%';
+      headRow.append(zoomLabel);
+
+      const inBtn = ctl('zoom-in');
+      inBtn.addEventListener('click', () => {
+        const rec = imageRecords.get(imageId);
+        if (rec) zoomAt(rec, 1.25, rec.stageEl.clientWidth / 2, rec.stageEl.clientHeight / 2);
+      });
+      headRow.append(inBtn);
+
+      const fitBtn = ctl('zoom-fit');
+      fitBtn.addEventListener('click', () => resetZoom(imageId));
+      headRow.append(fitBtn);
+
+      const copyViewBtn = ctl('copy-view');
+      copyViewBtn.addEventListener('click', () => copyView(imageId));
+      headRow.append(copyViewBtn);
+    }
+
     const removeBtn = ctl('remove-image');
     removeBtn.classList.add('icon-btn--danger');
     removeBtn.addEventListener('click', () => deleteImage(imageId));
@@ -1066,6 +1218,15 @@ export function mountMarkup(root, ctx) {
     const stageEl = document.createElement('div');
     stageEl.className = 'markup-stage';
     figureEl.append(stageEl);
+
+    // Everything that scales lives in here. The stage is the window; this is the
+    // thing that moves behind it. Marks are stored as fractions of the image and
+    // are positioned inside this same wrapper, so one transform carries the
+    // picture and every mark on it together and none of the drawing maths has to
+    // know that zoom exists.
+    const zoomEl = document.createElement('div');
+    zoomEl.className = 'markup-zoom';
+    stageEl.append(zoomEl);
 
     const imgEl = document.createElement('img');
     imgEl.className = 'markup-img';
@@ -1081,12 +1242,12 @@ export function mountMarkup(root, ctx) {
       rec.failed = false;
       render();
     });
-    stageEl.append(imgEl);
+    zoomEl.append(imgEl);
 
     const failEl = document.createElement('p');
     failEl.className = 'hint markup-fail';
     failEl.hidden = true;
-    stageEl.append(failEl);
+    stageEl.append(failEl); // outside the zoom: a failure message is chrome, not content
 
     let svgEl = null;
     let labelsEl = null;
@@ -1096,11 +1257,11 @@ export function mountMarkup(root, ctx) {
       svgEl.setAttribute('class', 'markup-svg');
       svgEl.setAttribute('viewBox', '0 0 1 1');
       svgEl.setAttribute('preserveAspectRatio', 'none');
-      stageEl.append(svgEl);
+      zoomEl.append(svgEl);
 
       labelsEl = document.createElement('div');
       labelsEl.className = 'markup-labels';
-      stageEl.append(labelsEl);
+      zoomEl.append(labelsEl);
 
       // A plain, unscaled HTML layer for resize handles: the svg above uses
       // viewBox="0 0 1 1" with preserveAspectRatio="none", so any shape drawn
@@ -1109,17 +1270,94 @@ export function mountMarkup(root, ctx) {
       // for its circular numbers — stays a true, constant-size square instead.
       handlesEl = document.createElement('div');
       handlesEl.className = 'markup-handles';
-      stageEl.append(handlesEl);
+      zoomEl.append(handlesEl);
 
       svgEl.addEventListener('pointerdown', (evt) => onPointerDown(imageId, svgEl, evt));
       svgEl.addEventListener('pointermove', (evt) => onPointerMove(svgEl, evt));
       svgEl.addEventListener('pointerup', (evt) => onPointerUp(svgEl, evt));
       svgEl.addEventListener('pointercancel', onPointerCancel);
+
+      // Wheel to zoom, on the STAGE rather than the svg, so it works over the
+      // failure message and the padding too. `passive: false` because the whole
+      // point is to stop the page scrolling under it — a wheel over an image
+      // that scrolled the board instead would make zoom unusable at the exact
+      // moment it matters, at the bottom of a long tab.
+      stageEl.addEventListener('wheel', (evt) => {
+        if (!evt.ctrlKey && !evt.metaKey && !stageEl.dataset.wheelZoom) {
+          // Plain wheel scrolls the page. Zoom is Ctrl/Cmd+wheel, the same
+          // gesture every image viewer and every editor already uses, so a wheel
+          // over a tall tab still scrolls it.
+          return;
+        }
+        evt.preventDefault();
+        const rec = imageRecords.get(imageId);
+        if (!rec) return;
+        const box = stageEl.getBoundingClientRect();
+        zoomAt(rec, evt.deltaY < 0 ? 1.15 : 1 / 1.15, evt.clientX - box.left, evt.clientY - box.top);
+      }, { passive: false });
+    }
+
+    // ---- this image's own marks table, inside its own slice ----
+    //
+    // One table per image, under the image it belongs to. It used to be ONE
+    // table under ALL the images: with several screenshots on a tab you scrolled
+    // to the bottom to read a note, then back up to see what it was about, and a
+    // row gave no clue which picture it came from beyond a caption column.
+    // Reported 2026-08-27. A slice is caption, buttons, image, marks — and that
+    // is also why the caption column is gone from the table: every row in this
+    // one belongs to this image by construction.
+    let listEl = null;
+    let colHeadEl = null;
+    let listEmptyEl = null;
+    if (annotatable) {
+      listEl = document.createElement('div');
+      listEl.className = 'markup-list';
+      figureEl.append(listEl);
+
+      colHeadEl = document.createElement('div');
+      colHeadEl.className = 'markup-row markup-row-head';
+      listEl.append(colHeadEl);
+
+      const idxHeadCell = document.createElement('span');
+      idxHeadCell.className = 'markup-index';
+      idxHeadCell.textContent = '#';
+      colHeadEl.append(idxHeadCell);
+
+      const chipHeadCell = document.createElement('span');
+      chipHeadCell.className = 'mono markup-chip';
+      chipHeadCell.textContent = 'Id';
+      colHeadEl.append(chipHeadCell);
+
+      const summaryHeadCell = document.createElement('span');
+      summaryHeadCell.className = 'markup-summary';
+      summaryHeadCell.textContent = 'Mark';
+      colHeadEl.append(summaryHeadCell);
+
+      const colorHeadBtn = ctl('bulk-colour', {
+        className: 'markup-bulk-color-btn',
+        onClick: () => toggleBulkColorPanel(imageId),
+      });
+      colHeadEl.append(colorHeadBtn);
+
+      const noteHeadCell = document.createElement('span');
+      noteHeadCell.className = 'markup-note';
+      noteHeadCell.textContent = 'Note';
+      colHeadEl.append(noteHeadCell);
+
+      const delHeadCell = document.createElement('span');
+      delHeadCell.className = 'markup-row-head-spacer';
+      colHeadEl.append(delHeadCell);
+
+      listEmptyEl = document.createElement('p');
+      listEmptyEl.className = 'hint markup-list-empty';
+      listEmptyEl.textContent = 'No marks on this image yet — draw a region or a pen stroke above.';
+      listEl.append(listEmptyEl);
     }
 
     return {
       id: imageId, figureEl, capEl, hideBtn, clearBtn,
-      stageEl, imgEl, failEl, svgEl, labelsEl, handlesEl,
+      stageEl, zoomEl, imgEl, failEl, svgEl, labelsEl, handlesEl,
+      listEl, colHeadEl, listEmptyEl, zoomLabel,
       annotatable, failed: false,
     };
   }
@@ -1294,50 +1532,45 @@ export function mountMarkup(root, ctx) {
 
   /* ---------- rendering: marks list ---------- */
 
+  // One pass over every image, numbering marks as it goes, filling each slice's
+  // own table.
+  //
+  // The NUMBERING stays global — 1..n across the whole tab, not restarting per
+  // image. That is a decision with a reason: restarting made "mark 1" name two
+  // different things the moment a second image arrived, and pointing at things
+  // is the entire purpose of this view. Grouping the ROWS by image does not
+  // require renumbering them, so it does not.
   function renderList(state) {
-    const showImageTag = state.images.length > 1;
-    // EMPTIED, never hidden — here and in the rows. This was `hidden` on both,
-    // which is `display: none`, and a display:none grid item is not placed in
-    // the grid at all: with a single image every cell slid one column left into
-    // a track sized for something else. The id landed in the 22px mark-number
-    // track and rendered as "bb"; the delete button landed in the note track and
-    // became a full-width box with an ✕ adrift in it. Reported 2026-08-27 as
-    // "the marks table columns are odd", which was exactly right.
-    //
-    // The column is 0px when there is one image, and `.markup-row-image:empty`
-    // drops its own padding and border, so the cell holds its place and occupies
-    // no space.
-    listEl.style.setProperty('--markup-img-col', showImageTag ? 'minmax(6ch, 18ch)' : '0px');
-    imgHeadCell.textContent = showImageTag ? 'Image' : '';
-    const entries = [];
-    // Numbered across the whole tab, not per image. Restarting at 1 for every
-    // image meant "mark 1" named two different things as soon as a second image
-    // arrived — and pointing at things is the entire purpose of this view.
+    const present = new Set();
     let idx = 0;
     for (const im of state.images) {
       if (!im.annotatable) continue;
-      const imageLabel = im.caption || labelForImage(im);
+      const rec = imageRecords.get(im.id);
+      const entries = [];
       for (const r of im.regions) {
         idx += 1;
-        entries.push({ imageId: im.id, imageLabel, id: r.id, type: r.shape === 'ellipse' ? 'ellipse' : 'region', obj: r, index: idx });
+        entries.push({ imageId: im.id, id: r.id, type: r.shape === 'ellipse' ? 'ellipse' : 'region', obj: r, index: idx });
       }
-      for (const s of im.strokes) {
+      for (const st of im.strokes) {
         idx += 1;
-        entries.push({ imageId: im.id, imageLabel, id: s.id, type: 'pen', obj: s, index: idx });
+        entries.push({ imageId: im.id, id: st.id, type: 'pen', obj: st, index: idx });
       }
-    }
-
-    const present = new Set();
-    for (const entry of entries) {
-      const key = markKey(entry.imageId, entry.id);
-      present.add(key);
-      let row = rowEls.get(key);
-      if (!row) {
-        row = buildRow(entry.imageId, entry.id);
-        rowEls.set(key, row);
+      if (!rec || !rec.listEl) continue;
+      for (const entry of entries) {
+        const key = markKey(entry.imageId, entry.id);
+        present.add(key);
+        let row = rowEls.get(key);
+        if (!row) {
+          row = buildRow(entry.imageId, entry.id);
+          rowEls.set(key, row);
+        }
+        updateRow(row, entry);
+        rec.listEl.append(row); // re-appending moves it, keeping list order in sync
       }
-      updateRow(row, entry, showImageTag);
-      listEl.append(row); // re-appending an existing node moves it, keeping list order in sync
+      rec.listEmptyEl.hidden = entries.length !== 0;
+      // The empty line goes last so it sits under the header rather than under
+      // rows that arrived after it.
+      rec.listEl.append(rec.listEmptyEl);
     }
     for (const [key, row] of rowEls) {
       if (!present.has(key)) {
@@ -1345,7 +1578,6 @@ export function mountMarkup(root, ctx) {
         rowEls.delete(key);
       }
     }
-    listEmptyEl.hidden = entries.length !== 0;
   }
 
   function buildRow(imageId, id) {
@@ -1353,10 +1585,6 @@ export function mountMarkup(root, ctx) {
     const row = document.createElement('div');
     row.className = 'markup-row';
     row.dataset.markKey = key;
-
-    const imgTag = document.createElement('span');
-    imgTag.className = 'mono markup-row-image';
-    row.append(imgTag);
 
     const index = document.createElement('span');
     index.className = 'markup-index';
@@ -1437,23 +1665,7 @@ export function mountMarkup(root, ctx) {
     return row;
   }
 
-  function updateRow(row, entry, showImageTag) {
-    const imgTag = row.querySelector('.markup-row-image');
-    // EMPTIED, never hidden. `hidden` is `display: none`, and a display:none grid
-    // item is not placed in the grid at all — so with a single image every cell
-    // in this row slid one column left while the header's own image cell stayed
-    // put. The id landed in the 22px mark-number track and rendered as "bb"; the
-    // delete button landed in the note track and became a full-width box with an
-    // ✕ floating in the middle of it. Reported 2026-08-27 as "the marks table
-    // columns are odd", which was exactly right.
-    //
-    // The column is 0px when there is one image, so an empty cell costs nothing
-    // and keeps the row seven cells wide whatever is on screen.
-    imgTag.textContent = showImageTag ? entry.imageLabel : '';
-    // The column is capped and ellipsised, so the full name has to be reachable
-    // somewhere — three screenshots all called "image.png" are otherwise
-    // indistinguishable in the list.
-    imgTag.title = showImageTag ? entry.imageLabel : '';
+  function updateRow(row, entry) {
     row.querySelector('.markup-index').textContent = String(entry.index);
     row.querySelector('.markup-chip').textContent = entry.id;
     row.querySelector('.markup-summary').textContent = summarize(entry);
@@ -1484,6 +1696,161 @@ export function mountMarkup(root, ctx) {
     return Math.round(clamp01(v) * 100);
   }
 
+  /* ---------- copy to the clipboard ---------- */
+
+  // Everything here draws onto a canvas BY HAND from the state, rather than
+  // serialising the live <svg> and rasterising it. Two reasons, and both are
+  // load-bearing:
+  //
+  //   1. The marks are painted with `var(--mark)` and friends. An <svg>
+  //      serialised out of the document takes none of the page's CSS with it, so
+  //      every stroke would come back black — and `colorVar()` already resolves a
+  //      token to a real colour for exactly this kind of question.
+  //   2. The id badges are HTML, not SVG. Getting them into a rasterised SVG
+  //      means <foreignObject>, which several browsers refuse to draw to a canvas
+  //      at all or taint the canvas for. Drawing a rounded box and some text is
+  //      three lines and cannot be refused.
+  //
+  // The image itself is same-origin — `api(im.src)` under the board's own
+  // uploads/ or assets/ — so the canvas is NOT tainted and toBlob() works. That
+  // is the fact the whole feature rests on; a cross-origin image would fail here
+  // with a SecurityError and no amount of care would help.
+  function copyStatus(text, bad) {
+    copyStatusEl.textContent = text;
+    copyStatusEl.classList.toggle('is-bad', !!bad);
+    if (copyStatusEl.timer) clearTimeout(copyStatusEl.timer);
+    copyStatusEl.timer = setTimeout(() => { copyStatusEl.textContent = ''; copyStatusEl.classList.remove('is-bad'); }, 4000);
+  }
+
+  function drawMarksOnto(cx, im, sx, sy, sw, sh, scale) {
+    const nudge = (v) => Math.round(v);
+    let n = 0;
+    for (const state of [im.regions, im.strokes]) void state;
+    const all = [];
+    for (const r of im.regions) all.push({ obj: r, kind: r.shape === 'ellipse' ? 'ellipse' : 'rect' });
+    for (const st of im.strokes) all.push({ obj: st, kind: 'pen' });
+    for (const entry of all) {
+      n += 1;
+      const stroke = resolvedColor(colorToken(entry.obj), '#ff0066');
+      cx.strokeStyle = stroke;
+      cx.lineWidth = 2;
+      cx.lineJoin = 'round';
+      cx.lineCap = 'round';
+      let bx = 0;
+      let by = 0;
+      if (entry.kind === 'pen') {
+        const pts = decodePoints(entry.obj.points);
+        if (!pts.length) continue;
+        cx.beginPath();
+        pts.forEach((pt, i) => {
+          const px = nudge((pt[0] * im.naturalW - sx) * scale);
+          const py = nudge((pt[1] * im.naturalH - sy) * scale);
+          if (i === 0) cx.moveTo(px, py); else cx.lineTo(px, py);
+        });
+        cx.stroke();
+        bx = (pts[0][0] * im.naturalW - sx) * scale;
+        by = (pts[0][1] * im.naturalH - sy) * scale;
+      } else {
+        const x = (entry.obj.x * im.naturalW - sx) * scale;
+        const y = (entry.obj.y * im.naturalH - sy) * scale;
+        const w = entry.obj.w * im.naturalW * scale;
+        const h = entry.obj.h * im.naturalH * scale;
+        cx.beginPath();
+        if (entry.kind === 'ellipse') cx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2);
+        else cx.rect(x, y, w, h);
+        cx.stroke();
+        bx = x;
+        by = y;
+      }
+      // The id badge, drawn the way the overlay draws it: the id, because that
+      // is the string a human types back to an agent.
+      const text = entry.obj.id;
+      cx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
+      const tw = cx.measureText(text).width;
+      cx.fillStyle = stroke;
+      cx.fillRect(bx, by - 14, tw + 8, 14);
+      cx.fillStyle = resolvedColor('accent-ink', '#111');
+      cx.fillText(text, bx + 4, by - 3.5);
+    }
+    return n;
+  }
+
+  // A rectangle of an image, in image fractions, as a PNG on the clipboard.
+  async function copyRect(imageId, rect, withMarks, what) {
+    const rec = imageRecords.get(imageId);
+    const im = readState().images.find((x) => x.id === imageId);
+    if (!rec || !im || !rec.imgEl.naturalWidth) { copyStatus('nothing to copy', true); return; }
+    const nw = rec.imgEl.naturalWidth;
+    const nh = rec.imgEl.naturalHeight;
+    const sx = Math.max(0, rect.x * nw);
+    const sy = Math.max(0, rect.y * nh);
+    const sw = Math.min(nw - sx, rect.w * nw);
+    const sh = Math.min(nh - sy, rect.h * nh);
+    if (sw < 1 || sh < 1) { copyStatus('that selection is empty', true); return; }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(sw);
+    canvas.height = Math.round(sh);
+    const cx = canvas.getContext('2d');
+    try {
+      cx.drawImage(rec.imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    } catch {
+      copyStatus('the image could not be read into a canvas', true);
+      return;
+    }
+    if (withMarks) drawMarksOnto(cx, { ...im, naturalW: nw, naturalH: nh }, sx, sy, sw, sh, 1);
+
+    let blob;
+    try {
+      blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned nothing'))), 'image/png');
+      });
+    } catch {
+      copyStatus('this image cannot be copied (the canvas is tainted)', true);
+      return;
+    }
+    // Loudly, not silently. In a VS Code panel the board is a cross-origin frame
+    // and clipboard-write has to be delegated to it by permissions policy; if
+    // that has not happened this rejects, and a copy button that quietly does
+    // nothing is the exact failure this project keeps being bitten by.
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      copyStatus(`${what} copied — ${canvas.width}×${canvas.height}, paste it with Ctrl+V`);
+    } catch (err) {
+      copyStatus('the clipboard refused this copy: ' + (err && err.message ? err.message : 'not permitted here'), true);
+    }
+  }
+
+  // The crop tool's selection. `withMarks` is the difference between the two
+  // buttons: a clean closeup to annotate afresh, or the region as it looks now
+  // to paste somewhere outside the board.
+  function copyCrop(withMarks) {
+    const entries = [...cropSel.entries()];
+    if (!entries.length) { copyStatus('draw a rectangle with the crop tool first', true); return; }
+    const [imageId, rect] = entries[entries.length - 1];
+    void copyRect(imageId, rect, withMarks, withMarks ? 'region with marks' : 'region');
+  }
+
+  // What the stage is showing right now, marks included — the "capture the
+  // zoomed view" half. Derived from the transform rather than from a selection,
+  // so at 100% it is simply the whole image.
+  function copyView(imageId) {
+    const rec = imageRecords.get(imageId);
+    if (!rec) return;
+    const view = zoomOf(imageId);
+    const w = rec.stageEl.clientWidth;
+    const h = rec.stageEl.clientHeight;
+    const rect = {
+      x: (-view.tx / view.z) / w,
+      y: (-view.ty / view.z) / (h || 1),
+      w: 1 / view.z,
+      h: 1 / view.z,
+    };
+    // The stage is as wide as the image and as tall as the image's own aspect
+    // ratio makes it, so the visible fraction is the same on both axes.
+    void copyRect(imageId, { x: clamp01(rect.x), y: clamp01(rect.y), w: rect.w, h: rect.h }, true, 'view');
+  }
+
   /* ---------- colour token resolution ---------- */
 
   function colorToken(mark) {
@@ -1493,6 +1860,15 @@ export function mountMarkup(root, ctx) {
 
   function colorVar(token) {
     return 'var(--' + token + ')';
+  }
+
+  // The same token as an ACTUAL colour, for the canvas — which cannot read a
+  // `var()`. Resolved off the live panel, so it is whatever the viewer's theme
+  // (or an embedder's palette) has made it at this moment, rather than a copy of
+  // the stylesheet kept here to go stale.
+  function resolvedColor(token, fallback) {
+    const v = getComputedStyle(panel).getPropertyValue('--' + token).trim();
+    return v || fallback;
   }
 
   migrateLegacyShape();
@@ -1637,7 +2013,44 @@ function ensureStyles() {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-[data-view="markup"] .markup-figure { min-width: 0; }
+/* A SLICE: caption and buttons, the picture, then that picture's own marks. The
+   three used to be spread across the tab -- every image stacked, then one table
+   for all of them at the bottom -- so reading a note meant scrolling past every
+   other screenshot to reach it and back up again to see what it was about. */
+[data-view="markup"] .markup-figure {
+  min-width: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+[data-view="markup"] .markup-figure:last-child { border-bottom: 0; padding-bottom: 0; }
+
+/* The thing that moves behind the stage's window. transform-origin at the top
+   left keeps the arithmetic in zoomAt honest: a centred origin makes every pan
+   offset depend on the element's size. */
+[data-view="markup"] .markup-zoom {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+[data-view="markup"] .markup-zoom-label {
+  min-width: 4ch;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+}
+[data-view="markup"] .markup-stage[data-zoomed="yes"] .markup-svg[data-tool="move"] { cursor: grab; }
+[data-view="markup"] .markup-stage[data-zoomed="yes"] .markup-svg[data-tool="move"]:active { cursor: grabbing; }
+[data-view="markup"] .markup-svg[data-tool="crop"] { cursor: crosshair; }
+
+/* The crop selection. Deliberately unlike a mark: dashed, no fill, no badge --
+   it is a thing about to be copied, not a thing that was recorded. */
+[data-view="markup"] .markup-crop {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+[data-view="markup"] .markup-copy-status { margin: 0 0 0 4px; }
+[data-view="markup"] .markup-copy-status.is-bad { color: var(--danger); }
 [data-view="markup"] .markup-figure-head {
   display: flex;
   align-items: center;
@@ -1647,6 +2060,7 @@ function ensureStyles() {
 [data-view="markup"] .markup-figure-caption { margin: 0; }
 [data-view="markup"] .markup-stage {
   position: relative;
+  touch-action: none;
   width: 100%;
   /* No max-width. It was 900px, which on a wide board or a maximised panel left
      most of the row empty while the thing you are trying to point AT was
@@ -1827,7 +2241,6 @@ function ensureStyles() {
 [data-view="markup"] .markup-list {
   display: grid;
   grid-template-columns:
-    var(--markup-img-col, 0px)   /* image name, 0 when there is only one image */
     22px                          /* mark number */
     minmax(5ch, max-content)      /* bb id */
     minmax(9ch, 1fr)              /* what and where */
@@ -1836,7 +2249,12 @@ function ensureStyles() {
     24px;                         /* delete */
   column-gap: 8px;
   row-gap: 6px;
+  margin-top: 10px;
 }
+/* Six columns, not seven. The image-name column is gone: every row in a table
+   now belongs to the image directly above it, so a caption repeated down the
+   column was noise with a truncation problem attached. */
+[data-view="markup"] .markup-list > .markup-list-empty { grid-column: 1 / -1; margin: 2px 0 0; }
 /* The two full-width children of the list that are not rows. */
 [data-view="markup"] .markup-list > .markup-bulk-panel { grid-column: 1 / -1; }
 [data-view="markup"] .markup-row {
@@ -1888,24 +2306,6 @@ function ensureStyles() {
   border: 1px solid var(--line);
   border-radius: 3px;
   font-size: 0.79rem;
-}
-/* An empty image cell keeps its grid slot and gives up its box. See the note at
-   the showImageTag assignment: taking it out of the flow instead is what shifted
-   every column left. */
-[data-view="markup"] .markup-row-image:empty { padding: 0; border: 0; }
-[data-view="markup"] .markup-row-image {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 2px 6px;
-  background: var(--sunken);
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--edge);
-  border-radius: 3px;
-  font-size: 0.72rem;
-  color: var(--muted);
 }
 [data-view="markup"] .markup-summary { min-width: 0; color: var(--muted); font-size: 0.84rem; }
 [data-view="markup"] .markup-row-head-spacer { width: 24px; }

@@ -56,6 +56,21 @@
       "doc": "Resize a selected rectangle or ellipse."
     },
     {
+      "id": "crop",
+      "label": "⧉ Crop",
+      "doc": "Select a rectangle to copy. Not a mark: it is never stored."
+    },
+    {
+      "id": "copy-region",
+      "label": "Copy region",
+      "doc": "Copy the selected rectangle to the clipboard as a clean image."
+    },
+    {
+      "id": "copy-seen",
+      "label": "Copy as seen",
+      "doc": "Copy the selected rectangle with its marks drawn on."
+    },
+    {
       "id": "swatch",
       "label": "",
       "title": "Colour",
@@ -96,14 +111,36 @@
       "label": "Remove image",
       "title": "Take this image off the tab, with its marks",
       "doc": "Take an image off the tab, with its marks."
+    },
+    {
+      "id": "zoom-out",
+      "label": "−",
+      "doc": "Zoom out of this image."
+    },
+    {
+      "id": "zoom-in",
+      "label": "+",
+      "doc": "Zoom into this image."
+    },
+    {
+      "id": "zoom-fit",
+      "label": "Fit",
+      "doc": "Back to the whole image at 100%."
+    },
+    {
+      "id": "copy-view",
+      "label": "Copy view",
+      "doc": "Copy what this image is showing right now, marks included."
     }
   ],
   "gestures": [
     "paste (Ctrl+V) or drop an image to add one",
     "note each mark",
-    "hover a truncated image name in the marks list to see it in full",
     "right-click a mark row to copy its id, a link to it, or it as markdown",
-    "each mark is badged on the image with its id, so the image, the list and a sentence all use one identifier"
+    "each mark is badged on the image with its id, so the image, the list and a sentence all use one identifier",
+    "Ctrl/Cmd+wheel over an image to zoom it; drag with Move to pan a zoomed one",
+    "each image is its own slice — caption, buttons, the picture, then that image's own marks",
+    "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks"
   ],
   "keys": [],
   "notes": [

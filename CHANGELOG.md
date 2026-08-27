@@ -263,6 +263,32 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **feat: a markup tab is a stack of SLICES, and each image can be zoomed and copied.**
+  `capsHash` moves to `55dd4182`.
+  **A slice per image**: caption and buttons, the picture, then that picture's own marks.
+  It used to be every image stacked and then ONE table for all of them at the bottom, so
+  with several screenshots on a tab you scrolled past every other picture to read a note
+  and back up to see what it was about — and a row said which image it came from only
+  through a caption column, which is now gone because it cannot be ambiguous any more.
+  Mark numbering stays global across the tab (1..n, not restarting per image): "mark 1"
+  naming two different things is the one thing this renderer exists to prevent.
+  **Zoom**, per image and per viewer: Ctrl/Cmd+wheel over a picture, `−` / `+` / `Fit` on
+  its own head row, and drag with **Move** to pan a zoomed one. A plain wheel still
+  scrolls the page — a tall markup tab that trapped the wheel would be unscrollable
+  exactly where it is longest. Nothing about zoom reaches the document, like scroll and
+  the theme; marks are stored as fractions of the image, so they scale and pan for free.
+  **Copy to the clipboard**: a new **Crop** tool selects a rectangle — a selection, never
+  a mark, so it is never stored — and then **Copy region** copies the clean pixels (a
+  closeup to annotate afresh) while **Copy as seen** copies it with the marks drawn on (to
+  paste outside the board). **Copy view** on each image copies whatever it is showing
+  right now. The marks are drawn onto the canvas by hand from the state rather than by
+  rasterising the live SVG, for two reasons: the strokes are painted with `var(--mark)`
+  and a serialised SVG carries none of the page's CSS, and the id badges are HTML, which
+  would need `<foreignObject>` — refused or canvas-tainting in several browsers. It works
+  at all because an image is served from the board's own origin, so the canvas is not
+  tainted. **A refusal is reported, never swallowed**: in a VS Code panel the board is a
+  cross-origin frame and clipboard-write must be delegated to it (the extension now does),
+  and if a browser refuses anyway the status line says so.
 - **fix: the new-tab sheet says what each type IS, next to the type.** It already computed
   the one-line blurb `aboard capabilities` prints — and rendered it at the BOTTOM of the
   sheet, under the note field, where it read as a hint about the note. So choosing between
