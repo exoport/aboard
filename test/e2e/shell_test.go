@@ -328,6 +328,59 @@ func TestANewTabStartsWithItsDeclaredState(t *testing.T) {
 	}
 }
 
+// Making a tab and then having to go and find it is the wrong end of the
+// gesture: you made it because you want to put something on it.
+//
+// Opened on a DEEP LINK, which is the case that can break it and the one nobody
+// would reproduce by hand. A framing host addresses the board as
+// `#tab=<id>&r=<n>`, so the fragment on the page says one tab while the human
+// creates another — and the fragment is read at load AND on every `hashchange`.
+// Anything that re-reads it after a create lands the human back where they
+// started, with a tab they cannot see and no message saying so. The write also
+// echoes back over SSE and repaints, which is the second way this can regress.
+func TestCreatingATabSwitchesToIt(t *testing.T) {
+	s := open(t, "#tab=bb13")
+
+	// The premise: the deep link landed, so the fragment names a tab that is NOT
+	// the one about to be created.
+	if err := expect.Locator(s.view("bb13")).ToBeVisible(); err != nil {
+		t.Fatalf("the deep link did not land, so this test is not testing the case it exists for: %v", err)
+	}
+
+	const name = "Switched to on creation"
+	if err := s.page.Locator("#add-tab").Click(); err != nil {
+		t.Fatalf("opening the new-tab dialog: %v", err)
+	}
+	if err := s.page.Locator("#new-tab-name").Fill(name); err != nil {
+		t.Fatalf("naming the tab: %v", err)
+	}
+	if _, err := s.page.Locator("#new-tab-type").SelectOption(playwright.SelectOptionValues{
+		Values: &[]string{"markup"},
+	}); err != nil {
+		t.Fatalf("choosing the type: %v", err)
+	}
+	if err := s.page.Locator(`#new-tab-form button[type="submit"]`).Click(); err != nil {
+		t.Fatalf("submitting: %v", err)
+	}
+
+	// By NAME, because the id is the board's to allocate and the point of the
+	// assertion is what the human is looking at.
+	selected := s.page.Locator(`#tabs .tab[aria-selected="true"]`)
+	if err := expect.Locator(selected).ToContainText(name); err != nil {
+		t.Fatalf("the board did not switch to the tab it just created: %v", err)
+	}
+
+	// And it STAYS. The save echoes back as an SSE frame and repaints, and the
+	// old fragment is still sitting in the URL the whole time.
+	time.Sleep(settle)
+	if err := expect.Locator(selected).ToContainText(name); err != nil {
+		t.Errorf("the board switched away from the new tab after the write settled: %v", err)
+	}
+	if err := expect.Locator(s.view("bb13")).ToBeHidden(); err != nil {
+		t.Errorf("the deep-linked tab came back on screen: %v", err)
+	}
+}
+
 // The notify button's whole claim is "someone is listening", so with nobody
 // waiting it must be disabled and say so rather than looking live. The live
 // half — a real `aboard wait` released by pressing it — is TestTheNotifyButtonReleasesAWaitingSession.

@@ -142,11 +142,18 @@ own tab strip:
 http://localhost:<port>/?chrome=notabs#tab=bb13
 ```
 
-`?chrome=notabs` hides the tab button list and keeps everything else: the topbar, the
-`+` that opens the new-tab dialog, and the tab note. `?chrome=none` drops the whole
-head, for an embedding that wants the view alone. An unrecognised value is treated as
-`full`. It has to be asked for in the URL because the frame is cross-origin: a host
-cannot inject CSS into it or reach its DOM.
+`?chrome=notabs` hides the whole tab strip — the button list and the `+` — and keeps
+everything else: the topbar and the tab note. `?chrome=none` drops the whole head, for
+an embedding that wants the view alone. An unrecognised value is treated as `full`. It
+has to be asked for in the URL because the frame is cross-origin: a host cannot inject
+CSS into it or reach its DOM.
+
+A host that hides the strip should put a **New tab** button in its own toolbar and post
+`{ __aboard: 'newtab' }` into the frame when it is pressed. That opens the board's own
+new-tab sheet — the host is not expected to build one, and should not: the sheet knows
+every type this board has and what an empty state of each looks like. The board then
+switches to whatever gets created, so the host's sidebar highlight follows through the
+`active` message below with nothing extra to do.
 
 Navigation goes both ways. The host points the frame at `#tab=<id>` — a fragment
 change, so the page does not reload — and the board posts

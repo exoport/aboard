@@ -942,11 +942,29 @@ function applyEmbedderTheme(msg) {
   else document.dispatchEvent(new CustomEvent('aboard:theme', { detail: { kind: themeKind() } }));
 }
 
+// Everything an embedder may ASK this page to do, and it is a short list on
+// purpose. Authenticated by `e.source` rather than by origin, exactly like the
+// `active` message going the other way: a sandboxed `html` tab is a frame inside
+// this one and can reach `window.top`, so "who sent it" is the only question
+// worth asking.
+//
+// `newtab` opens the board's own New tab sheet. A host that hides the tab strip
+// with `?chrome=notabs` hides the `+` with it, so this is how its own button
+// reaches the one piece of the flow that must not move: the sheet knows every
+// type this board has and what an empty state of each looks like, and a host
+// reimplementing that would be a second copy of the board's schema living
+// somewhere with no way to notice it had gone stale.
+//
+// It OPENS the sheet and nothing more — the human still names the tab and picks
+// the type, and can still cancel. An embedder cannot create a tab, and it
+// certainly cannot start a session; the rule that nothing in the UI does that
+// holds across the frame boundary too.
 addEventListener('message', (e) => {
   if (window.parent === window || e.source !== window.parent) return;
   const msg = e.data;
-  if (!msg || typeof msg !== 'object' || msg.__aboard !== 'theme') return;
-  applyEmbedderTheme(msg);
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.__aboard === 'theme') { applyEmbedderTheme(msg); return; }
+  if (msg.__aboard === 'newtab') { openNewTabSheet(); return; }
 });
 
 /* ---------- what a tab is FOR ---------- */
@@ -2331,12 +2349,20 @@ const showBlurb = () => { $typeHint.textContent = TYPES[$typeSelect.value]?.blur
 $typeSelect.addEventListener('change', showBlurb);
 showBlurb();
 
-$addTab.addEventListener('click', () => {
+// A function rather than an inline handler because the `+` is no longer the only
+// way in: an embedder that owns the tab strip posts `{__aboard: 'newtab'}` and
+// lands here. One entry point, so the sheet cannot open two slightly different
+// ways. Declared, not assigned to a const, so the message listener defined
+// earlier in this module can name it.
+function openNewTabSheet() {
+  if ($dialog.open) { $nameInput.focus(); return; }
   $nameInput.value = '';
   showBlurb();
   $dialog.showModal();
   $nameInput.focus();
-});
+}
+
+$addTab.addEventListener('click', openNewTabSheet);
 document.getElementById('new-tab-cancel').addEventListener('click', () => $dialog.close());
 
 document.getElementById('new-tab-form').addEventListener('submit', async (e) => {

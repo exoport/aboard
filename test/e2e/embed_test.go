@@ -5,6 +5,7 @@ package e2e
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxschmitt/playwright-go"
 
@@ -21,10 +22,18 @@ import (
 
 /* ---------- ?chrome= ---------- */
 
-// `notabs` is what an embedder loads. The button list goes; everything a human
-// working inside that embedder still needs stays, because the alternative is
-// either stranding them or making every embedder reimplement the board's own
-// new-tab dialog.
+// `notabs` is what an embedder loads. The whole tab STRIP goes — the list and
+// the `+` with it — and everything a human working inside that embedder still
+// needs stays.
+//
+// The `+` used to stay, on the reasoning that hiding it would either strand the
+// human or make every embedder reimplement the board's new-tab dialog. That was
+// half right and it cost a whole row of vertical space: with the list gone the
+// button sat alone on a line of its own, in the one mode where the host has a
+// toolbar of its own to put it in. Reported on 2026-08-27 from the VS Code
+// panel. The other half of the old reasoning still holds and is now paid for
+// properly — the host does NOT reimplement anything, it posts
+// `{__aboard:'newtab'}` and the board opens its own sheet (see the test below).
 func TestChromeNotabsHidesTheStripAndKeepsEverythingElse(t *testing.T) {
 	s := openChrome(t, "chrome=notabs&tab=bb13")
 
@@ -40,8 +49,16 @@ func TestChromeNotabsHidesTheStripAndKeepsEverythingElse(t *testing.T) {
 	if n, err := s.page.Locator("#tabs .tab").Count(); err != nil || n == 0 {
 		t.Errorf("the shell stopped building the strip entirely (count %d, err %v) — chrome= is meant to hide it, not to fork the shell", n, err)
 	}
+	// The `+` goes with the list it belonged to, and for the same reason: this
+	// is the mode where the host owns the tab strip.
+	if err := expect.Locator(s.page.Locator("#add-tab")).ToBeHidden(); err != nil {
+		t.Errorf("the + button is still taking a row under chrome=notabs: %v", err)
+	}
+	if n, err := s.page.Locator("#add-tab").Count(); err != nil || n != 1 {
+		t.Errorf("the + button stopped being BUILT (count %d, err %v) — the newtab message opens the sheet it owns, so it has to exist", n, err)
+	}
 
-	for _, sel := range []string{"#add-tab", ".topbar", "#poke", "#tab-note"} {
+	for _, sel := range []string{".topbar", "#poke", "#tab-note"} {
 		if err := expect.Locator(s.page.Locator(sel)).ToBeVisible(); err != nil {
 			t.Errorf("%s did not survive chrome=notabs: %v", sel, err)
 		}
@@ -96,7 +113,9 @@ func TestAnUnknownChromeValueFallsBackToFull(t *testing.T) {
 func TestChromeAndTheDeepLinkSurviveASelfReload(t *testing.T) {
 	dev := startDevBoard(t)
 
-	s := openReady(t, dev.url, "chrome=notabs#tab=bb14", "#add-tab")
+	// Ready on `.topbar` rather than `#add-tab`: under notabs the + is hidden
+	// with the strip, and a hidden element is not something to wait for.
+	s := openReady(t, dev.url, "chrome=notabs#tab=bb14", ".topbar")
 	if err := expect.Locator(s.view("bb14")).ToBeVisible(); err != nil {
 		t.Fatalf("the deep link did not land: %v", err)
 	}
@@ -264,6 +283,75 @@ func TestARepaintIsNotATabChange(t *testing.T) {
 	}
 }
 
+/* ---------- {__aboard:'newtab'} ---------- */
+
+// A host that hides the strip with `?chrome=notabs` hides the `+` with it, so it
+// needs a way back to the one gesture that went missing. This is that way, and
+// the shape of it is the point: the host asks, the BOARD opens its own sheet.
+//
+// The alternative — the host building its own new-tab flow — needs the list of
+// types and an empty state for each, which is the board's schema living in a
+// second place with nothing to notice when it goes stale. The extension is a
+// viewer; this keeps it one.
+func TestAnEmbedderCanOpenTheBoardsNewTabSheet(t *testing.T) {
+	s := openWrapper(t)
+	frame := s.page.FrameLocator("#frame")
+
+	// The premise. If the + were reachable there would be nothing to fix.
+	if err := expect.Locator(frame.Locator("#add-tab")).ToBeHidden(); err != nil {
+		t.Fatalf("the + is visible under chrome=notabs, so this test is testing nothing: %v", err)
+	}
+	before := s.tabCount()
+
+	if _, err := s.page.Evaluate(
+		`() => document.getElementById('frame').contentWindow.postMessage({ __aboard: 'newtab' }, '*')`, nil); err != nil {
+		t.Fatalf("posting newtab into the frame: %v", err)
+	}
+
+	if err := expect.Locator(frame.Locator("#new-tab-dialog")).ToBeVisible(); err != nil {
+		t.Fatalf("the newtab message did not open the board's own sheet: %v", err)
+	}
+	// The board's sheet, with the board's own type list in it — not an empty
+	// shell the host would have to fill.
+	if n, err := frame.Locator("#new-tab-type option").Count(); err != nil || n == 0 {
+		t.Errorf("the sheet opened with no types in it (count %d, err %v)", n, err)
+	}
+
+	// It OPENS the sheet and stops. An embedder that could create a tab outright
+	// would be a host writing to the board with nobody having named anything.
+	if got := s.tabCount(); got != before {
+		t.Errorf("the newtab message created a tab on its own: %d tabs, was %d", got, before)
+	}
+	if err := frame.Locator("#new-tab-cancel").Click(); err != nil {
+		t.Fatalf("cancelling the sheet: %v", err)
+	}
+	if got := s.tabCount(); got != before {
+		t.Errorf("cancelling the sheet still left a tab behind: %d tabs, was %d", got, before)
+	}
+}
+
+// Same rule as the theme message, and it matters more here: this one draws a
+// MODAL. An `html` tab is a sandboxed frame that can reach `window.top`, so a
+// widget could otherwise pop the new-tab sheet over the board whenever it liked.
+func TestANewTabRequestFromSomewhereOtherThanTheParentIsIgnored(t *testing.T) {
+	s := openWrapper(t)
+	frame := s.page.FrameLocator("#frame")
+
+	// Posted from inside the board, so `e.source` is the board's own window and
+	// not its parent — the closest a test gets to a sibling frame or a pasted
+	// console line. It has to run in the FRAME's realm; posting from the wrapper
+	// would make the wrapper the source, which IS the parent.
+	board := s.boardFrame()
+	if _, err := board.Evaluate(`() => window.postMessage({ __aboard: 'newtab' }, '*')`); err != nil {
+		t.Fatalf("posting from inside the board: %v", err)
+	}
+	time.Sleep(settle)
+
+	if err := expect.Locator(frame.Locator("#new-tab-dialog")).ToBeHidden(); err != nil {
+		t.Errorf("a newtab request from a non-parent source opened the sheet: %v", err)
+	}
+}
+
 /* ---------- storage refused ---------- */
 
 // Inside a webview the board is a third-party frame, where storage is
@@ -312,17 +400,23 @@ func TestTheBoardWorksWhereStorageIsRefused(t *testing.T) {
 /* ---------- helpers ---------- */
 
 // openChrome opens a page whose tab strip is deliberately not on screen, so the
-// readiness check is the `+` button — which every chrome mode but `none` keeps.
+// readiness check is `.topbar` — the part of the head that every chrome mode but
+// `none` keeps.
+//
+// It was `#add-tab` until 2026-08-27, when `notabs` started hiding the whole
+// `.tabstrip` rather than just the list inside it. The `+` went with the strip,
+// so the readiness wait became a wait for something that will never be visible,
+// and every notabs test failed as "the board never came up".
 //
 // Then it waits for the strip to be BUILT, and that second wait is the one that
-// earns its place. `#add-tab` is in the static markup, so it is on screen before
+// earns its place. `.topbar` is in the static markup, so it is on screen before
 // the first fetch has even returned — and "no VISIBLE .tab" is trivially true of
 // a board that has not drawn its tabs yet. Without this, the notabs assertion
 // could pass against a shell with the CSS rule deleted, which is the one thing
 // it exists to catch.
 func openChrome(t *testing.T, query string) *session {
 	t.Helper()
-	ready := "#add-tab"
+	ready := ".topbar"
 	if strings.Contains(query, "chrome=none") {
 		// `none` hides the head the `+` lives in, so the view is the signal — the
 		// ACTIVE view, specifically.
@@ -376,7 +470,10 @@ func openWrapper(t *testing.T) *session {
 	if _, err := s.page.Goto(boardURL + "/e2e-embedder.html"); err != nil {
 		t.Fatalf("loading the embedder page: %v", err)
 	}
-	if err := s.page.FrameLocator("#frame").Locator("#add-tab").
+	// `.topbar h1`, not `#add-tab`: the frame is `?chrome=notabs`, where the +
+	// is hidden along with the strip it belongs to, and waiting for a hidden
+	// element to become visible fails as "the board never came up".
+	if err := s.page.FrameLocator("#frame").Locator(".topbar h1").
 		WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible}); err != nil {
 		t.Fatalf("the board never came up inside the embedder: %v", err)
 	}
@@ -421,7 +518,9 @@ func openSandboxedWrapper(t *testing.T, query string) *session {
 	if _, err := s.page.Goto(boardURL + "/e2e-sandboxed.html"); err != nil {
 		t.Fatalf("loading the sandboxed wrapper: %v", err)
 	}
-	if err := s.page.FrameLocator("#frame").Locator("#add-tab").
+	// `.topbar h1` for the same reason openWrapper uses it: this frame is
+	// `chrome=notabs`, where the + is hidden along with the strip.
+	if err := s.page.FrameLocator("#frame").Locator(".topbar h1").
 		WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible}); err != nil {
 		t.Fatalf("the board never came up inside the sandboxed frame: %v", err)
 	}
@@ -436,6 +535,18 @@ func openSandboxedWrapper(t *testing.T, query string) *session {
 // document and the board never saw it. The symptom was an `active` message that
 // never arrived, which reads exactly like the feature being broken. The click
 // target is the board's own <h1>, which has no handler of its own.
+// tabCount is how many tabs the BOARD is showing, read from inside the frame.
+// The strip is hidden under notabs but it is still built, which is what makes it
+// a usable count here — and is itself the thing TestChromeNotabs… pins.
+func (s *session) tabCount() int {
+	s.t.Helper()
+	n, err := s.page.FrameLocator("#frame").Locator("#tabs .tab").Count()
+	if err != nil {
+		s.t.Fatalf("counting the tabs inside the frame: %v", err)
+	}
+	return n
+}
+
 func (s *session) pressInFrame(t *testing.T, key string) {
 	t.Helper()
 	if err := s.page.FrameLocator("#frame").Locator(".topbar h1").Click(); err != nil {

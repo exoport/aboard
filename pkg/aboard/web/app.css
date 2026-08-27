@@ -183,8 +183,15 @@ body {
  * `ui` catalog already has a `tabs` component, saved from this only by its
  * `uic-` prefix), and a chrome switch that silently blanked part of a tab's
  * contents would be the worst kind of bug — invisible in the mode everyone
- * develops in. */
-body[data-chrome="notabs"] .board-head .tabs { display: none; }
+ * develops in.
+ *
+ * `notabs` hides the whole `.tabstrip`, not just `.tabs` inside it. It used to
+ * hide only the list, which left the `+` button alone on a row of its own —
+ * a full line of vertical space, in the one mode where the host is already
+ * offering its own way to add a tab, and the only thing on screen suggesting
+ * the board still owned a tab strip. A host that takes the strip takes the
+ * button with it: see the `newtab` message in aboard.html. */
+body[data-chrome="notabs"] .board-head .tabstrip { display: none; }
 body[data-chrome="none"] .board-head { display: none; }
 
 .topbar {
@@ -536,16 +543,26 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 /* What a tab is FOR, above the view: the agent's brief statement of the tab's
    purpose, which the human may edit. Quiet by default — it is context, not a
    notice — and only present when it has been written. What they want DONE about
-   the tab is the strip below, .tab-asks. */
+   the tab is the strip below, .tab-asks.
+
+   A CAPTION, not a strip, and that is the whole point of this rule. It used to
+   carry a fill, a coloured left bar and a rounded box — the same three things
+   .tab-asks and .banner carry — so the eye read all three as notices stacked on
+   top of each other and the human could not tell the standing description of the
+   tab from something that had just happened. Reported on 2026-08-27, in those
+   words: it must not be confused with a notification.
+
+   Weight is what separates them now: this is a plain line under a hairline rule,
+   .tab-asks keeps its bar and fill, .banner keeps its full border. The label
+   keeps --agent because that is still the colour of everything an agent says;
+   what it loses is the SHAPE of a notice. */
 .tab-note {
   display: flex;
   align-items: baseline;
   gap: 9px;
   margin-top: 10px;
-  padding: 6px 11px;
-  border-left: 2px solid var(--agent);
-  background: var(--sunken);
-  border-radius: 0 3px 3px 0;
+  padding: 2px 1px 7px;
+  border-bottom: 1px solid var(--line);
   font-size: 0.85rem;
   line-height: 1.5;
 }

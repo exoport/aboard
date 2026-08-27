@@ -124,15 +124,21 @@ attribute.
 | value    | effect                                                                            |
 | -------- | ----------------------------------------------------------------------------------- |
 | `full`   | Everything. What an unparameterised URL gets, and what an **unrecognised value** gets — a typo that blanks the UI would be worse than one that does nothing. |
-| `notabs` | Hides the tab button list. The topbar (notify button, version badge), the `+` and the tab note all stay. |
+| `notabs` | Hides the whole tab strip — the button list **and the `+`**. The topbar (notify button, version badge) and the tab note stay. |
 | `none`   | Hides `.board-head` entirely — the view and nothing around it.                     |
 
 This exists for a host that embeds the board and draws its own tab list — a VS Code
 panel, say. It has to be asked for in the URL: the frame is cross-origin, so an
 embedder can neither inject CSS nor reach the DOM, and chrome is a viewer's business
-rather than the board's. `notabs` keeps the `+` on purpose, because it is the only
-trigger for the new-tab dialog: hiding it either strands a human working inside the
-embedder or forces every embedder to reimplement a dialog that belongs to the board.
+rather than the board's.
+
+`notabs` used to keep the `+`, on the reasoning that hiding it would either strand a
+human working inside the embedder or force every embedder to reimplement a dialog that
+belongs to the board. The second half of that is still true and is now paid for
+properly — the embedder posts `newtab` and the BOARD opens its own sheet (below) — while
+the first half turned out to cost more than it was worth: with the list gone the `+` sat
+alone on a row of its own, a whole line of a small panel, in the one mode where the host
+has a toolbar to put it in. Changed 2026-08-27.
 
 It composes with the deep link (`?chrome=notabs#tab=bb71`) and survives the board's
 own [self-reload](../how-to/run-in-vscode.md#when-the-page-reloads-itself), which
@@ -168,9 +174,33 @@ for the same data is a bug factory.
 
 ### What an embedder may post to the shell
 
-One message, in the other direction: a palette. A host that owns the window — a VS Code
-panel deriving colours from the editor's own theme — hands the board its colours so it
-belongs there instead of being a dark rectangle inside a light IDE.
+Two messages, in the other direction, and both are **authenticated by
+`event.source === window.parent`** — the mirror of the rule the `active` message above
+asks its receiver to apply, and the same rule an `html` tab's bridge uses on messages
+from ITS parent. A message from any other window — a sibling frame, an opener, a
+sandboxed `html` tab reaching `window.top`, a script in the console — is ignored.
+
+#### `newtab`
+
+```js
+frame.contentWindow.postMessage({ __aboard: 'newtab' }, '*');
+```
+
+Opens the board's own New tab sheet. This is what a host that hid the strip with
+`?chrome=notabs` uses to put the `+` in its own toolbar.
+
+**It opens the sheet and does nothing else.** The human still names the tab, picks the
+type and can still cancel; an embedder cannot create a tab, and the board switches to
+whatever is created exactly as it does when the board's own `+` was pressed. The sheet
+stays on the board on purpose: it knows every type this board has and what an empty
+state of each looks like, and a host rebuilding that would be keeping a copy of the
+board's schema with no way to notice it had gone stale.
+
+#### `theme`
+
+A palette. A host that owns the window — a VS Code panel deriving colours from the
+editor's own theme — hands the board its colours so it belongs there instead of being a
+dark rectangle inside a light IDE.
 
 ```js
 frame.contentWindow.postMessage({
@@ -179,11 +209,6 @@ frame.contentWindow.postMessage({
   tokens: { '--bg': '#fffdf7', '--text': '#1a1a1a' },
 }, '*');
 ```
-
-**Authenticated by `event.source === window.parent`**, the mirror of the rule the
-`active` message above asks its receiver to apply, and the same rule an `html` tab's
-bridge uses on messages from ITS parent. A message from any other window — a sibling
-frame, an opener, a script in the console — is ignored.
 
 `tokens` keys must be among the token names `aboard capabilities` reports under `theme`;
 values must be a hex colour, a CSS colour keyword or a function call such as

@@ -263,6 +263,23 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: a tab's purpose strip is no longer dressed as a notification.** "THIS TAB IS
+  FOR" carried a fill, a coloured left bar and a rounded box — the same three things
+  `.tab-asks` and the change banner carry — so all three read as notices stacked on each
+  other and the standing description of a tab was indistinguishable from something that
+  had just happened. It is a caption now: a plain line under a hairline rule, with only
+  the label keeping `--agent`. The other two are unchanged and still look like notices,
+  which is the whole point — weight now says what kind of thing each one is.
+- **feat: a host that hides the tab strip can ask for the new-tab sheet.**
+  `?chrome=notabs` now hides the whole strip including the `+`, which used to sit alone
+  on a row of its own — a full line of a small panel, in the one mode where the host has
+  a toolbar to put the button in. In exchange the shell accepts one new message from its
+  parent, `{__aboard: 'newtab'}`, which opens the board's **own** sheet: the human still
+  names the tab, picks the type and can cancel, and the board switches to whatever is
+  created. Authenticated by `event.source === window.parent` like the theme message —
+  an `html` tab can reach `window.top`, and this one draws a modal. The sheet stays on
+  the board deliberately: it knows every type and every empty state, and a host
+  rebuilding that would keep a copy of the board's schema with no way to notice drift.
 - **fix: the board stops asking for a favicon it was refusing to serve.** With no
   `<link rel="icon">` in the shell, every browser asked for `/favicon.ico` on its own; that
   path is not on the server's static allow-list, so the answer was `403` and the console
