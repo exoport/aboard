@@ -89,6 +89,21 @@ Everything else in that review is dispositioned in
   would silently break a developer who symlinks part of their own web tree, which
   is a real workflow and the likelier outcome. Worth doing alongside anything that
   makes `--dev` reachable by someone other than its operator.
+- **A poke does not record where it came from, and the board now has three
+  buttons that send one.** `lastPoke` is `{event, at, by}` and `by` is always
+  `"human"` — so when a session parked on `aboard wait` is released, nothing
+  says whether the human pressed the board's own topbar notify button, the VS
+  Code extension's view-title Nudge, or its status-bar item. Measured
+  2026-08-27, releasing a real session from a real panel: the released agent
+  could tell that it had been poked and not by what. Harmless for the feature —
+  a release is a release — and it cost something real exactly once: a
+  verification row about the extension's button could not be ticked from the
+  evidence, because the board's own button would have produced an identical
+  record. The fix is small and has a shape already: writes carry `__origin`
+  (`"vscode"`, `"cli"`), so `/poke` would take the same field and `lastPoke`
+  would carry it. Worth doing with anything else that touches the notify
+  channel; not worth a commit of its own, since the only reader today is a
+  human deciding whether they may tick a box.
 - **`POST /log?tab=bb999` creates a sidecar log for a tab that does not exist.**
   Each file is capped and rotated, so it is bounded in SIZE; what is unbounded is
   the NUMBER of files, one per distinct well-formed id. Not fixed because
