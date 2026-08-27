@@ -283,6 +283,31 @@ mount remains its own §10 entry. What landed, and what it cost:
   that wrongly excludes something is invisible until then. Two new unticked rows on the
   extension's verification list say exactly that.
 
+### 10r. Reported from the installed panel: the theme ramp, the purpose strip, the `+`  ☑ `4102353` + aboard_vscode `03d6506` (2026-08-27, after the human installed the `.vsix` and ran it)
+
+Four things, and the first is the one worth keeping.
+
+- **The panel's palette did not match the browser's, because the depth ramp was
+  BORROWED.** `bg → sunken → surface → raised` is an ORDER; VS Code's registered colours
+  have no ordering relationship to each other. Measured on the human's own theme (FireFly
+  Pro): `--sunken` came from `input.background` `#000000`, BELOW the `#0a0f17` ground, and
+  `--raised` came from `button.secondaryBackground`, which that theme never sets — so VS
+  Code's default mid grey `#3a3d41` decided it, and `.icon-btn` paints with `--raised`.
+  Every Edit/Add/Dismiss/Fit button in the panel was a light grey pill. The three layers
+  are derived from `--bg` now, with app.css's own steps applied equally to r/g/b so the
+  editor's tint survives; hues and the ground still follow the editor. The ordering
+  property has its own test over eight grounds and both variants.
+- **"THIS TAB IS FOR" read as a notification**, because it wore the same fill, left bar
+  and box as `.tab-asks` and `.banner`. A caption now — the label keeps `--agent`, the
+  shape goes. Shot and looked at rather than reasoned about.
+- **`?chrome=notabs` now hides the whole `.tabstrip`**, not just `.tabs`, so the `+` stops
+  costing a row of the panel; the host's own New Tab button posts `{__aboard:'newtab'}`
+  and the BOARD opens its own sheet. Second inbound message, first that makes the board
+  do something, guarded by `e.source === window.parent` because it draws a modal.
+- **"Creating a tab must switch to it" was already true.** `TestCreatingATabSwitchesToIt`
+  passed on its first run, including the deep-link case that could plausibly have broken
+  it — which is now the case it covers, because that is the shape the panel always uses.
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
