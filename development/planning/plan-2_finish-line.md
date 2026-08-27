@@ -216,6 +216,8 @@ Chromium, which flaked once and would again.
 
 ### 10k. The two new recipes are a library in `recipes/`, not built-ins  ☑ `ca7b7e4` (the human's decision: embedded = small basic functionality; `recipes/` = the curated library; users write their own or copy from it)
 
+### 10l. Themes: a dark/light switch, `.aboard/theme.json`, no product name in the palette  ☑ `380309f` (capsHash → `6d8593b1`; the embedder theme message is the hook for the extension)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
