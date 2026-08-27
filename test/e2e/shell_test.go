@@ -378,6 +378,44 @@ func TestTheNewTabSheetSaysWhatEachTypeIs(t *testing.T) {
 	if err := expect.Locator(blurb).ToContainText("image"); err != nil {
 		t.Errorf("the description did not follow the choice to markup: %v", err)
 	}
+
+	// And the sheet does not change SIZE as you read it. It was `min-width`, so
+	// the modal sized itself to its widest line — which is the description — and
+	// picking a type slid the whole dialog sideways under the cursor. Every type,
+	// because the widest blurb is the one that would prove it.
+	types := []string{"dag", "kanban", "markup", "html", "stack", "ui", "notes", "gate"}
+	widths := make([]float64, 0, len(types))
+	heights := make([]float64, 0, len(types))
+	for _, ty := range types {
+		if _, err := s.page.Locator("#new-tab-type").SelectOption(playwright.SelectOptionValues{
+			Values: &[]string{ty},
+		}); err != nil {
+			t.Fatalf("choosing %s: %v", ty, err)
+		}
+		var box struct{ W, H float64 }
+		s.evalJSON(&box, `() => {
+			const r = document.getElementById('new-tab-dialog').getBoundingClientRect();
+			return { W: r.width, H: r.height };
+		}`)
+		widths = append(widths, box.W)
+		heights = append(heights, box.H)
+	}
+	for i := range widths {
+		if widths[i] != widths[0] {
+			t.Errorf("the sheet is %.0fpx wide for one type and %.0fpx for another — its width follows the description",
+				widths[0], widths[i])
+			break
+		}
+	}
+	// Height is allowed to move a little — a three-line floor cannot cover a
+	// description that genuinely needs four — but not by half the dialog.
+	for i := range heights {
+		if diff := heights[i] - heights[0]; diff > 40 || diff < -40 {
+			t.Errorf("the sheet's height swings %.0fpx between types (%.0f vs %.0f) — the Create button walks while you read",
+				diff, heights[0], heights[i])
+			break
+		}
+	}
 }
 
 // Making a tab and then having to go and find it is the wrong end of the

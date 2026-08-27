@@ -2553,6 +2553,27 @@ if (!new URLSearchParams(location.search).has('nosse')) {
   });
 }
 
+// The sticky head's height, published as a custom property.
+//
+// `.board-head` is sticky at the top of the scrolling document, and a renderer
+// that wants a sticky strip of its own — markup's toolbar, so the tools stay
+// reachable on a tab with six screenshots on it — has to sit BELOW it or it
+// slides underneath. That offset is not a constant: the tab strip wraps to two
+// rows on a narrow board, the note and requests strips come and go, and a change
+// banner appears and is dismissed.
+//
+// So it is measured and republished whenever it moves. One observer for the
+// whole shell rather than a guess in each renderer, and the value is a CSS
+// variable so nothing has to listen for it.
+const headEl = document.querySelector('.board-head');
+if (headEl && typeof ResizeObserver === 'function') {
+  const publish = () => {
+    document.documentElement.style.setProperty('--head-h', headEl.offsetHeight + 'px');
+  };
+  new ResizeObserver(publish).observe(headEl);
+  publish();
+}
+
 // Deep links. `?tab=` has always worked; `#tab=bb71&node=bb57` addresses a node
 // INSIDE a tab, which is what a reference in prose or a chat message actually
 // needs — "the node called auth" becomes a click. The fragment is per-viewer

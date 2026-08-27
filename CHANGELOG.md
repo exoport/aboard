@@ -263,6 +263,28 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: five follow-ups on the markup and new-tab work, all reported from using it.**
+  The new-tab sheet had `min-width`, so it sized itself to its widest line — which is the
+  type description — and picking a type slid the whole modal sideways under the cursor.
+  Fixed width now, with the description in its own block under the select and a
+  three-line floor so the Create button stops walking up and down.
+  A markup image was `width: 100%`, which fixed "the row is half empty" by creating "a
+  200px screenshot blown up to 1300px of blur". The contract is a CEILING: as wide as the
+  row allows, as wide as the picture actually is, whichever is smaller.
+  Zoom goes **below** 100% (to 20%) as well as above it, and a zoomed-out image centres
+  itself; it is also offered on read-only images now, which is exactly the case a
+  reference pane beside a working copy is for.
+  The crop selection is **ephemeral**: it disappears the moment it has been copied,
+  instead of sitting on the picture looking like a mark you cannot select or delete.
+  And the paste bar and tools are **sticky**, so on a tab with six screenshots the tools
+  are not a scroll away from the picture you are working on. The offset comes from a new
+  `--head-h` custom property the shell measures and republishes, because the height of
+  its own sticky head changes when the tab strip wraps or a banner appears.
+  One more, found by the test rather than reported: **a copy now answers the press
+  immediately**. Everything after the click is a promise, and `navigator.clipboard.write`
+  does not always reject when it cannot proceed — on an unfocused document Chromium
+  leaves it pending — so a press could produce no picture, no error and no message. It
+  says "copying…" synchronously, and the write is raced against a 3s timeout.
 - **feat: a markup tab is a stack of SLICES, and each image can be zoomed and copied.**
   `capsHash` moves to `55dd4182`.
   **A slice per image**: caption and buttons, the picture, then that picture's own marks.

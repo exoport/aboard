@@ -184,6 +184,78 @@ func TestHidingMarksIsPerViewer(t *testing.T) {
 // markup.spec.json), which is what makes an unknown colour name a warning rather
 // than a mark that renders in no colour at all. Five swatches, and choosing one
 // changes what the NEXT mark is drawn in — a per-viewer preference, never saved.
+// The paste bar and the tools stay on screen while you scroll through the
+// images. With one image they were always visible; with six they were a scroll
+// away from whichever picture you were working on, so picking a colour meant
+// scrolling up and then finding your place again. Reported 2026-08-27.
+//
+// The offset is the interesting part: the shell's own head is sticky above this,
+// and its height changes when the tab strip wraps or a banner appears — so
+// aboard.html measures it and publishes `--head-h`, and this asserts the tools
+// land BELOW the head rather than under it.
+func TestTheMarkupToolsStayOnScreenWhileScrolling(t *testing.T) {
+	id := makeScratchTab(t, "Long markup")
+
+	const count = 5
+	images := make([]any, 0, count)
+	for i := range count {
+		images = append(images, map[string]any{
+			"id": fmt.Sprintf("im%d", i), "src": "assets/mock-screen.svg",
+			"caption": fmt.Sprintf("shot-%d.svg", i),
+		})
+	}
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{"layout": "stacked", "images": images}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+
+	top := func(sel string) float64 {
+		var y float64
+		s.evalJSON(&y, `(q) => document.querySelector(q).getBoundingClientRect().top`, sel)
+		return y
+	}
+	tools := `[data-tab="` + id + `"] .markup-sticky`
+
+	// Measured at TWO depths, not against the resting position. A sticky element
+	// does travel with the page until it reaches its pin — comparing "before
+	// scrolling" with "after" fails on correct behaviour, which is how this
+	// assertion was written the first time.
+	scrollTo := func(y int) float64 {
+		if _, err := s.page.Evaluate(fmt.Sprintf(`() => window.scrollTo(0, %d)`, y), nil); err != nil {
+			t.Fatalf("scrolling: %v", err)
+		}
+		var at float64
+		s.evalJSON(&at, `() => window.scrollY`)
+		return at
+	}
+	if at := scrollTo(2500); at < 1000 {
+		t.Fatalf("the page only scrolled %.0fpx — this tab is not long enough to test stickiness", at)
+	}
+	pinned := top(tools)
+	deeper := scrollTo(4500)
+	after := top(tools)
+
+	if after < -1 {
+		t.Errorf("the tools scrolled off the top (%.0f) — they are not sticky", after)
+	}
+	if diff := after - pinned; diff > 2 || diff < -2 {
+		t.Errorf("the tools moved %.0fpx between scroll %.0f and %.0f (%.0f then %.0f) — they are still travelling",
+			diff, 2500.0, deeper, pinned, after)
+	}
+
+	// And below the shell's own sticky head, not underneath it. This is what
+	// --head-h buys; with `top: 0` the tools would slide under the tab strip.
+	head := top(".board-head")
+	var headH float64
+	s.evalJSON(&headH, `() => document.querySelector('.board-head').getBoundingClientRect().height`)
+	if after < head+headH-2 {
+		t.Errorf("the tools sit at %.0f, inside the head which ends at %.0f — they are sticking to the wrong thing",
+			after, head+headH)
+	}
+}
+
 // A slice per image: caption and buttons, the picture, then THAT picture's own
 // marks. Reported 2026-08-27 — with several screenshots on a tab, one table at
 // the bottom meant scrolling past every other image to read a note and back up
@@ -422,13 +494,42 @@ func TestTheCropToolSelectsWithoutMarking(t *testing.T) {
 	// drawn into is not tainted and toBlob() returns. A cross-origin image would
 	// fail here with a SecurityError and no amount of care in this code would
 	// help.
+	// Focus first. Chromium will not complete a clipboard write for a document
+	// that does not have focus, and the suite drives several contexts through one
+	// browser — so which page holds focus at this instant is not this test's to
+	// assume. Without it the copy hung about one run in six, and the board's own
+	// timeout (see copyRect) turned that into a visible failure rather than a
+	// hang, which is right for a human and still a failed test here.
+	if err := s.page.BringToFront(); err != nil {
+		t.Fatalf("focusing the page: %v", err)
+	}
 	if err := region.Click(); err != nil {
 		t.Fatalf("clicking Copy region: %v", err)
 	}
 	status := view.Locator(".markup-copy-status")
+	// The press ANSWERS, and it answers at once. Asserted separately from the
+	// result because the two can fail for entirely different reasons: this one
+	// says the button is wired, the one below says the clipboard worked.
+	if err := expect.Locator(status).Not().ToHaveText(""); err != nil {
+		t.Fatalf("pressing Copy region said nothing at all — the press was swallowed: %v", err)
+	}
 	if err := expect.Locator(status).ToContainText("copied"); err != nil {
+		var diag map[string]any
+		s.evalJSON(&diag, `(q) => {
+			const btns = [...document.querySelectorAll(q + ' [data-gesture="copy-region"]')];
+			const stats = [...document.querySelectorAll(q + ' .markup-copy-status')];
+			const views = [...document.querySelectorAll('[data-view="markup"]')];
+			return {
+				buttons: btns.length,
+				disabled: btns.map((b) => b.disabled),
+				statuses: stats.length,
+				statusText: stats.map((e) => e.textContent),
+				markupViews: views.length,
+				crops: document.querySelectorAll(q + ' .markup-crop').length,
+			};
+		}`, `[data-tab="`+id+`"]`)
 		got, _ := status.TextContent()
-		t.Fatalf("the copy did not reach the clipboard (status: %q): %v", got, err)
+		t.Fatalf("the copy did not reach the clipboard (status: %q) diag=%+v: %v", got, diag, err)
 	}
 	// It says WHAT it copied, because "copied" alone cannot be checked by the
 	// person who pressed it until they paste somewhere else.
@@ -442,38 +543,90 @@ func TestTheCropToolSelectsWithoutMarking(t *testing.T) {
 		got, _ := status.TextContent()
 		t.Errorf("the copy reported a failure: %q", got)
 	}
+
+	// And the selection is gone the moment it has done its job. A dashed box that
+	// outlives the copy sits on the picture looking like a mark you cannot
+	// select, note or delete — which is how it was reported.
+	if err := expect.Locator(view.Locator(".markup-crop")).ToHaveCount(0); err != nil {
+		t.Errorf("the crop rectangle is still on the image after being copied: %v", err)
+	}
+	if err := expect.Locator(region).ToBeDisabled(); err != nil {
+		t.Errorf("Copy region is still live with nothing selected: %v", err)
+	}
+	// Still not a mark, after all that.
+	if err := expect.Locator(view.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(0); err != nil {
+		t.Errorf("copying turned the crop rectangle into a mark: %v", err)
+	}
 }
 
-// An image uses the width it is given. `.markup-stage` was capped at 900px, so
-// on a wide board or a maximised panel most of the row sat empty while the thing
-// you are trying to POINT AT was drawn small — reported 2026-08-27 with a
-// screenshot of a 1600px panel half full.
+// An image uses the width it is given, and NEVER more than its own.
 //
-// Marks are stored as fractions of the image, so nothing about them depends on
-// the scale; the cap bought a smaller picture and nothing else.
-func TestAMarkupImageUsesTheWidthItIsGiven(t *testing.T) {
-	id := makeScratchTab(t, "Wide image")
+// Two reports a day apart, and the fix for the first overshot the second.
+// `.markup-stage` was capped at 900px, so on a wide board most of the row sat
+// empty while the thing you are pointing AT was drawn small. Removing the cap
+// left the image at `width: 100%`, which stretched a 200px screenshot across
+// 1300px of blur — "a small image is shown huge".
+//
+// So the contract is a CEILING, not a target: as wide as the row allows, as wide
+// as the picture actually is, whichever is smaller. Zoom is how you deliberately
+// go past it. Asserted at two viewport widths, because either one alone shows
+// only half of the rule.
+func TestAMarkupImageFillsTheRowWithoutBeingUpscaled(t *testing.T) {
+	id := makeScratchTab(t, "Sized image")
 
 	d := readDoc(t)
 	d.tab(t, id)["type"] = "markup"
 	d.tab(t, id)["state"] = map[string]any{
 		"layout": "stacked",
-		"images": []any{map[string]any{"id": "only", "src": "assets/mock-screen.svg", "caption": "wide.svg"}},
+		"images": []any{map[string]any{"id": "only", "src": "assets/mock-screen.svg", "caption": "900px.svg"}},
 	}
 	apply(t, d)
 
 	s := open(t, "tab="+id)
-	var stage, view float64
-	s.evalJSON(&stage, `(q) => document.querySelector(q).getBoundingClientRect().width`,
-		`[data-tab="`+id+`"] .markup-stage`)
-	s.evalJSON(&view, `(q) => document.querySelector(q).getBoundingClientRect().width`,
-		`[data-tab="`+id+`"] .markup-images`)
+	measure := func() (w, natural, row float64) {
+		var out struct{ W, Natural, Row float64 }
+		s.evalJSON(&out, `(q) => {
+			const img = document.querySelector(q + ' .markup-img');
+			const row = document.querySelector(q + ' .markup-images');
+			return {
+				W: img.getBoundingClientRect().width,
+				Natural: img.naturalWidth,
+				Row: row.getBoundingClientRect().width,
+			};
+		}`, `[data-tab="`+id+`"]`)
+		return out.W, out.Natural, out.Row
+	}
 
-	// The suite runs at 1400px, so a 900px cap is unmissable here. Compared
-	// against the row it sits in rather than a constant: the assertion is "it uses
-	// what it is given", not "it is at least N pixels".
-	if stage < view-2 {
-		t.Errorf("the image stage is %.0fpx inside a %.0fpx row — something is still capping it", stage, view)
+	// Wide: the row is bigger than the picture, so the picture stays its own
+	// size. This is the half that regressed.
+	w, natural, row := measure()
+	if row <= natural {
+		t.Fatalf("the row (%.0f) is not wider than the image (%.0f), so this cannot test upscaling", row, natural)
+	}
+	if w > natural+1 {
+		t.Errorf("a %.0fpx image was blown up to %.0fpx to fill a %.0fpx row", natural, w, row)
+	}
+
+	// Narrow: the picture is bigger than the row, so it comes down to fit. This
+	// is the half the 900px cap used to break.
+	if err := s.page.SetViewportSize(700, 900); err != nil {
+		t.Fatalf("narrowing the viewport: %v", err)
+	}
+	w, natural, row = measure()
+	if row >= natural {
+		t.Fatalf("at 700px the row (%.0f) is still wider than the image (%.0f)", row, natural)
+	}
+	if w > row+1 {
+		t.Errorf("a %.0fpx image overflows a %.0fpx row, at %.0fpx wide", natural, row, w)
+	}
+	// The stage draws a 1px border on each side, so a picture that fills the row
+	// is `row - 2` wide and not `row`. Stated rather than absorbed into a fuzzy
+	// tolerance: a test that allows 4px of slack would also pass a picture that
+	// was 4px short for a reason nobody intended.
+	const stageBorders = 2
+	if w < row-stageBorders-1 {
+		t.Errorf("the image is %.0fpx inside a %.0fpx row (less than %.0f) — it is not using the width it has",
+			w, row, row-stageBorders)
 	}
 }
 

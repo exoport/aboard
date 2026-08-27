@@ -64,7 +64,9 @@ export function mountMarkup(root, ctx) {
   // fractions. NOT a mark: it is never given an id, never written, and never
   // survives a click elsewhere. It exists to be copied.
   const cropSel = new Map();
-  const MIN_ZOOM = 1;
+  // Below 100% as well as above it: a screenshot that is taller than the window
+  // is unreadable at 1:1 and there was no way to pull back from it.
+  const MIN_ZOOM = 0.2;
   const MAX_ZOOM = 8;
 
   function zoomOf(imageId) {
@@ -78,6 +80,18 @@ export function mountMarkup(root, ctx) {
   function clampPan(rec, view) {
     const w = rec.stageEl.clientWidth;
     const h = rec.stageEl.clientHeight;
+    // Zoomed IN: the visible window has to stay inside the picture, or panning
+    // ends on an empty box with no way back but Fit.
+    //
+    // Zoomed OUT: there is nothing to pan to, and the picture is smaller than
+    // its frame — so it is centred rather than pinned to a corner, which is what
+    // every image viewer does and the only arrangement that does not look like a
+    // layout bug.
+    if (view.z < 1) {
+      view.tx = (w - w * view.z) / 2;
+      view.ty = (h - h * view.z) / 2;
+      return view;
+    }
     const maxX = w * (view.z - 1);
     const maxY = h * (view.z - 1);
     view.tx = Math.min(0, Math.max(-maxX, view.tx));
@@ -127,6 +141,19 @@ export function mountMarkup(root, ctx) {
   // an AGENT had put in assets/, which made "look at this" something only one
   // side could say. A pasted screenshot with two circles on it is the fastest
   // bug report there is.
+  // The paste bar and the tools, stuck to the top of the scroll.
+  //
+  // With one image they were always on screen; with six they were a scroll away
+  // from whichever picture you were working on, so choosing a colour meant
+  // scrolling up and finding your place again. Reported 2026-08-27.
+  //
+  // Offset by --head-h, which aboard.html measures and republishes: the shell's
+  // own head is sticky above this, and its height changes when the tab strip
+  // wraps or a banner appears. A constant here would be right at one width.
+  const stickyEl = document.createElement('div');
+  stickyEl.className = 'markup-sticky';
+  panel.append(stickyEl);
+
   const intakeEl = document.createElement('div');
   intakeEl.className = 'markup-intake';
   const intakeHint = document.createElement('span');
@@ -135,11 +162,11 @@ export function mountMarkup(root, ctx) {
   const intakeStatus = document.createElement('span');
   intakeStatus.className = 'markup-intake-status mono';
   intakeEl.append(intakeHint, intakeStatus);
-  panel.append(intakeEl);
+  stickyEl.append(intakeEl);
 
   const toolbarEl = document.createElement('div');
   toolbarEl.className = 'toolbar';
-  panel.append(toolbarEl);
+  stickyEl.append(toolbarEl);
 
   const toolLabel = document.createElement('span');
   toolLabel.className = 'toolbar-label';
@@ -181,7 +208,7 @@ export function mountMarkup(root, ctx) {
 
   const colorToolbarEl = document.createElement('div');
   colorToolbarEl.className = 'toolbar';
-  panel.append(colorToolbarEl);
+  stickyEl.append(colorToolbarEl);
 
   const colorLabel = document.createElement('span');
   colorLabel.className = 'toolbar-label';
@@ -1180,8 +1207,14 @@ export function mountMarkup(root, ctx) {
     // Zoom lives on the image's own head row rather than the tab toolbar,
     // because with a slice per image there is no such thing as "the" image any
     // more — each one is zoomed on its own.
+    // Zoom is offered on EVERY image, markable or not. A read-only reference
+    // pane — annotatable: false — is exactly the thing you want to magnify while
+    // you draw on the one beside it, and gating zoom behind "can be marked"
+    // would take it away from the case it is most useful in. Panning still needs
+    // the svg, so a reference image zooms from the buttons and the wheel and
+    // centres itself; that is enough for a reference.
     let zoomLabel = null;
-    if (annotatable) {
+    {
       const outBtn = ctl('zoom-out');
       outBtn.addEventListener('click', () => {
         const rec = imageRecords.get(imageId);
@@ -1276,26 +1309,26 @@ export function mountMarkup(root, ctx) {
       svgEl.addEventListener('pointermove', (evt) => onPointerMove(svgEl, evt));
       svgEl.addEventListener('pointerup', (evt) => onPointerUp(svgEl, evt));
       svgEl.addEventListener('pointercancel', onPointerCancel);
-
-      // Wheel to zoom, on the STAGE rather than the svg, so it works over the
-      // failure message and the padding too. `passive: false` because the whole
-      // point is to stop the page scrolling under it — a wheel over an image
-      // that scrolled the board instead would make zoom unusable at the exact
-      // moment it matters, at the bottom of a long tab.
-      stageEl.addEventListener('wheel', (evt) => {
-        if (!evt.ctrlKey && !evt.metaKey && !stageEl.dataset.wheelZoom) {
-          // Plain wheel scrolls the page. Zoom is Ctrl/Cmd+wheel, the same
-          // gesture every image viewer and every editor already uses, so a wheel
-          // over a tall tab still scrolls it.
-          return;
-        }
-        evt.preventDefault();
-        const rec = imageRecords.get(imageId);
-        if (!rec) return;
-        const box = stageEl.getBoundingClientRect();
-        zoomAt(rec, evt.deltaY < 0 ? 1.15 : 1 / 1.15, evt.clientX - box.left, evt.clientY - box.top);
-      }, { passive: false });
     }
+
+    // Wheel to zoom, outside the annotatable guard for the same reason the
+    // buttons are: a read-only reference is a thing you magnify. On the STAGE
+    // rather than the svg, so it works over the failure message and the padding
+    // too — and a non-annotatable image has no svg at all. `passive: false`
+    // because the whole point is to stop the page scrolling under it.
+    stageEl.addEventListener('wheel', (evt) => {
+      if (!evt.ctrlKey && !evt.metaKey) {
+        // Plain wheel scrolls the page. Zoom is Ctrl/Cmd+wheel, the gesture
+        // every image viewer and every editor already uses, so a wheel over a
+        // tall tab still scrolls it.
+        return;
+      }
+      evt.preventDefault();
+      const rec = imageRecords.get(imageId);
+      if (!rec) return;
+      const box = stageEl.getBoundingClientRect();
+      zoomAt(rec, evt.deltaY < 0 ? 1.15 : 1 / 1.15, evt.clientX - box.left, evt.clientY - box.top);
+    }, { passive: false });
 
     // ---- this image's own marks table, inside its own slice ----
     //
@@ -1814,8 +1847,26 @@ export function mountMarkup(root, ctx) {
     // that has not happened this rejects, and a copy button that quietly does
     // nothing is the exact failure this project keeps being bitten by.
     try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      // Raced against a timeout, because the failure this guards is SILENCE.
+      // navigator.clipboard.write does not always reject when it cannot proceed:
+      // on a document that does not have focus Chromium leaves the promise
+      // pending indefinitely, so a press produced no picture, no error and no
+      // message — the exact shape of defect this board keeps finding. Measured:
+      // it hung about one run in six in the browser suite before this.
+      //
+      // Three seconds is long for a local clipboard write and short enough that
+      // nobody wonders whether they pressed it.
+      await Promise.race([
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('the clipboard did not answer — is this window focused?')), 3000)),
+      ]);
       copyStatus(`${what} copied — ${canvas.width}×${canvas.height}, paste it with Ctrl+V`);
+      // Gone the moment it has done its job. A dashed box that outlives the copy
+      // sits on the picture looking like a mark that cannot be selected, noted
+      // or deleted — which is what it was reported as. Copying twice from one
+      // rectangle is rarer than wondering what the leftover box is.
+      cropSel.delete(imageId);
+      render();
     } catch (err) {
       copyStatus('the clipboard refused this copy: ' + (err && err.message ? err.message : 'not permitted here'), true);
     }
@@ -1825,6 +1876,11 @@ export function mountMarkup(root, ctx) {
   // buttons: a clean closeup to annotate afresh, or the region as it looks now
   // to paste somewhere outside the board.
   function copyCrop(withMarks) {
+    // Says something SYNCHRONOUSLY, before any of the async work. Everything
+    // below this line is a promise — toBlob, then the clipboard — and a press
+    // whose only feedback arrives after them is a press that looks ignored while
+    // they run, and looks ignored forever if one of them never settles.
+    copyStatus('copying…');
     const entries = [...cropSel.entries()];
     if (!entries.length) { copyStatus('draw a rectangle with the crop tool first', true); return; }
     const [imageId, rect] = entries[entries.length - 1];
@@ -1835,6 +1891,7 @@ export function mountMarkup(root, ctx) {
   // zoomed view" half. Derived from the transform rather than from a selection,
   // so at 100% it is simply the whole image.
   function copyView(imageId) {
+    copyStatus('copying…');
     const rec = imageRecords.get(imageId);
     if (!rec) return;
     const view = zoomOf(imageId);
@@ -1994,6 +2051,20 @@ function ensureStyles() {
 }
 [data-view="markup"] .markup-intake-status { font-size: 0.78rem; color: var(--accent); }
 [data-view="markup"] .markup-intake-status[data-bad="yes"] { color: var(--danger); }
+/* The paste bar and the two tool rows, kept on screen. --head-h is the shell's
+   own sticky head, measured in aboard.html; the fallback is 0 so a renderer used
+   outside that shell still behaves. A background is required: a sticky element
+   with none lets the content scroll through it. */
+[data-view="markup"] .markup-sticky {
+  position: sticky;
+  top: var(--head-h, 0px);
+  z-index: 5;
+  background: var(--bg);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
 [data-view="markup"] .markup-images {
   margin: 0 0 16px;
 }
@@ -2061,7 +2132,12 @@ function ensureStyles() {
 [data-view="markup"] .markup-stage {
   position: relative;
   touch-action: none;
-  width: 100%;
+  /* fit-content, not 100%: the stage is the frame around the picture, so it is
+     as wide as the picture is allowed to be and no wider. With a stage at 100%
+     and an image stretched to fill it, a 200px screenshot was blown up to 1300px
+     and came out a blur -- reported 2026-08-27 as "a small image is shown huge".
+     A LARGE image still uses the whole row, because max-width caps it there. */
+  width: fit-content;
   /* No max-width. It was 900px, which on a wide board or a maximised panel left
      most of the row empty while the thing you are trying to point AT was
      rendered small -- reported 2026-08-27. Marks are stored as fractions of the
@@ -2073,7 +2149,10 @@ function ensureStyles() {
   border-radius: 4px;
   overflow: hidden;
 }
-[data-view="markup"] .markup-img { display: block; width: 100%; height: auto; }
+/* auto width so the natural size is one ceiling, max-width so the row is the
+   other. The aspect ratio was never the problem -- auto height already kept it.
+   Upscaling was. */
+[data-view="markup"] .markup-img { display: block; width: auto; max-width: 100%; height: auto; }
 [data-view="markup"] .markup-svg {
   position: absolute;
   inset: 0;

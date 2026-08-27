@@ -774,26 +774,41 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 
 /* ---------- new-tab dialog ---------- */
 
+/* ONE width, fixed. It was `min-width`, so the sheet sized itself to its widest
+   line — and its widest line is the chosen type's description, which changes
+   every time the select changes. Picking a type made the whole modal jump
+   sideways under the cursor. Reported 2026-08-27. */
 .sheet-dialog {
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line-strong);
   border-radius: 6px;
   padding: 18px 20px;
-  min-width: min(420px, 90vw);
+  width: min(520px, 92vw);
+  box-sizing: border-box;
 }
 
 .sheet-dialog::backdrop { background: rgb(0 0 0 / 0.6); }
 
-/* The chosen type's blurb, pulled up tight under the select it describes. The
-   form's 12px gap would otherwise leave it floating between two fields, which is
-   how it came to read as a hint about the wrong one. */
+/* The chosen type's description: its own block under the select, not hung off
+   it. It was pulled up tight against the field with a rule down its side, which
+   made it read as part of the control rather than as an answer to it.
+   
+   `min-height` is three lines. The descriptions run from four words to two
+   sentences, so without a floor the sheet grew and shrank vertically as well as
+   sideways every time the select moved, and the Create button walked up and down
+   the screen while you were reading. A fixed box that is sometimes half empty is
+   a better thing to aim a cursor at. */
 .new-tab-blurb {
-  margin: -7px 0 0;
-  min-height: 1.4em;
+  margin: 0;
+  min-height: 3.6em;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--sunken);
   color: var(--muted);
-  border-left: 2px solid var(--agent);
-  padding-left: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .sheet-dialog form { display: flex; flex-direction: column; gap: 12px; }
