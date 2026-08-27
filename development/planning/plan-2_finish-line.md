@@ -318,6 +318,13 @@ Four things, and the first is the one worth keeping.
   `docs/reference/theme.md` carries it as guidance for any embedder, because the board
   accepts all 21 names and cannot enforce this — every one of those values was valid on
   its own, which is exactly why nothing warned.
+- **CONFIRMED in a running host on 2026-08-27**, by the human, after reinstalling the
+  `.vsix`: the palette is right, and **high contrast was worked through in both variants**
+  — the one row on the extension's list that no other theme can substitute for, since a
+  high-contrast LIGHT body carries both `vscode-high-contrast` and
+  `vscode-high-contrast-light` and a wrong class order renders every one of them as a dark
+  board in a white editor. Still unwatched from this round: `aboard.theme: board`, the
+  sidebar's New Tab end to end, and the nudge button's two glyphs on a real toolbar.
 
 ### 10. Gated on the human — do not start without an answer
 

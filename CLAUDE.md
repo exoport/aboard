@@ -53,8 +53,15 @@ unit-tested, and **run in a real Extension Development Host once, partially**, o
 the status block in the extension's `README.md`, which is now the only record of it: that
 repo's `docs/handoff.md` was deleted on 2026-08-27 with its load-bearing content moved
 into the README). On **2026-08-27** the extension's notify bell became a **nudge button**
-(`$(zap)` / `$(circle-slash)`, commands `aboard.nudge*`) and a dev **`.vsix`** packages
-with `npm run package` — neither yet seen in a running host; plan-2 §10q. The review file has a disposition beside every finding, and
+(`$(zap)` / `$(circle-slash)`, commands `aboard.nudge*`), a dev **`.vsix`** packages with
+`npm run package`, and the human **installed it and ran it** — which found four things no
+test had (plan-2 §10r): the purpose strip read as a notification, the `+` cost a row of
+the panel, and the VS Code palette mapping was wrong TWICE. Both palette failures were
+made of individually valid colours, which is why nothing warned: **the four depth tokens
+are an ORDER and the eleven voices are a SET that must stay mutually distinguishable**,
+and a host theme guarantees neither — so an embedder now sends the ten neutrals and keeps
+the board's voices ([theme.md](docs/reference/theme.md)). Confirmed in a running host,
+high contrast both ways. The review file has a disposition beside every finding, and
 `development/handoffs/` is gone — see the decision below.
 
 That one run is also the only reason the native-dialog defect below was ever found: it
