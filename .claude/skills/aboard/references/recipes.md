@@ -40,4 +40,8 @@ repository under `recipes/`, which are not compiled into the binary and are
 used by copying the file into one of the three directories above. This table
 cannot list them — it is generated from the binary, and it ships inside a
 skill directory copied between projects, where a path into somebody else's
-checkout would name nothing. See `recipes/README.md` there if you have it.
+checkout would name nothing. In aboard's own checkout, if you have it,
+`recipes/README.md` is the library and `docs/reference/recipes.md` is the
+format reference: every folder and its precedence, the frontmatter schema,
+the `aboard-template` block, the commands, and every reason a file is
+rejected.

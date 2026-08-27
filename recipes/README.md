@@ -77,7 +77,9 @@ worth doing.
 ## Contributing one
 
 Same format as a built-in: **[How to write a recipe](../docs/how-to/write-a-recipe.md)**
-is the full guide, and the short version is
+is the full guide and **[Recipes](../docs/reference/recipes.md)** is the reference —
+folders, precedence, the frontmatter schema, the template fence and the commands. The
+short version is
 
 1. **Frontmatter.** `name` (which must equal the file stem), `description`, `when_to_use`
    are required; `tags` and `requires.min_schema` are optional. Write `when_to_use` as

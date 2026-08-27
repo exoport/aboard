@@ -717,7 +717,11 @@ const recipeIndexParagraph = "**The table above is only the recipes shipped in t
 	"used by copying the file into one of the three directories above. This table\n" +
 	"cannot list them — it is generated from the binary, and it ships inside a\n" +
 	"skill directory copied between projects, where a path into somebody else's\n" +
-	"checkout would name nothing. See `recipes/README.md` there if you have it.\n"
+	"checkout would name nothing. In aboard's own checkout, if you have it,\n" +
+	"`recipes/README.md` is the library and `docs/reference/recipes.md` is the\n" +
+	"format reference: every folder and its precedence, the frontmatter schema,\n" +
+	"the `aboard-template` block, the commands, and every reason a file is\n" +
+	"rejected.\n"
 
 // mdCell makes a value safe for a markdown table cell: one line, pipes escaped.
 // Never truncated — a description too long for a table is a description to

@@ -195,7 +195,9 @@ Nine recipes ship with the binary and a project may add or override its own in
 wins, and a shadowed recipe is always reported rather than hidden. A few more are
 collected in this repository's [`recipes/`](recipes/README.md) library: not compiled in,
 used by copying the file into one of those directories. Writing one:
-[How to write a recipe](docs/how-to/write-a-recipe.md).
+[How to write a recipe](docs/how-to/write-a-recipe.md); the format itself — folders,
+precedence, the frontmatter schema, the template block — is
+[the recipes reference](docs/reference/recipes.md).
 
 ## Inside ape
 
@@ -218,7 +220,7 @@ what you need:
 
 - **[Tutorials](docs/tutorials/)** — [Your first board](docs/tutorials/first-board.md): install, seed, serve, dock, write, watch, export.
 - **[How-to guides](docs/how-to/)** — [install](docs/how-to/install.md), [run it in VS Code](docs/how-to/run-in-vscode.md), [run a second board](docs/how-to/run-a-second-board.md), [put it behind a reverse proxy](docs/how-to/serve-under-a-path-prefix.md), [promote a tab into a document](docs/how-to/promote-a-tab-into-a-document.md), write a recipe, embed it in ape, verify a release.
-- **[Reference](docs/reference/)** — the [CLI](docs/reference/cli.md), the [`.aboard/` layout](docs/reference/layout.md), the [state file](docs/reference/state-file.md), the [HTTP API](docs/reference/http-api.md), the [capability manifest](docs/reference/capabilities.md).
+- **[Reference](docs/reference/)** — the [CLI](docs/reference/cli.md), the [`.aboard/` layout](docs/reference/layout.md), the [state file](docs/reference/state-file.md), the [HTTP API](docs/reference/http-api.md), the [capability manifest](docs/reference/capabilities.md), [recipes](docs/reference/recipes.md).
 - **[Explanation](docs/explanation/)** — [how aboard runs](docs/explanation/how-aboard-runs.md), and the design rationale, including the decisions that are closed.
 
 If you are new, three pages get you furthest:

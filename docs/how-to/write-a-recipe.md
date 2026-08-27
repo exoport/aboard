@@ -9,6 +9,11 @@ Nine recipes ship with the binary, and a project can add or override its own. Wr
 when your project has a board move that keeps recurring and keeps being done slightly
 differently.
 
+This page is the task. **[Recipes](../reference/recipes.md) is the reference** — every
+folder and its precedence, the frontmatter schema field by field, the exact rules for the
+template fence, every reason a file is rejected, and the commands with their exit codes.
+Look things up there.
+
 **Look in the library first.** aboard's own repository collects further recipes in a
 top-level [`recipes/`](../../recipes/README.md) folder — worth sharing, not worth
 shipping in every binary. They are not compiled in and not discovered: you get one by
@@ -156,9 +161,16 @@ aboard recipes show my-move            # the body, as an agent will read it
 aboard recipes show my-move --template # the skeleton, if it has one
 ```
 
-If `list` does not show it, the frontmatter did not validate — the row is not silently
-dropped, so read what `list` says about it. The usual cause is `name` disagreeing with
-the filename.
+If `list` does not show it under the name you expected, look under its **filename
+stem**: a file that was read and could not be used is listed there, marked `INVALID`
+with the reason, rather than dropped. The usual cause is `name` disagreeing with the
+filename. Every reason a file is rejected is tabulated in
+[Recipes](../reference/recipes.md#why-a-file-is-rejected).
+
+If it is missing from the listing **entirely** it was never read as a recipe, and that
+is a different question: the suffix test is exact and lower-case, so `my-move.MD` and
+`my-move.markdown` are not recipes, and a `README.md` is skipped on purpose. See
+[what is read, and what is skipped](../reference/recipes.md#what-is-read-and-what-is-skipped).
 
 **A recipe directory is flat.** `.aboard/recipes/team/my-move.md` is not loaded: the
 precedence order is four fixed tiers, and nesting would add a fifth axis with no rule
@@ -234,6 +246,7 @@ recipe's own `when_to_use`.
 
 ## See also
 
+- [Recipes](../reference/recipes.md) — the reference: folders, precedence, the frontmatter schema, the template block, and the commands.
 - [The capability manifest](../reference/capabilities.md) — what a recipe body should consult rather than copy.
 - [The state file](../reference/state-file.md) — the document your template block becomes part of.
 - [Why a local, non-authoritative channel](../explanation/why-a-local-non-authoritative-channel.md) — why `.aboard/recipes/` is the private scope and `_aboard/recipes/` the shared one.

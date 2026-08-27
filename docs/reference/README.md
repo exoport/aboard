@@ -16,10 +16,10 @@ For aboard, reference is the surface area: every command, every route, every pat
 - [http-api.md](http-api.md) — every route the server answers, with parameters, bodies and status codes, including the compare-and-set contract and the SSE frames.
 - [capabilities.md](capabilities.md) — the capability manifest: what it contains, what `capsHash` fingerprints, what `--check` gates, and the declared command table.
 - [theme.md](theme.md) — colour: the 21 tokens and their roles, both built-in variants with their measured contrast ratios, the `.aboard/theme.json` schema, the switch, and the theme message an embedder may send.
+- [recipes.md](recipes.md) — the recipe format: the four discovery tiers and their precedence, the frontmatter schema, the `aboard-template` block, why a file is rejected, and the `recipes list|show|index` commands with their exit codes.
 
 ## Planned reference
 
-- **Recipe frontmatter schema.** Field-by-field, once the format has settled past its first few built-ins. The working description is in [How to write a recipe](../how-to/write-a-recipe.md).
 - **Exit codes.** The table lives in the declared command table today and is printed per command by `aboard capabilities`; a page is worth writing once a command needs a code outside the shared four.
 - **The `aboard.*` bridge.** The `get` / `set` / `onData` / `fit` contract an `html` tab's widget scripts against.
 
