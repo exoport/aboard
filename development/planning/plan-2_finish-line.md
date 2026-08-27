@@ -318,6 +318,15 @@ Four things, and the first is the one worth keeping.
   `docs/reference/theme.md` carries it as guidance for any embedder, because the board
   accepts all 21 names and cannot enforce this — every one of those values was valid on
   its own, which is exactly why nothing warned.
+- **A fifth, found by using the channel rather than looking at it** (`b817d70`): an
+  agent's reply to a request rendered inside `.ask-meta`, which is `flex: 0 0 auto` —
+  right for the timestamp it was written for, catastrophic for a sentence. The reply ran
+  off the right edge and the human's own request beside it was squeezed until
+  `overflow-wrap: anywhere` broke it ONE CHARACTER PER LINE. 13px of a 344px strip, at
+  the panel width it was reported from. The reply is its own full-width line under the
+  request now — structure, because the layout was calling an answer a piece of metadata.
+  The feature shipped with a two-word note in its test; a 250-character
+  `aboard requests done --note` is ordinary and had never been written.
 - **CONFIRMED in a running host on 2026-08-27**, by the human, after reinstalling the
   `.vsix`: the palette is right, and **high contrast was worked through in both variants**
   — the one row on the extension's list that no other theme can substitute for, since a
@@ -325,6 +334,13 @@ Four things, and the first is the one worth keeping.
   `vscode-high-contrast-light` and a wrong class order renders every one of them as a dark
   board in a white editor. Still unwatched from this round: `aboard.theme: board`, the
   sidebar's New Tab end to end, and the nudge button's two glyphs on a real toolbar.
+- **The whole channel was then driven end to end on 2026-08-27, and it works.** The human
+  left the first request this board has ever carried (`bb200` on `bb199`), `aboard
+  requests` found it, an agent filled the tab and stamped it done, the human pressed the
+  panel's own **Nudge** and released an agent genuinely parked on `aboard wait`. Every
+  `[~]` row from the 2026-08-26 checklist is now closed except the two copy commands. What
+  is still unexercised is the DATA half: nobody has yet changed a bound field or pressed a
+  `ui` button and had an agent read it back.
 
 ### 10. Gated on the human — do not start without an answer
 
