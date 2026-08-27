@@ -220,6 +220,8 @@ Chromium, which flaked once and would again.
 
 ### 10m. The recipes reference page  ☑ `32086a9` (docs/reference/recipes.md: folders and precedence, file format, the frontmatter schema, the template block, the commands; rebased onto 10l)
 
+### 10n. The extension hands the board the VS Code theme  ☑ aboard_vscode `4b7cb67` (`aboard.theme` = follow|board; the mapping is guarded to the board's AAA rule; nothing seen in a real host yet)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
