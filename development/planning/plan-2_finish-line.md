@@ -214,6 +214,8 @@ Chromium, which flaked once and would again.
 
 ### 10j. Two recipes: the decision wizard, reviewed, and a human checklist  ☑ `bedc408` (built in a worktree, rebased onto 10i)
 
+### 10k. The two new recipes are a library in `recipes/`, not built-ins  ☑ `ca7b7e4` (the human's decision: embedded = small basic functionality; `recipes/` = the curated library; users write their own or copy from it)
+
 ### 10. Gated on the human — do not start without an answer
 
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
