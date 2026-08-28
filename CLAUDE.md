@@ -104,8 +104,26 @@ nobody re-measures them. A fifth, the pinned-versus-`$PATH` divergence, is RESOL
 see "the make targets are the gate" below.
 
 If you are resuming and looking for the next task, **there is not one queued — ask the
-human.** A remote exists (`github.com/exoport/aboard`, and `…/aboard_vscode` for the
-extension); both are PUBLIC, and the first push was prepared on 2026-08-28. `git remote -v` prints
+human.** **Both repositories are PUBLIC and RELEASED as of 2026-08-28**: `aboard` at
+**v0.1.0** (six platform archives, checksums, a cosign bundle verified `Verified OK`,
+and `go install github.com/exoport/aboard/cmd/aboard@v0.1.0` working from the module
+proxy) and `aboard_vscode` at **v0.1.1** (the `.vsix` attached to its release; not on
+any marketplace, which stays a decision rather than an omission).
+
+**The first push is what Windows CI was for, and it found four rounds of failures —
+two of them real product bugs.** `make ci-local` says it cannot catch Windows runtime
+behaviour; this is the bill. (1) `mime.TypeByExtension` reads the Windows registry,
+where `.js` is routinely `text/plain`, and with the board's `nosniff` a browser then
+REFUSES its own modules — a blank board on a platform the release ships a binary for.
+Types are declared in `assetTypes` now and `Serve` registers that same table. (2) `Init`
+compared a resolved root against an unresolved `filepath.Abs`, so `aboard init` refused
+to complete a root behind any symlink — reachable on macOS, certain on Windows. The rest
+were test assumptions: a resolved-vs-unresolved expectation in `mustAbs`, a POSIX-shaped
+"absolute" path, `time.Now()` used as if it must differ from a file written moments
+earlier (Windows ticks at ~15.6 ms), two tests asking the OS for something Windows
+refuses, and `boards` on a platform with no `/proc`. A run's logs need authentication, so
+CI now emits the failing tests and their assertion lines as ONE annotation — annotations
+are readable on a public repo without a token, logs are not. `git remote -v` prints
 `git@github.diegosz:exoport/…` rather than `github.com` because this machine rewrites it
 with a `url.…insteadOf` rule in `git config` pointing at an SSH host alias that picks the
 right key — the alias is local configuration, not the address, so **write `github.com` in

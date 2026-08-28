@@ -344,6 +344,10 @@ Four things, and the first is the one worth keeping.
 
 ### 10. Gated on the human — do not start without an answer
 
+- ~~**Remote, first tag, first release**~~ — **DONE 2026-08-28.** `aboard v0.1.0` and
+  `aboard_vscode v0.1.1` are pushed, tagged and released; the org's OIDC permission was
+  in place, keyless cosign signed the checksums, and `cosign verify-blob` against the
+  published bundle answers `Verified OK`. The original text is kept below for the record.
 - **Remote, first tag, first release**: `origin` exists on BOTH repos already
   (`github.com/exoport/aboard` and `…/aboard_vscode` — `git remote -v` shows a
   `git@github.diegosz:…` rewrite because this machine has a `url.…insteadOf` rule pointing at an
