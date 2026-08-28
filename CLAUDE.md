@@ -82,6 +82,21 @@ button's acknowledgement is a flash the repaint cannot reach, the journal entry 
 the whole tab so the `apply` merge survives a foreign rename, and `boards` — dropped
 that morning and REVERSED the same day with a design — shipped as a `/proc` scan with
 no registry file.
+On **2026-08-28** the clipboard round trip landed and then taught the same lesson twice:
+the panel runs `xclip` because a webview cannot reach the clipboard at all, and the board
+now learns what its host can do from an ANNOUNCEMENT rather than by asking and timing
+out — a timeout cannot tell "nothing framed me" from "an old host" from "a host that
+broke", and one failure survived three rounds of reinstall-and-restart on that evidence.
+Gating the ask on that announcement was then a regression within the hour, because a host
+one build older announces nothing and copies perfectly well: **an announcement explains a
+failure, it does not authorise the attempt.** The same day, two renames before the first
+tag — **ids are tagged `ab`** (was `bb`; a rename, not a migration, since every parser
+reads `^[a-z]*(\d+)$`) and the document **schema resets to 1** (it read 3, counting the
+spike's two layout changes). That second one shipped a defect worth remembering: the
+version is declared in Go AND in the shell, and changing one made every board come up
+with an empty tab strip, no console error and a valid document — now checked by
+`TestTheShellAgreesWithTheDeclaredSchemaVersion`. `capsHash` is `207b5d93`.
+
 `development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
 count, `BUILD_DATE` and `make install INSTALL_DIR`), each with what it would take, so
