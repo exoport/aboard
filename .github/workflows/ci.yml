@@ -44,8 +44,39 @@ jobs:
       # code is precisely what a Windows run exists to exercise — root discovery
       # walks upward through separators, and the state file is written through a
       # same-directory temp + rename, which behaves differently on Windows.
+      # The failure is ANNOTATED, not just logged.
+      #
+      # A run's logs need authentication to download, so on 2026-08-28 a Windows
+      # failure on the release push could be seen to exist and not read: the
+      # jobs API named the step and nothing named the test. Annotations are part
+      # of a public repository's check run and readable without a token, so the
+      # names of failing tests belong there. It costs one `tee` and says the one
+      # thing the API otherwise cannot.
       - name: Test
-        run: make test
+        run: |
+          set -o pipefail
+          if make test 2>&1 | tee test-output.txt; then
+            exit 0
+          fi
+          echo "::group::failing tests"
+          grep -E '^(\s*--- FAIL|FAIL)' test-output.txt | head -40 || true
+          echo "::endgroup::"
+          grep -E '^\s*--- FAIL' test-output.txt | head -20 | while IFS= read -r line; do
+            echo "::error title=go test (${{ matrix.os }})::${line}"
+          done
+          # And the assertion lines under them, which say WHY.
+          grep -E '^\s+[A-Za-z0-9_]+\.go:[0-9]+:' test-output.txt | head -20 | while IFS= read -r line; do
+            echo "::error title=detail (${{ matrix.os }})::${line}"
+          done
+          exit 1
+
+      - name: Keep the test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.os }}
+          path: test-output.txt
+          retention-days: 7
 
       - name: Smoke — ./aboard version
         # Catches //go:build constraint regressions that would let a package
