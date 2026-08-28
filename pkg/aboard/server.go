@@ -355,16 +355,10 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		return fmt.Errorf("no board document at %s — run `%s` in %s", stateFile, hint, cfg.Root)
 	}
 
-	// .js must be text/javascript or the browser refuses the ES modules; some
-	// systems' /etc/mime.types disagree, so state it rather than inherit it.
-	for ext, typ := range map[string]string{
-		".js":   "text/javascript; charset=utf-8",
-		".mjs":  "text/javascript; charset=utf-8",
-		".css":  "text/css; charset=utf-8",
-		".html": "text/html; charset=utf-8",
-		".svg":  "image/svg+xml",
-		".json": "application/json",
-	} {
+	// The same table writeAsset serves from, registered process-wide as well, so
+	// anything that reaches mime.TypeByExtension directly — an upload, a future
+	// route — gets the board's answer rather than the machine's.
+	for ext, typ := range assetTypes {
 		if err := mime.AddExtensionType(ext, typ); err != nil {
 			logger.Printf("mime %s: %v", ext, err)
 		}
@@ -1933,12 +1927,59 @@ func (s *server) handleTheme(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+// assetTypes is what the embedded tree is served as, DECLARED here rather than
+// asked of the operating system.
+//
+// `mime.TypeByExtension` is not a constant function: on Windows it consults the
+// registry, where `.js` and `.css` are routinely `text/plain` because some
+// installer wrote that key years ago. Combined with the `nosniff` below — which
+// is deliberate and stays — a browser then REFUSES to execute the module, and the
+// board comes up blank with a console error about a MIME type. Nothing about the
+// binary or the machine looks wrong; the shell simply never runs.
+//
+// Found by the first Windows CI run this repository ever had, on the day of the
+// first release, as a failing content-type assertion. It reads like a test being
+// fussy about a header and it is the whole product not working on a platform the
+// release builds a binary for.
+//
+// So the types are ours. `TypeByExtension` remains the fallback for anything not
+// listed, because an asset this table has not heard of is better served with the
+// operating system's guess than with nothing at all — and
+// TestEveryEmbeddedExtensionHasADeclaredType keeps the list honest against the
+// tree it describes.
+//
+// `Serve` also registers this table with the `mime` package, which it has always
+// done — and that registration was the ONLY defence until now. It is a
+// process-global side effect of starting a server, so anything that serves an
+// asset without having started one (every test that builds a server directly)
+// got the machine's answer instead. On Linux the machine's answer is right and
+// nothing showed; on Windows it is `text/plain` and the assertion failed. Serving
+// from the table directly is what makes the type a property of this code rather
+// than of the process's history.
+var assetTypes = map[string]string{
+	".html": "text/html; charset=utf-8",
+	".css":  "text/css; charset=utf-8",
+	".js":   "text/javascript; charset=utf-8",
+	".mjs":  "text/javascript; charset=utf-8",
+	".json": "application/json",
+	".svg":  "image/svg+xml",
+	".md":   "text/markdown; charset=utf-8",
+	".go":   "text/plain; charset=utf-8",
+}
+
+func assetType(ext string) string {
+	if typ, ok := assetTypes[strings.ToLower(ext)]; ok {
+		return typ
+	}
+	return mime.TypeByExtension(ext)
+}
+
 // writeAsset sends one asset with the caching rules that suit how it can change.
 // The ETag is computed over the bytes actually sent, not the file on disk, so a
 // templated shell served under two different base paths does not answer the
 // second request from the first one's cache.
 func (s *server) writeAsset(w http.ResponseWriter, r *http.Request, name string, body []byte) {
-	if typ := mime.TypeByExtension(path.Ext(name)); typ != "" {
+	if typ := assetType(path.Ext(name)); typ != "" {
 		w.Header().Set("Content-Type", typ)
 	}
 	// nosniff, on every asset. The declared type is right for each of them, and

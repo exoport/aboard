@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -114,6 +115,15 @@ func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
 // then pointed at a stub, so the three cases are exactly the three answers the
 // real tool can give.
 func TestFmtCheckFailsWhenGofumptItselfFails(t *testing.T) {
+	// The subject is a POSIX shell fragment out of the Makefile, driven with a
+	// `#!/bin/sh` stub standing in for gofumpt. Windows has no shebang and no
+	// executable bit, so the stub cannot be run as a program there and the test
+	// would be measuring the runner's shell rather than the recipe. The recipe
+	// itself only ever runs under `make` on a developer's machine or on the Linux
+	// CI job, both of which have a real sh.
+	if runtime.GOOS == "windows" {
+		t.Skip("the recipe under test is a POSIX shell fragment and the stub is a #!/bin/sh script")
+	}
 	src, err := os.ReadFile("../../Makefile")
 	if err != nil {
 		t.Fatalf("reading the Makefile: %v", err)

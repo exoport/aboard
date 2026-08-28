@@ -61,13 +61,17 @@ jobs:
           echo "::group::failing tests"
           grep -E '^(\s*--- FAIL|FAIL)' test-output.txt | head -40 || true
           echo "::endgroup::"
-          grep -E '^\s*--- FAIL' test-output.txt | head -20 | while IFS= read -r line; do
-            echo "::error title=go test (${{ matrix.os }})::${line}"
-          done
-          # And the assertion lines under them, which say WHY.
-          grep -E '^\s+[A-Za-z0-9_]+\.go:[0-9]+:' test-output.txt | head -20 | while IFS= read -r line; do
-            echo "::error title=detail (${{ matrix.os }})::${line}"
-          done
+          # ONE annotation carrying everything, not one per line. GitHub keeps only
+          # the first 10 annotations per step, and a run with ten failing tests
+          # spent all ten on names and dropped every assertion line — which is the
+          # half that says why. Newlines survive an annotation when encoded as %0A.
+          {
+            grep -E '^\s*--- FAIL' test-output.txt | head -25
+            echo '---'
+            grep -E '^\s+[A-Za-z0-9_]+\.go:[0-9]+:' test-output.txt | head -25
+          } > failures.txt || true
+          body="$(sed -e 's/%/%25/g' -e 's/\r/%0D/g' failures.txt | awk '{printf "%s%%0A", $0}')"
+          echo "::error title=go test failed (${{ matrix.os }})::${body}"
           exit 1
 
       - name: Keep the test output

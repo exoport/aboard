@@ -205,8 +205,24 @@ func mustAbs(t *testing.T, dir string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// t.TempDir can hand back a path through a symlink (/tmp -> /private/tmp on
-	// macOS); FindRoot does not resolve symlinks, so neither does this.
+	// FindRoot resolves the root it returns (layout.go), so an expectation built
+	// from a raw t.TempDir() has to be resolved the same way or it is comparing
+	// two different spellings of one directory. The comment here used to say the
+	// opposite — "FindRoot does not resolve symlinks, so neither does this" — and
+	// it was true until FindRoot gained that resolution and this was not revisited.
+	//
+	// It costs nothing on Linux, where a temp dir is already canonical, which is
+	// why nothing noticed for as long as Linux was the only platform that ran the
+	// suite. It matters on macOS (/tmp -> /private/tmp) and it is what took down
+	// the first Windows run: t.TempDir() there is under an 8.3 short name
+	// (C:\Users\RUNNER~1\...) which resolution expands to the long one, so six
+	// tests compared a resolved root against an unresolved expectation.
+	//
+	// Failure is tolerated for the same reason layout.go tolerates it: the
+	// directory exists, and an unresolvable path is still worth comparing.
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
 	return abs
 }
 

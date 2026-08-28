@@ -3,9 +3,11 @@ package aboard
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -338,5 +340,42 @@ func TestPokingWithNobodyWaitingReleasesNobody(t *testing.T) {
 	}
 	if waiters.Waiting != 0 || len(waiters.Waiters) != 0 {
 		t.Errorf("an idle board reports %d waiting: %v", waiters.Waiting, waiters.Waiters)
+	}
+}
+
+// Every extension in the embedded tree has a type this binary declares, so no
+// asset's content type depends on the machine serving it.
+//
+// The fallback is real and stays — an unknown extension is better served with the
+// operating system's guess than with nothing — but nothing IN THE TREE may reach
+// it. On Windows `mime.TypeByExtension` reads the registry, where `.js` is
+// commonly `text/plain`; with the nosniff header the board's own modules are then
+// refused by the browser and the shell never runs.
+func TestEveryEmbeddedExtensionHasADeclaredType(t *testing.T) {
+	seen := map[string]bool{}
+	err := fs.WalkDir(web.FS, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			seen[strings.ToLower(path.Ext(p))] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking the embedded tree: %v", err)
+	}
+	if len(seen) == 0 {
+		t.Fatal("the embedded tree looks empty, so this test proved nothing")
+	}
+	for ext := range seen {
+		if ext == "" {
+			continue // a file with no extension gets no declared type, which is correct
+		}
+		if _, ok := assetTypes[ext]; !ok {
+			t.Errorf("the embedded tree contains %q files and assetTypes does not declare one — "+
+				"on Windows that asset's type comes from the registry, and for a script that means "+
+				"the browser refuses to run it", ext)
+		}
 	}
 }

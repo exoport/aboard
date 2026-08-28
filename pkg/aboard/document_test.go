@@ -437,6 +437,19 @@ func TestAnExternalEditIsSeenByTheNextWrite(t *testing.T) {
 // Against the stat-after-read version this fails within a round or two, every
 // run; readStable's stat-read-stat is what makes it green.
 func TestAWriteLandingInsideAReadDoesNotPinTheCacheStale(t *testing.T) {
+	// This stages the race deliberately: hardlink, then rename over the state
+	// file, sixty times, while a goroutine reads it. Windows refuses to rename
+	// over a file another handle has open, so the burst cannot be staged there at
+	// all — the test fails on its own setup rather than on the invariant.
+	//
+	// Worth writing down rather than just skipping: the SAME refusal is a real
+	// constraint on the write path on Windows, where writeAtomic's temp+rename
+	// meets a concurrent read of the same file. The Linux job proves the cache
+	// invariant; what Windows does under concurrent read and write is not proven
+	// by this suite, and the README says so.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows will not rename over a file that is open for reading, so this race cannot be staged there")
+	}
 	mk := func(n int) string {
 		return `{"version":1,"rev":1,"nextId":9,"tabs":[{"id":"ab1","name":"P","type":"notes","state":{"text":"` +
 			strings.Repeat("x", (4<<20)+n*997) + `"}}]}`
