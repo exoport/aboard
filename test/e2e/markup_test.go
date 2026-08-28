@@ -907,19 +907,35 @@ func TestOneMarkableImageInAPairGetsTheFullWidthTable(t *testing.T) {
 	id := makeScratchTab(t, "Before and after")
 	d := readDoc(t)
 	d.tab(t, id)["type"] = "markup"
+	// TWO pairs, because the tab this was reported from has three: a spanning
+	// table has to interleave — pair, table, pair, table — and getting that wrong
+	// puts the second pair's table under the first pair.
 	d.tab(t, id)["state"] = map[string]any{
 		"layout": "side-by-side",
 		"images": []any{
 			map[string]any{"id": "before", "src": "assets/mock-screen.svg", "caption": "before.svg", "annotatable": false},
 			map[string]any{"id": "after", "src": "assets/mock-screen-after.svg", "caption": "after.svg"},
+			map[string]any{"id": "before2", "src": "assets/mock-screen.svg", "caption": "before-2.svg", "annotatable": false},
+			map[string]any{"id": "after2", "src": "assets/mock-screen-after.svg", "caption": "after-2.svg"},
 		},
 	}
 	apply(t, d)
 
 	s := open(t, "tab="+id)
 	view := s.view(id)
-	if err := expect.Locator(view.Locator(".markup-list")).ToHaveCount(1); err != nil {
-		t.Fatalf("a pair with one markable image should have exactly one table: %v", err)
+	if err := expect.Locator(view.Locator(".markup-list")).ToHaveCount(2); err != nil {
+		t.Fatalf("two pairs with one markable image each should have two tables: %v", err)
+	}
+	if err := expect.Locator(view.Locator(".markup-list.markup-list-span")).ToHaveCount(2); err != nil {
+		t.Fatalf("both tables should span their pair: %v", err)
+	}
+
+	// The order on screen: pair, its table, pair, its table.
+	var order []string
+	s.evalJSON(&order, `(q) => [...document.querySelector(q + ' .markup-images').children]
+		.map((el) => el.classList.contains('markup-list') ? 'table' : 'figure')`, `[data-tab="`+id+`"]`)
+	if strings.Join(order, ",") != "figure,figure,table,figure,figure,table" {
+		t.Errorf("the wrap holds %v — a spanning table belongs after its own pair, not after all of them", order)
 	}
 
 	// The measurement that matters: the table is as wide as the two pictures
@@ -958,6 +974,63 @@ func TestOneMarkableImageInAPairGetsTheFullWidthTable(t *testing.T) {
 	if box.TableWidth < box.RightFigure*3/2 {
 		t.Errorf("the table is %.0fpx wide against a %.0fpx column — it is still living in one column",
 			box.TableWidth, box.RightFigure)
+	}
+}
+
+// A figure's head stays inside its own column, however narrow the board gets.
+//
+// The head is a flex row carrying a caption and up to eight controls, and a flex
+// row that cannot wrap does not shrink either — the items keep their content
+// width and overflow. In a two-column layout that overflow is not clipped, it is
+// PAINTED OVER the figure beside it: the right image's caption landed on top of
+// the left image's "Copy view" button. Reported 2026-08-28 from a narrow VS Code
+// panel, which is the width this test uses.
+func TestAFigureHeadStaysInsideItsColumn(t *testing.T) {
+	id := makeScratchTab(t, "Narrow pair")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "side-by-side",
+		"images": []any{
+			// The markable one carries the most controls — rename, hide, clear,
+			// three zoom, fit, copy — so it is the one that overflows first.
+			map[string]any{"id": "l", "src": "assets/mock-screen.svg", "caption": "a-long-dashboard-name-before.svg"},
+			map[string]any{"id": "r", "src": "assets/mock-screen-after.svg", "caption": "a-long-dashboard-name-after.svg"},
+		},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	// Wider than the 760px single-column breakpoint and narrow enough to squeeze:
+	// two columns of about 430px, which is the panel this was reported from.
+	if err := s.page.SetViewportSize(900, 900); err != nil {
+		t.Fatalf("narrowing the viewport: %v", err)
+	}
+	view := s.view(id)
+	if err := expect.Locator(view.Locator(".markup-figure")).ToHaveCount(2); err != nil {
+		t.Fatalf("want two figures: %v", err)
+	}
+
+	var over []map[string]any
+	s.evalJSON(&over, `(q) => [...document.querySelectorAll(q + ' .markup-figure')].map((f) => {
+		const head = f.querySelector('.markup-figure-head');
+		const fr = f.getBoundingClientRect(), hr = head.getBoundingClientRect();
+		return { id: f.dataset.imageId, overflow: Math.round(hr.right - fr.right), lines: Math.round(hr.height) };
+	})`, `[data-tab="`+id+`"]`)
+
+	for _, f := range over {
+		if n, ok := f["overflow"].(float64); ok && n > 1 {
+			t.Errorf("the head of image %v runs %.0fpx past its own column — at this width it is drawn over the figure beside it",
+				f["id"], n)
+		}
+	}
+	// And it solved it by WRAPPING rather than by clipping something away: a head
+	// that fits on one line at this width would mean the controls went missing.
+	if len(over) == 2 {
+		if h, ok := over[1]["lines"].(float64); ok && h < 40 {
+			t.Errorf("the markable image's head is %.0fpx tall — eight controls and a caption cannot fit one line at 430px, "+
+				"so something is being hidden rather than wrapped", h)
+		}
 	}
 }
 

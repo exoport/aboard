@@ -1248,9 +1248,11 @@ export function mountMarkup(root, ctx) {
         renderCropSelection(im.id, rec); // ...so the crop rectangle is re-added after it
       }
       applyZoom(rec);
-      desired.push(rec.figureEl);
     }
-    placeSpanningTables(state, desired);
+    // Built pair by pair rather than image by image, because a spanning table
+    // belongs after ITS OWN pair — appending them all at the end put every
+    // table below every picture, which is the layout this change exists to fix.
+    layOutRows(state, desired);
     // Only what is actually out of place moves. Re-inserting a node that is
     // already where it belongs still detaches and re-inserts it, and with tall
     // images that briefly shortens the document and makes the browser clamp the
@@ -1285,25 +1287,29 @@ export function mountMarkup(root, ctx) {
   // widens. In stacked layout, or with both images markable, the table goes back
   // inside its figure, so this is reversible on every render rather than a state
   // the view can get stuck in.
-  function placeSpanningTables(state, desired) {
+  function layOutRows(state, desired) {
     const paired = state.layout === 'side-by-side';
     const ims = state.images;
     for (let i = 0; i < ims.length; i += paired ? 2 : 1) {
       const pair = paired ? ims.slice(i, i + 2) : ims.slice(i, i + 1);
       const markable = pair.filter((im) => im.annotatable);
       const span = paired && pair.length === 2 && markable.length === 1;
+      const spanning = [];
       for (const im of pair) {
         const rec = imageRecords.get(im.id);
         if (!rec) continue;
+        desired.push(rec.figureEl);
         rec.figureEl.classList.toggle('has-spanning-table', span);
         if (!rec.listEl) continue;
         rec.listEl.classList.toggle('markup-list-span', span);
         if (span) {
-          desired.push(rec.listEl);
+          spanning.push(rec.listEl);
         } else if (rec.listEl.parentElement !== rec.figureEl) {
           rec.figureEl.append(rec.listEl);
         }
       }
+      // After the pair's own figures, and before the next pair's.
+      desired.push(...spanning);
     }
   }
 
@@ -2562,13 +2568,29 @@ function ensureStyles() {
   background: var(--sunken);
 }
 [data-view="markup"] .markup-copy-status.is-bad { color: var(--danger); }
+/* WRAPS. A figure is one column of a pair, and its head carries a caption plus
+   up to eight controls -- rename, hide, clear, three zoom controls, fit, copy.
+   A flex row that cannot wrap does not shrink either: its items keep their
+   content width, overflow the column and PAINT OVER the figure beside them, so
+   the right image's caption landed on top of the left image's Copy view button.
+   Reported 2026-08-28 from a narrow panel. Wrapping is the whole fix; the
+   caption ellipsising is what stops a long file name from forcing it. */
 [data-view="markup"] .markup-figure-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  min-width: 0;
 }
-[data-view="markup"] .markup-figure-caption { margin: 0; }
+[data-view="markup"] .markup-figure-caption {
+  margin: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 [data-view="markup"] .markup-stage {
   position: relative;
   touch-action: none;
