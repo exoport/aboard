@@ -45,9 +45,18 @@ func TestFindRootNotFound(t *testing.T) {
 	if !errors.Is(err, ErrNoRoot) {
 		t.Fatalf("err = %v, want ErrNoRoot", err)
 	}
-	// The message has to name where it looked, or the reader has no next step.
-	if !strings.Contains(err.Error(), mustAbs(t, dir)) {
-		t.Fatalf("error %q does not name the start directory %q", err, dir)
+	// The message has to name where it looked, or the reader has no next step —
+	// and "where it looked" is the path the CALLER passed, made absolute, not a
+	// resolved one. There is no root to resolve in this case, which is the whole
+	// point of it: the walk ran off the top without finding one. So this compares
+	// against filepath.Abs and not mustAbs, whose resolution would ask for a
+	// spelling the error has no way to produce.
+	abs, err2 := filepath.Abs(dir)
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if !strings.Contains(err.Error(), abs) {
+		t.Fatalf("error %q does not name the start directory %q", err, abs)
 	}
 }
 
@@ -120,7 +129,11 @@ func TestRootResolve(t *testing.T) {
 	if got, want := root.Resolve("x.json"), filepath.Join(string(filepath.Separator)+"p", "x.json"); got != want {
 		t.Errorf("Resolve(relative) = %q, want %q — a relative path means relative to the ROOT, not the cwd", got, want)
 	}
-	abs := filepath.Join(string(filepath.Separator)+"elsewhere", "x.json")
+	// An absolute path has to be absolute ON THIS PLATFORM: "\\elsewhere\\x.json"
+	// is absolute to a POSIX eye and RELATIVE to Windows, which wants a volume, so
+	// Resolve joined it to the root and the test read as a Resolve bug. t.TempDir
+	// is absolute everywhere, which is the whole reason to borrow it here.
+	abs := filepath.Join(t.TempDir(), "x.json")
 	if got := root.Resolve(abs); got != abs {
 		t.Errorf("Resolve(absolute) = %q, want it untouched", got)
 	}

@@ -128,6 +128,21 @@ func Init(cfg InitConfig) (InitResult, error) {
 	if err != nil {
 		return InitResult{}, fmt.Errorf("resolve %s: %w", cfg.Dir, err)
 	}
+	// Resolved the same way FindRoot resolves, and for a reason that only shows
+	// where the two spellings differ: the check below compares what FindRoot
+	// returned — which IS resolved — against this. Comparing a resolved path with
+	// an unresolved one is a false inequality wherever a path crosses a symlink,
+	// and `init` then refuses to complete a root that is exactly where you stand,
+	// telling you to run it from the directory you are already in.
+	//
+	// Invisible on Linux, where a project path is usually already canonical.
+	// Reachable on macOS (/tmp -> /private/tmp) and hit immediately on Windows,
+	// where a temp directory is handed out under its 8.3 short name. Found by the
+	// first Windows CI run this repository ever had. Failure is tolerated exactly
+	// as it is in FindRoot: the unresolved path is still the right answer.
+	if resolved, evalErr := filepath.EvalSymlinks(dir); evalErr == nil {
+		dir = resolved
+	}
 
 	root := Root(dir)
 	if found, ferr := FindRoot(dir); ferr == nil {

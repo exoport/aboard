@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -17,10 +18,38 @@ import (
 // Fails before: the command did not exist; it fails again the moment somebody
 // adds a projectRoot(cmd) call to it out of habit, which every sibling command
 // in this package begins with.
+// On a platform with no /proc there is nothing to scan, and `boards` says so and
+// exits 2 rather than pretending. That is the documented behaviour (see
+// boards_other.go), so these two tests assert THAT there instead of asserting a
+// listing that cannot exist — a skip would leave the honest-everywhere promise
+// untested on the platforms it was written for.
+func boardsIsAScan() bool { return runtime.GOOS == "linux" }
+
+func assertHonestElsewhere(t *testing.T, code int, out, errOut string) {
+	t.Helper()
+	if code != aboard.ExitUsage {
+		t.Fatalf("boards exited %d on %s, want %d — the command exists everywhere and is honest where it cannot scan",
+			code, runtime.GOOS, aboard.ExitUsage)
+	}
+	if !strings.Contains(errOut, runtime.GOOS) {
+		t.Errorf("the refusal does not name the platform:\n%s", errOut)
+	}
+	if !strings.Contains(errOut, "aboard status") {
+		t.Errorf("the refusal does not point at the per-project command:\n%s", errOut)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("it printed a listing anyway:\n%s", out)
+	}
+}
+
 func TestBoardsNeedsNoProjectOfItsOwn(t *testing.T) {
 	dir := t.TempDir() // no .aboard/ anywhere above it that matters
 
 	code, out, errOut := exitOf(t, "--cwd", dir, "boards")
+	if !boardsIsAScan() {
+		assertHonestElsewhere(t, code, out, errOut)
+		return
+	}
 	if code != aboard.ExitOK {
 		t.Fatalf("boards exited %d from a directory with no board: %s", code, errOut)
 	}
@@ -35,6 +64,10 @@ func TestBoardsJSONIsADocument(t *testing.T) {
 	dir := t.TempDir()
 
 	code, out, errOut := exitOf(t, "--cwd", dir, "boards", "--output-format", "json")
+	if !boardsIsAScan() {
+		assertHonestElsewhere(t, code, out, errOut)
+		return
+	}
 	if code != aboard.ExitOK {
 		t.Fatalf("boards --output-format json exited %d: %s", code, errOut)
 	}
