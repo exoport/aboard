@@ -975,6 +975,18 @@ addEventListener('message', (e) => {
   // The host's answer to a clipboard request a renderer made. Delivered as an
   // event so the shell needs to know nothing about which renderer asked — the
   // markup view listens for it and matches on the id it sent.
+  // A host saying what it can do for this board. Recorded on `window` so a
+  // renderer can read it without the shell knowing what any of it means, and
+  // re-emitted so one that is already mounted hears about it.
+  //
+  // It exists because the alternative is asking and waiting: a timeout cannot
+  // tell "nothing framed me" from "an old host" from "a host that broke", and
+  // that ambiguity is what made a clipboard failure undiagnosable in a panel.
+  if (msg.__aboard === 'host') {
+    window.ABOARD_HOST = { name: typeof msg.name === 'string' ? msg.name : 'unknown', clipboard: !!msg.clipboard };
+    document.dispatchEvent(new CustomEvent('aboard:host', { detail: window.ABOARD_HOST }));
+    return;
+  }
   if (msg.__aboard === 'clipboard-result' && typeof msg.id === 'number') {
     document.dispatchEvent(new CustomEvent('aboard:clipboard-result', { detail: msg }));
     return;

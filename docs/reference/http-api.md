@@ -174,7 +174,7 @@ for the same data is a bug factory.
 
 ### What an embedder may post to the shell
 
-Two messages, in the other direction, and both are **authenticated by
+Four messages, in the other direction, and all are **authenticated by
 `event.source === window.parent`** — the mirror of the rule the `active` message above
 asks its receiver to apply, and the same rule an `html` tab's bridge uses on messages
 from ITS parent. A message from any other window — a sibling frame, an opener, a
@@ -195,6 +195,44 @@ whatever is created exactly as it does when the board's own `+` was pressed. The
 stays on the board on purpose: it knows every type this board has and what an empty
 state of each looks like, and a host rebuilding that would be keeping a copy of the
 board's schema with no way to notice it had gone stale.
+
+#### `host`
+
+```js
+frame.contentWindow.postMessage({ __aboard: 'host', name: 'vscode', clipboard: true }, '*');
+```
+
+What this host can do FOR the board, sent on every frame load. Recorded on
+`window.ABOARD_HOST` and re-emitted as an `aboard:host` event, so a renderer can read it
+without the shell knowing what any of it means.
+
+It exists because the alternative is asking and waiting. A renderer that needs something
+only a host can do — writing an image to the system clipboard, which a webview is not
+permitted to do — would otherwise discover the answer by timing out, and **a timeout
+cannot tell "nothing framed me" from "an old host" from "a host that broke"**. That
+ambiguity is what made one clipboard failure undiagnosable through three rounds of
+reinstalling. Announce, and the board can say which of the three it is looking at.
+
+`clipboard: true` promises only that the host will ANSWER a `clipboard-image` request —
+not that it will succeed. The answer carries its own reason.
+
+#### `clipboard-image` · `clipboard-result`
+
+```js
+// board → host
+parent.postMessage({ __aboard: 'clipboard-image', id: 1, dataUrl: 'data:image/png;base64,…' }, '*');
+// host → board
+frame.contentWindow.postMessage({ __aboard: 'clipboard-result', id: 1, ok: false, error: 'xclip is not installed' }, '*');
+```
+
+The board asking a host to put a PNG on the system clipboard, because it cannot. A
+webview applies a permissions policy that blocks the Clipboard API and the host cannot
+lift it; an extension host is an ordinary process and can run `xclip`.
+
+Only sent when the host has announced `clipboard: true`, and only after the board's own
+`navigator.clipboard.write` has been refused. `id` is echoed back because more than one
+copy can be in flight and a reply that cannot be matched to its request is one that has to
+be guessed at. A host that accepts and then never replies is given six seconds.
 
 #### `theme`
 

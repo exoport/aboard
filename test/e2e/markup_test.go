@@ -477,7 +477,10 @@ func TestARefusedCopyOffersThePictureInstead(t *testing.T) {
 
 	// It says the clipboard failed...
 	status := view.Locator(".markup-copy-status")
-	if err := expect.Locator(status).ToContainText("not available"); err != nil {
+	// Unframed, so there is no host to ask and the BROWSER's own reason is the
+	// actionable one. Framed, the board says which hop went quiet instead — see
+	// TestAHostThatRefusesGivesItsOwnReason.
+	if err := expect.Locator(status).ToContainText("permissions policy"); err != nil {
 		got, _ := status.TextContent()
 		t.Fatalf("a refused copy did not say so (status %q): %v", got, err)
 	}

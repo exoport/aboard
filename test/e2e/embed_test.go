@@ -439,6 +439,60 @@ func TestAHostThatRefusesGivesItsOwnReason(t *testing.T) {
 	}
 }
 
+// A host that never says what it can do gets NAMED as the reason, rather than
+// the board timing out and showing the browser's error.
+//
+// This is the case that could not be diagnosed on 2026-08-28: the panel showed
+// the fallback after several seconds and the message was Chromium's permissions
+// policy — which is true and useless, because it is equally true when everything
+// is working and the host is about to do the copy. A timeout cannot tell
+// "nothing framed me" from "an old host" from "a host that broke", so the board
+// stops guessing and says which of them it is looking at.
+func TestAHostThatNeverAnnouncedIsNamedAsTheReason(t *testing.T) {
+	s := openWrapper(t) // deliberately NOT the announcing wrapper
+	frame := s.page.FrameLocator("#frame")
+
+	if _, err := s.page.Evaluate(`(tab) => {
+		const f = document.getElementById('frame');
+		f.src = f.getAttribute('src').split('#')[0] + '#tab=' + tab;
+	}`, markupTab); err != nil {
+		t.Fatalf("pointing the frame at the markup tab: %v", err)
+	}
+	if err := frame.Locator(".markup-svg").First().
+		WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible}); err != nil {
+		t.Fatalf("the markup tab never came up: %v", err)
+	}
+
+	board := s.boardFrame()
+	if _, err := board.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked by a permissions policy')) },
+		});
+	}`); err != nil {
+		t.Fatalf("blocking the clipboard: %v", err)
+	}
+	cropInFrame(t, s)
+
+	dialog := frame.Locator(".markup-image-dialog[open]")
+	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+		t.Fatalf("no dialog: %v", err)
+	}
+	// It names the hop and what to do about it, and does NOT hand back the
+	// browser's message, which says nothing about the host at all.
+	if err := expect.Locator(dialog).ToContainText("has not said what it can do"); err != nil {
+		t.Errorf("the dialog does not name the silent host: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText(".vsix"); err != nil {
+		t.Errorf("the dialog does not say what to do about it: %v", err)
+	}
+	// And it does not wait six seconds to find out: with no announcement there is
+	// nothing to ask, so the answer is immediate.
+	if err := expect.Locator(dialog).Not().ToContainText("did not answer within"); err != nil {
+		t.Errorf("the board waited for a host it already knew was not there: %v", err)
+	}
+}
+
 /* ---------- storage refused ---------- */
 
 // Inside a webview the board is a third-party frame, where storage is
@@ -648,6 +702,9 @@ func openWrapperWithClipboard(t *testing.T) *session {
 		window.__clip = [];
 		window.__clipAnswer = { ok: true, tool: 'xclip' };
 		const frame = document.getElementById('frame');
+		// What the real host does on every frame load: say what it can do, so the
+		// board never has to discover it by timing out.
+		frame.contentWindow.postMessage({ __aboard: 'host', name: 'vscode-standin', clipboard: true }, '*');
 		addEventListener('message', (e) => {
 			if (e.source !== frame.contentWindow) return;
 			const m = e.data;

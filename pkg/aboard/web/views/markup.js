@@ -2045,12 +2045,20 @@ export function mountMarkup(root, ctx) {
       // browser's context menu on it. Right-click, Copy Image — the same gesture
       // they would use on any image on any page, available in a VS Code webview
       // too. A refusal becomes one extra click rather than a dead end.
-      copyStatus((viaHost && viaHost.error)
-        ? viaHost.error
-        : 'the clipboard is not available here — copy it from the picture instead', true);
+      // Three different failures, three different sentences. They used to share
+      // one, so "the host never answered" and "xclip is missing" and "nothing is
+      // framing this page" were indistinguishable to the person reading it.
+      const gap = hostClipboardGap();
+      const why = (viaHost && viaHost.error) ? viaHost.error
+        : window.parent === window
+          ? (err && err.message ? String(err.message) : 'the clipboard is not permitted here')
+          : gap
+            ? gap
+            : 'the window framing this board did not answer within six seconds';
+      copyStatus(why, true);
       // The host's reason if it gave one — "xclip is not installed", which the
       // human can act on — and the browser's only if nobody answered.
-      offerImage(canvas, what, (viaHost && viaHost.error) ? { message: viaHost.error } : err, imageId);
+      offerImage(canvas, what, { message: why }, imageId);
     }
   }
 
@@ -2073,8 +2081,22 @@ export function mountMarkup(root, ctx) {
     resolve({ ok: !!msg.ok, error: msg.error, tool: msg.tool });
   });
 
+  // Why a copy could not go through the host, in words that name the hop rather
+  // than the symptom. Returned instead of `null` so the dialog can say which of
+  // three different situations this is.
+  function hostClipboardGap() {
+    if (window.parent === window) return 'nothing is framing this board';
+    const host = window.ABOARD_HOST;
+    if (!host) {
+      return 'the window framing this board has not said what it can do — if this is a VS Code panel, '
+        + 'the extension is older than this board (reinstall the .vsix) or the panel needs reloading';
+    }
+    if (!host.clipboard) return `the ${host.name} window framing this board cannot write images to the clipboard`;
+    return null;
+  }
+
   function askHostToCopy(blob) {
-    if (window.parent === window) return Promise.resolve(null);
+    if (hostClipboardGap()) return Promise.resolve(null);
     return new Promise((resolve) => {
       const id = (clipboardAsk += 1);
       const reader = new FileReader();
