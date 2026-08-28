@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -509,6 +510,20 @@ func TestAWriteLandingInsideAReadDoesNotPinTheCacheStale(t *testing.T) {
 // and no journal line. A file that does not exist yet still has to be allowed
 // through, because that is the first POST on a fresh root.
 func TestAnUnreadableBoardIsRefusedRatherThanTakenAsEmpty(t *testing.T) {
+	// Two environments where a mode of 0 does not deny a read, and the test would
+	// fail for a reason that has nothing to do with the board.
+	//
+	// On WINDOWS `os.Chmod` reaches one bit — the read-only attribute — and
+	// permissions live in ACLs it does not touch, so a file at 0o000 is read
+	// perfectly well and the write is accepted. Found by the first Windows CI run
+	// this repository ever had, on the day of the first release: `make ci-local`
+	// says in as many words that it cannot catch Windows RUNTIME behaviour, and
+	// this is what that sentence was about. The mode-policy tests next door chose
+	// a `//go:build unix` tag for the same reason; a runtime skip is used here
+	// because the rest of this file is portable and the tag would take it with it.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no unreadable-by-mode: os.Chmod moves the read-only bit and nothing else")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root, where a mode of 0 is not a refusal")
 	}
