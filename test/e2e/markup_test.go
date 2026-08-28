@@ -992,9 +992,10 @@ func TestAFigureHeadStaysInsideItsColumn(t *testing.T) {
 	d.tab(t, id)["state"] = map[string]any{
 		"layout": "side-by-side",
 		"images": []any{
-			// The markable one carries the most controls — rename, hide, clear,
-			// three zoom, fit, copy — so it is the one that overflows first.
-			map[string]any{"id": "l", "src": "assets/mock-screen.svg", "caption": "a-long-dashboard-name-before.svg"},
+			// The reported shape, and the one that skews: the read-only side has
+			// five controls and the markable side eight — rename, hide, clear,
+			// three zoom, fit, copy — so their heads wrap to different heights.
+			map[string]any{"id": "l", "src": "assets/mock-screen.svg", "caption": "a-long-dashboard-name-before.svg", "annotatable": false},
 			map[string]any{"id": "r", "src": "assets/mock-screen-after.svg", "caption": "a-long-dashboard-name-after.svg"},
 		},
 	}
@@ -1031,6 +1032,30 @@ func TestAFigureHeadStaysInsideItsColumn(t *testing.T) {
 			t.Errorf("the markable image's head is %.0fpx tall — eight controls and a caption cannot fit one line at 430px, "+
 				"so something is being hidden rather than wrapped", h)
 		}
+	}
+
+	// ...and wrapping to DIFFERENT heights must not skew the pair. The markable
+	// side carries eight controls to the read-only side's five, so its head wraps
+	// one line further and used to push its own picture down with it. The two
+	// pictures start on the same line because the figures share row tracks.
+	var tops []float64
+	s.evalJSON(&tops, `(q) => [...document.querySelectorAll(q + ' .markup-figure .markup-stage')]
+		.map((el) => Math.round(el.getBoundingClientRect().top))`, `[data-tab="`+id+`"]`)
+	if len(tops) != 2 {
+		t.Fatalf("measured %d stages, want 2", len(tops))
+	}
+	if diff := tops[0] - tops[1]; diff > 1 || diff < -1 {
+		t.Errorf("the two pictures start at %v — a taller head on one side skews the pair", tops)
+	}
+
+	// The heads really are different heights. Without this the alignment above
+	// proves nothing: two identical heads line up by accident, which is exactly
+	// how the first version of this test passed while the defect was live.
+	var heads []float64
+	s.evalJSON(&heads, `(q) => [...document.querySelectorAll(q + ' .markup-figure-head')]
+		.map((el) => Math.round(el.getBoundingClientRect().height))`, `[data-tab="`+id+`"]`)
+	if len(heads) != 2 || heads[0] == heads[1] {
+		t.Errorf("the two heads are %v — this test needs them to differ, or it is asserting nothing", heads)
 	}
 }
 

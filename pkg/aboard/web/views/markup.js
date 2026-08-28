@@ -1300,6 +1300,11 @@ export function mountMarkup(root, ctx) {
         if (!rec) continue;
         desired.push(rec.figureEl);
         rec.figureEl.classList.toggle('has-spanning-table', span);
+        // How many of the wrap's rows this figure occupies: head and stage
+        // always, plus its own marks table when it keeps one. The stylesheet
+        // turns those into shared tracks, which is what aligns the pair.
+        const keepsTable = !!rec.listEl && !span;
+        rec.figureEl.style.gridRow = paired ? 'span ' + (keepsTable ? 3 : 2) : '';
         if (!rec.listEl) continue;
         rec.listEl.classList.toggle('markup-list-span', span);
         if (span) {
@@ -1361,28 +1366,36 @@ export function mountMarkup(root, ctx) {
     // centres itself; that is enough for a reference.
     let zoomLabel = null;
     {
+      // One wrapping unit: minus, the readout, plus, Fit. The head wraps at a
+      // narrow width, and a readout that wraps away from the buttons it belongs
+      // to reads as a broken control — "-" ending one line and "47% +" starting
+      // the next, which is what the first wrapping head actually did.
+      const zoomGroup = document.createElement('span');
+      zoomGroup.className = 'markup-zoom-group';
+      headRow.append(zoomGroup);
+
       const outBtn = ctl('zoom-out');
       outBtn.addEventListener('click', () => {
         const rec = imageRecords.get(imageId);
         if (rec) zoomAt(rec, 1 / 1.25, rec.stageEl.clientWidth / 2, rec.stageEl.clientHeight / 2);
       });
-      headRow.append(outBtn);
+      zoomGroup.append(outBtn);
 
       zoomLabel = document.createElement('span');
       zoomLabel.className = 'hint markup-zoom-label';
       zoomLabel.textContent = '100%';
-      headRow.append(zoomLabel);
+      zoomGroup.append(zoomLabel);
 
       const inBtn = ctl('zoom-in');
       inBtn.addEventListener('click', () => {
         const rec = imageRecords.get(imageId);
         if (rec) zoomAt(rec, 1.25, rec.stageEl.clientWidth / 2, rec.stageEl.clientHeight / 2);
       });
-      headRow.append(inBtn);
+      zoomGroup.append(inBtn);
 
       const fitBtn = ctl('zoom-fit');
       fitBtn.addEventListener('click', () => resetZoom(imageId));
-      headRow.append(fitBtn);
+      zoomGroup.append(fitBtn);
 
       const copyViewBtn = ctl('copy-view');
       copyViewBtn.addEventListener('click', () => copyView(imageId));
@@ -2500,6 +2513,31 @@ function ensureStyles() {
   gap: 16px;
   align-items: start;
 }
+/* The two figures of a pair SHARE their rows, so a head band is as tall as the
+   taller of the two and both pictures start on the same line.
+
+   Without this a figure is an independent box and its head is as tall as its own
+   content: the markable side carries eight controls to the read-only side's five,
+   wraps to one more line at a narrow width, and pushes its picture down. The pair
+   then reads as skewed -- reported 2026-08-28 with a screenshot, one line lower
+   on the right. Row subgrid is the only thing that makes one figure's height
+   depend on its neighbour's; the marks table already uses column subgrid for the
+   same reason, so this is the shape this view already relies on.
+
+   The span is set per figure in JS, because a figure holds three rows when it
+   carries its own marks table and two when that table has moved out to span the
+   pair. Both figures of a pair always agree: a table moves out only when exactly
+   one of them is markable, and then neither keeps one. */
+[data-view="markup"] .markup-images[data-layout="side-by-side"] > .markup-figure {
+  display: grid;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+}
+/* Natural heights inside the shared tracks. A stretched stage would stand a
+   short picture in a tall box and put its border in the wrong place. */
+[data-view="markup"] .markup-images[data-layout="side-by-side"] > .markup-figure > * {
+  align-self: start;
+}
 [data-view="markup"] .markup-images[data-layout="stacked"] {
   display: flex;
   flex-direction: column;
@@ -2590,6 +2628,13 @@ function ensureStyles() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The zoom cluster wraps as ONE thing. */
+[data-view="markup"] .markup-zoom-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 [data-view="markup"] .markup-stage {
   position: relative;
