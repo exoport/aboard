@@ -1907,7 +1907,17 @@ export function mountMarkup(root, ctx) {
   }
 
   // A rectangle of an image, in image fractions, as a PNG on the clipboard.
-  async function copyRect(imageId, rect, withMarks, what) {
+  // `outWidth` is the width of the PICTURE PRODUCED, in pixels. Left undefined it
+  // is the source region at its own resolution — right for a crop, which is a
+  // closeup of the original and wants every pixel the original has.
+  //
+  // Copy view passes the stage's size instead, and that difference is the whole
+  // of a bug reported on 2026-08-27: at 244% on a small pasted image, "copy the
+  // view" produced 55x60. It was arithmetically correct — a region of the SOURCE
+  // is smaller the further you zoom in — and exactly backwards from what the
+  // button says. Zooming in to look at something and then copying it must not
+  // hand back something smaller than what you were looking at.
+  async function copyRect(imageId, rect, withMarks, what, outWidth) {
     const rec = imageRecords.get(imageId);
     const im = readState().images.find((x) => x.id === imageId);
     if (!rec || !im || !rec.imgEl.naturalWidth) { copyStatus('nothing to copy', true); return; }
@@ -1919,9 +1929,10 @@ export function mountMarkup(root, ctx) {
     const sh = Math.min(nh - sy, rect.h * nh);
     if (sw < 1 || sh < 1) { copyStatus('that selection is empty', true); return; }
 
+    const scale = outWidth && sw > 0 ? outWidth / sw : 1;
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(sw);
-    canvas.height = Math.round(sh);
+    canvas.width = Math.max(1, Math.round(sw * scale));
+    canvas.height = Math.max(1, Math.round(sh * scale));
     const cx = canvas.getContext('2d');
     try {
       cx.drawImage(rec.imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
@@ -1929,7 +1940,7 @@ export function mountMarkup(root, ctx) {
       copyStatus('the image could not be read into a canvas', true);
       return;
     }
-    if (withMarks) drawMarksOnto(cx, { ...im, naturalW: nw, naturalH: nh }, sx, sy, sw, sh, 1);
+    if (withMarks) drawMarksOnto(cx, { ...im, naturalW: nw, naturalH: nh }, sx, sy, sw, sh, scale);
 
     let blob;
     try {
@@ -2031,7 +2042,21 @@ export function mountMarkup(root, ctx) {
     };
     // The stage is as wide as the image and as tall as the image's own aspect
     // ratio makes it, so the visible fraction is the same on both axes.
-    void copyRect(imageId, { x: clamp01(rect.x), y: clamp01(rect.y), w: rect.w, h: rect.h }, true, 'view');
+    //
+    // Rendered at what is ON SCREEN, times the device pixel ratio so it is not
+    // softer than the screen it was copied from. Capped so a very deep zoom on a
+    // hi-dpi display cannot ask for a canvas of tens of megapixels.
+    // The LARGER of what is on screen and what the source region actually holds.
+    //
+    // Screen size alone would lose resolution the other way: a big screenshot
+    // shrunk to fit the row, copied at rest, would come back at the shrunken
+    // size when the original pixels were right there. Source size alone is the
+    // bug being fixed. Neither direction should cost anything, so neither does.
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    const onScreen = Math.round(w * dpr);
+    const sourceW = Math.round((rec.imgEl.naturalWidth || w) * rect.w);
+    const out = Math.min(4096, Math.max(onScreen, sourceW));
+    void copyRect(imageId, { x: clamp01(rect.x), y: clamp01(rect.y), w: rect.w, h: rect.h }, true, 'view', out);
   }
 
   /* ---------- colour token resolution ---------- */

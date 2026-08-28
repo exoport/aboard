@@ -263,6 +263,14 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: Copy view captures what you are looking at, at the size you are looking at it.**
+  It took a region of the SOURCE and copied it at source resolution — so the further you
+  zoomed IN, the smaller the copy got. On a small pasted image at 244% that came back
+  55×60. Arithmetically right and exactly backwards from what the button says. The output
+  is now the larger of what is on screen (times the device pixel ratio) and what the
+  source region holds, so neither zooming in nor being shrunk to fit costs anything.
+  `Copy region` is unchanged: a crop is a closeup of the original and still comes back at
+  the original's own resolution.
 - **fix: four more on markup, and the clipboard gets a way out.**
   **The zoom readout is the effective scale.** A screenshot wider than the row is shrunk
   to fit it, and the label said `100%` while the picture was at something nearer 60% — so

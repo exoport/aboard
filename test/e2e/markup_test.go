@@ -557,6 +557,104 @@ func TestTheZoomReadoutIsTheEffectiveScale(t *testing.T) {
 	}
 }
 
+// Copy view captures what the stage is SHOWING — not a fragment of it.
+//
+// Reported 2026-08-27 from a panel at 244%: the copy came back 55x60, a
+// thumbnail of a corner. The refusal dialog is what made it visible, since it
+// prints the size of what it is holding.
+func TestCopyViewCapturesTheWholeVisibleArea(t *testing.T) {
+	id := makeScratchTab(t, "Copy the view")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	first := view.Locator(`.markup-figure[data-image-id="one"]`)
+
+	// The clipboard refuses, so every copy lands in the dialog — which is the one
+	// place the SIZE of the capture is stated.
+	if _, err := s.page.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked for this test')) },
+		});
+	}`, nil); err != nil {
+		t.Fatalf("replacing the clipboard: %v", err)
+	}
+
+	capture := func() (w, h float64) {
+		// The previous capture is still in the <img>, so waiting for "a picture
+		// exists" returns the OLD one instantly. Waited on the src CHANGING
+		// instead — the first version of this test measured the same 900px twice
+		// and reported the code as broken in the opposite direction to the bug.
+		var was string
+		s.evalJSON(&was, `(q) => { const el = document.querySelector(q); return el ? el.getAttribute('src') || '' : ''; }`,
+			`[data-tab="`+id+`"] .markup-offer-img`)
+		if err := first.Locator(`[data-gesture="copy-view"]`).Click(); err != nil {
+			t.Fatalf("clicking Copy view: %v", err)
+		}
+		var out struct {
+			W, H float64
+			Src  string
+		}
+		eventually(t, "a NEW offered picture to be drawn", func() bool {
+			s.evalJSON(&out, `(q) => {
+				const el = document.querySelector(q);
+				return { W: el ? el.naturalWidth : 0, H: el ? el.naturalHeight : 0, Src: el ? (el.getAttribute('src') || '') : '' };
+			}`, `[data-tab="`+id+`"] .markup-offer-img`)
+			return out.W > 0 && out.Src != was
+		})
+		if err := view.Locator(".markup-image-dialog").GetByText("Close").Click(); err != nil {
+			t.Fatalf("closing the dialog: %v", err)
+		}
+		return out.W, out.H
+	}
+
+	var natural, shown float64
+	s.evalJSON(&natural, `(q) => document.querySelector(q).naturalWidth`, `[data-tab="`+id+`"] .markup-img`)
+	s.evalJSON(&shown, `(q) => document.querySelector(q).clientWidth`, `[data-tab="`+id+`"] .markup-img`)
+
+	// Unzoomed, the whole picture is visible, so the capture is the whole picture
+	// at the size it is DISPLAYED (times the device pixel ratio).
+	var dpr float64
+	s.evalJSON(&dpr, `() => Math.min(3, Math.max(1, window.devicePixelRatio || 1))`)
+	w, h := capture()
+	t.Logf("at rest: natural=%.0f shown=%.0f dpr=%.1f captured=%.0fx%.0f", natural, shown, dpr, w, h)
+	if want := shown * dpr; w < want*0.95 || w > want*1.05 {
+		t.Errorf("unzoomed, Copy view captured %.0fpx; the picture is shown at %.0fpx (dpr %.1f)", w, shown, dpr)
+	}
+
+	// Zoomed in twice: a quarter-ish of the picture is visible, so the capture is
+	// that much of it — and still hundreds of pixels, not tens.
+	for range 2 {
+		if err := first.Locator(`[data-gesture="zoom-in"]`).Click(); err != nil {
+			t.Fatalf("zooming: %v", err)
+		}
+	}
+	var z float64
+	s.evalJSON(&z, `(q) => {
+		const m = new DOMMatrixReadOnly(getComputedStyle(document.querySelector(q)).transform);
+		return m.a;
+	}`, `[data-tab="`+id+`"] .markup-zoom`)
+	w2, h2 := capture()
+	t.Logf("zoomed: z=%.3f captured=%.0fx%.0f", z, w2, h2)
+	// The KEY property, and the one that was inverted: zooming IN must not make
+	// the copy smaller. The stage is the same size whatever the zoom, so what is
+	// produced is the same size too — you just get less of the picture, larger.
+	if want := shown * dpr; w2 < want*0.95 || w2 > want*1.05 {
+		t.Errorf("at z=%.2f Copy view captured %.0fpx wide; the stage still shows %.0fpx (dpr %.1f) — zooming in shrank the copy",
+			z, w2, shown, dpr)
+	}
+	if h2 < 20 {
+		t.Errorf("Copy view captured %.0fpx tall — that is a thumbnail, not the view", h2)
+	}
+}
+
 // Panning a zoomed image with the Move tool, which is the only way to reach the
 // parts of a magnified screenshot that are off the stage.
 func TestPanningAZoomedMarkupImage(t *testing.T) {
