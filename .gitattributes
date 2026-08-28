@@ -1,3 +1,31 @@
+# LINE ENDINGS, GLOBALLY: this tree is LF and stays LF on every platform.
+#
+# The rule below is a blanket one because the per-path list under it has now
+# missed a path TWICE — first `recipes.md`, which is generated but does not carry
+# the word "generated" in its name, and then `docs/reference/cli.md` and the
+# embedded recipe builtins, which took down the first Windows CI run this
+# repository ever had, on the day of the first release.
+#
+# The reason the list keeps missing things is that the property it is tracking is
+# not "is this file generated". It is "does anything, anywhere, compare these
+# bytes" — and in a tree whose tests compare committed output against output
+# generated in memory, whose capabilities hash is taken over spec bytes, and whose
+# fixtures are diffed whole, the honest answer is "assume yes". A Windows checkout
+# with core.autocrlf=true (the default) rewrites LF -> CRLF, the in-memory side
+# keeps LF, and the comparison fails on a tree that is otherwise identical.
+#
+# So: normalise to LF in the repository and check out LF everywhere. The specific
+# `-text` rules below stay, and still win for the paths they name — they say the
+# stronger thing, which is that git must not touch those bytes at all.
+* text=auto eol=lf
+
+# Generated and compared byte-for-byte against a copy built in memory.
+docs/reference/cli.md -text
+
+# Embedded in the binary, and the recipe index is generated FROM them.
+pkg/aboard/recipes/builtin/** -text
+recipes/** -text
+
 # `-text` on the embedded tree is LOAD-BEARING, and the reason is worth stating
 # exactly, because the obvious version of it names a command CI never runs.
 #
