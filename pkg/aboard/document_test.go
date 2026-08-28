@@ -318,7 +318,17 @@ func TestTheWatcherTickHashesOnlyWhenTheFileMoved(t *testing.T) {
 	}
 
 	// And it does notice a real change, so the gate is a gate and not a mute.
-	if err := os.Chtimes(srv.stateFile, time.Now(), time.Now()); err != nil {
+	//
+	// A second LATER than the file's own mtime, not `time.Now()`. The gate compares
+	// against the mtime recorded at the last hash, and on Windows the system clock
+	// ticks at about 15.6 ms — so a file written a few milliseconds ago and
+	// `time.Now()` are routinely the SAME instant, Chtimes moves the mtime to the
+	// value it already had, the gate correctly sees no change, and the test reads
+	// that as the gate being broken. Deriving the new time from the old one makes
+	// the difference real on every platform instead of relying on the clock having
+	// advanced.
+	moved := info.ModTime().Add(time.Second)
+	if err := os.Chtimes(srv.stateFile, moved, moved); err != nil {
 		t.Fatal(err)
 	}
 	if got := srv.stateSignature(); got == first {

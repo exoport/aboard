@@ -25,17 +25,25 @@ import (
 // untested on the platforms it was written for.
 func boardsIsAScan() bool { return runtime.GOOS == "linux" }
 
-func assertHonestElsewhere(t *testing.T, code int, out, errOut string) {
+// The refusal travels on the returned ERROR, not on stderr: the command returns
+// it and the caller renders it, which is what makes an exit status testable at
+// all here. Asserting against the captured stderr found it empty and reported
+// "the refusal does not name the platform" — with nothing after the colon,
+// because there was nothing there.
+func assertHonestElsewhere(t *testing.T, err error, out string) {
 	t.Helper()
-	if code != aboard.ExitUsage {
+	if err == nil {
+		t.Fatalf("boards succeeded on %s, where there is no process table to read", runtime.GOOS)
+	}
+	if code, _ := ExitCode(err); code != aboard.ExitUsage {
 		t.Fatalf("boards exited %d on %s, want %d — the command exists everywhere and is honest where it cannot scan",
 			code, runtime.GOOS, aboard.ExitUsage)
 	}
-	if !strings.Contains(errOut, runtime.GOOS) {
-		t.Errorf("the refusal does not name the platform:\n%s", errOut)
+	if !strings.Contains(err.Error(), runtime.GOOS) {
+		t.Errorf("the refusal does not name the platform: %v", err)
 	}
-	if !strings.Contains(errOut, "aboard status") {
-		t.Errorf("the refusal does not point at the per-project command:\n%s", errOut)
+	if !strings.Contains(err.Error(), "aboard status") {
+		t.Errorf("the refusal does not point at the per-project command: %v", err)
 	}
 	if strings.TrimSpace(out) != "" {
 		t.Errorf("it printed a listing anyway:\n%s", out)
@@ -45,11 +53,12 @@ func assertHonestElsewhere(t *testing.T, code int, out, errOut string) {
 func TestBoardsNeedsNoProjectOfItsOwn(t *testing.T) {
 	dir := t.TempDir() // no .aboard/ anywhere above it that matters
 
-	code, out, errOut := exitOf(t, "--cwd", dir, "boards")
+	out, errOut, runErr := run(t, "--cwd", dir, "boards")
 	if !boardsIsAScan() {
-		assertHonestElsewhere(t, code, out, errOut)
+		assertHonestElsewhere(t, runErr, out)
 		return
 	}
+	code, _ := ExitCode(runErr)
 	if code != aboard.ExitOK {
 		t.Fatalf("boards exited %d from a directory with no board: %s", code, errOut)
 	}
@@ -63,11 +72,12 @@ func TestBoardsNeedsNoProjectOfItsOwn(t *testing.T) {
 func TestBoardsJSONIsADocument(t *testing.T) {
 	dir := t.TempDir()
 
-	code, out, errOut := exitOf(t, "--cwd", dir, "boards", "--output-format", "json")
+	out, errOut, runErr := run(t, "--cwd", dir, "boards", "--output-format", "json")
 	if !boardsIsAScan() {
-		assertHonestElsewhere(t, code, out, errOut)
+		assertHonestElsewhere(t, runErr, out)
 		return
 	}
+	code, _ := ExitCode(runErr)
 	if code != aboard.ExitOK {
 		t.Fatalf("boards --output-format json exited %d: %s", code, errOut)
 	}
