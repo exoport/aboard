@@ -1,10 +1,15 @@
 # CHANGELOG
 
-## Unreleased
+## v0.1.0 — 2026-08-28
 
-Everything below closes `development/planning/plan-2_finish-line.md`, which is complete.
-The entries are one per user-visible change, so the larger plan items appear as several
-lines and the ones with no user-visible surface — the suite, the extension — appear as one.
+The first release. Everything below closes
+`development/planning/plan-2_finish-line.md`, which is complete. The entries are one per
+user-visible change, so the larger plan items appear as several lines and the ones with no
+user-visible surface — the suite, the extension — appear as one.
+
+Pre-1.0: the command surface and the state schema may still move between minor releases.
+Two things settled deliberately just before this tag, because both stop being free the
+moment anything is published — the `ab` id tag and the document schema resetting to 1.
 
 - **BREAKING: ids are tagged `ab`, not `bb`.** The tag exists so an id survives being
   written in a sentence, and `ab` says the name of the tool where `bb` said the name of a

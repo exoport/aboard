@@ -105,7 +105,7 @@ see "the make targets are the gate" below.
 
 If you are resuming and looking for the next task, **there is not one queued — ask the
 human.** A remote exists (`github.com/exoport/aboard`, and `…/aboard_vscode` for the
-extension) and **nothing has ever been pushed to either**. `git remote -v` prints
+extension); both are PUBLIC, and the first push was prepared on 2026-08-28. `git remote -v` prints
 `git@github.diegosz:exoport/…` rather than `github.com` because this machine rewrites it
 with a `url.…insteadOf` rule in `git config` pointing at an SSH host alias that picks the
 right key — the alias is local configuration, not the address, so **write `github.com` in

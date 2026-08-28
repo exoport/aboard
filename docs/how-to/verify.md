@@ -5,11 +5,6 @@ Every tagged release of `aboard` is signed with
 Sigstore Fulcio (keyless). The signature attests that the release was built and uploaded
 by this repository's `release.yml` workflow on the corresponding tag.
 
-> **There is no tagged release yet**, so there is nothing to download and nothing to
-> verify: the `curl` commands below return a 404 today. This page describes the release
-> workflow that is already in the repository, and the commands are the ones to run
-> against the first tag when it exists.
-
 You don't need to verify to use aboard — install via the
 [release archive](install.md) and you get the same binary. But if you ship aboard to
 others, into CI, or into a regulated environment, a verify step closes the supply-chain

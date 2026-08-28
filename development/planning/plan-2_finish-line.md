@@ -355,15 +355,24 @@ Four things, and the first is the one worth keeping.
 - ~~**Go 1.27 for the `json/v2` item**~~ — **ANSWERED 2026-08-27, see §10p.**
 - **The `ape aboard` mount itself** — out of scope for this plan by the human's word ("in the
   future"); when it comes it is a plan in the ape repo: `require github.com/exoport/aboard` at a
-  real tag, `root.AddCommand(cli.NewRootCmd(cli.Options{Host: aboard.HostApe}))`, and the two latent
-  hosted-mode findings from the review (invocation strings that say `aboard`, `version`/`/health`
-  reporting the host's commit) become real then.
-- **Installing and testing the extension (M6)** — the human's call on when; item 8 stops at a
-  green build. **A dev `.vsix` now exists** (2026-08-27, §10q): `npm run package` in
-  `aboard_vscode` produces `aboard-vscode-0.1.0.vsix`. Nobody has installed from it yet, and
-  that install is a different test from F5 — no debugger, real activation events, the packaged
-  file list rather than the working tree. Publishing anywhere is still gated, and still Open
-  VSX rather than the Marketplace.
+  real tag, `root.AddCommand(cli.NewRootCmd(cli.Options{Host: aboard.HostApe}))`.
+  **Rehearsed on 2026-08-28 and half of it is now closed.** A stand-in host — a 30-line cobra CLI
+  with a `replace`, then the same host against a real `v0.1.0` through a file module proxy — proved
+  the mount compiles, runs, keeps `capsHash` identical, and reports `app: ape-aboard` with the
+  host's `argv0`. It also turned one of the two latent findings into a fixed defect: **version
+  resolution read `info.Main`, which under a host is the HOST**, so an embedded board would have
+  reported the host's tag as its own. Fixed before the tag (`3e5fbb3`); a hosted board now reads
+  its own `info.Deps` entry and reports no commit at all. The OTHER finding is still open and still
+  belongs with the mount: the invocation strings, re-measured at **55** hardcoded `aboard <cmd>`
+  occurrences in Go strings plus **12** cobra `Example:` fields — four times the 13 recorded below,
+  so the ape plan starts from the right number.
+- ~~**Installing and testing the extension (M6)**~~ — **DONE 2026-08-27/28.** The human
+  installed the `.vsix` and has used it daily since; `npm run install:dev` packages, force-installs
+  and prints the version that landed. It found what F5 could not: the purpose strip reading as a
+  notification, the `+` costing a row, the palette mapping wrong twice, and the whole clipboard
+  round trip. Publishing to a marketplace is STILL gated and still Open VSX rather than the
+  Marketplace — and note that `docs/how-to/use-the-vscode-extension.md` records not publishing as
+  a decision rather than an omission, so reversing it is a decision too.
 - **Five judgement calls the porting agents made, which stand until the human overrules
   them.** They were recorded in `development/handoffs/handoff-phase-e-finish.md`; that folder
   was deleted on 2026-08-27 once every handoff in it was implemented, so they are written out

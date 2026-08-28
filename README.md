@@ -32,12 +32,6 @@ to ship alongside, and nothing on the network at runtime.
 
 ## Install
 
-> **No release has been published yet.** There is no tag, and nothing is on the module
-> proxy or in GitHub Releases, so every command in this section returns a 404 today.
-> Until the first tag exists, build it from a clone: `make install` (or `go build
-> ./cmd/aboard`). Everything below is how installing will work, and is kept here rather
-> than removed so that it is right on the day the tag lands.
-
 With a Go toolchain (1.27 or later — the JSON codec is `encoding/json/v2`, which is stdlib from 1.27):
 
 ```bash
