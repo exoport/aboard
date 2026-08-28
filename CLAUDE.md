@@ -133,7 +133,7 @@ plan-2 §10.
 | `restart.sh`                      | Dev convenience only: start this project's board or print the URL of the one already running, and `-force` to actually replace it. `aboard serve` refuses a duplicate on its own; this adds the deliberate restart. |
 | `pkg/aboard/example/`             | The example board `aboard init --example` seeds from, embedded so a `go install` binary carries it; also the fixture the Go tests read. |
 | `.claude/skills/aboard/`          | The skill: SKILL.md + references. Hand-copied into a project; its generated half is rebuilt by `make caps`.                           |
-| `.claude/skills/{handoff,release}/` | Working skills for this repo, carried from ape: writing a handoff, and cutting a release. The release one drops ape's harness gates. |
+| `.claude/skills/{handoff,release}/` | Working skills for this repo, carried from ape: writing a handoff, and cutting a release. The release one drops ape's harness gates. The handoff one has **diverged deliberately** from the copy it was forked from (`apex_process_framework_eval`), which is otherwise identical: it carries the transient-and-deleted rule, tells the READER to promote-then-delete when the work lands, captures the board read-only beside git, and requires that any command written into a handoff be run once first. |
 | `docs/`                           | User-facing docs, Diátaxis-structured — see [docs/README.md](docs/README.md).                                                         |
 | `development/`                    | Plans, briefs and the review record. **No handoffs** — see the decision below. `git log` is a real source here too: commit messages carry the reasoning and the mistakes.  |
 

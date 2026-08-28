@@ -35,10 +35,11 @@ recreate that directory; `git log` holds the deleted files if anybody needs the 
 - DO NOT skip steps or change the sequence
 - HALT immediately when halt-conditions are met
 - Each action within a step is a REQUIRED action to complete that step
-- DO NOT pre-scan the repository tree. Only cite artifacts that were actually surfaced in the current conversation (read, edited, or returned by tool results).
+- DO NOT pre-scan the repository tree. Only cite artifacts that were actually surfaced in the current conversation (read, edited, or returned by tool results). Step 4 is the one exception and is not a scan: `git` and `aboard` are asked about LIVE STATE, which by definition is not in the conversation — a branch that moved, a request the human added while you were working.
 - DO NOT restate the content of any cited artifact. Reference it by path only.
 - DO NOT fabricate `suggested_skills`. Omit the section entirely when nothing concrete points to a next skill.
 - General rule: only use the Bash tool to execute shell commands. Do not use any other tool for command execution.
+- **A command you put in the document is a claim. Run it once before writing it.** This is the repository's own rule (`CLAUDE.md`, "A CLI command in a doc is a claim"), and a handoff is the document most likely to carry one: the spike's resume section said `-journal -l 20` where the flag was `-limit`, so the third command a resuming session ran exited 2. A handoff whose first instruction fails costs the reader more than no handoff at all, because they now doubt the rest of it.
 
 ## EXECUTION
 
@@ -77,11 +78,25 @@ recreate that directory; `git log` holds the deleted files if anybody needs the 
   - Output documents created or modified during the session.
 - If no such references exist, the References section will be omitted.
 
-### Step 4: Capture Git Context
+### Step 4: Capture Git and Board Context
 
 - Use the Bash tool to capture: current branch name, short HEAD SHA, `git status -s` short output, last 5 commit subjects (`git log -n 5 --oneline`).
-- Capture each command's output into a variable. Do not chain commands; run each as a separate Bash call.
+- Capture each command's output into a variable. **Do not chain commands; run each as a separate Bash call** — and the reason is worth keeping: `sh` is `dash` here, a failing `$(...)` aborts a `set -e` script with no message at all, and a chain that dies halfway records a handoff's git context as blank rather than as broken.
 - If the working directory is not a git repository, record `git_context = none` and proceed.
+
+**In this repository there is a second half of the context, and it is not in git.** The
+board is where the human's own asks live, and a handoff that ignores it hands the next
+session half a picture — `requests` in particular is a channel an agent may only read and
+tick off, never write. Capture it **read-only**, each as its own Bash call:
+
+```bash
+aboard status              # running? which URL? plus the caps beacon and skill staleness
+aboard requests            # what the HUMAN has asked for, oldest first
+aboard journal --limit 10  # who changed what recently, including other sessions
+```
+
+- If `aboard` is not on `PATH`, or `.aboard/` does not exist, record `board_context = none` and proceed. Neither is an error here: most repositories have no board. Verified — in a directory with no `.aboard/`, `aboard status` exits **1** with *"no .aboard/ here"*, so treat exit 1 from these three as "no board" and never as a failed handoff.
+- **Never write to the board from this skill.** No `apply`, no `poke`, no `requests done`, and never `Edit` `.aboard/aboard.json` — a handoff is a description of the work, and a write from it would land on a document another session or the human may be editing. The two hard rules in `CLAUDE.md` apply here with no exception.
 
 ### Step 5: Identify Suggested Skills (Conditional)
 
@@ -124,15 +139,27 @@ Document body sections, in order:
    > 3. If `suggested_skills` is non-empty, ask whether to start with the first listed skill.
    > 4. Otherwise, present the open threads below and ask which to pick up.
    > 5. Do NOT re-summarise the document back to the user — they wrote it. Just confirm and proceed.
+   > 6. This file is TRANSIENT. When the work it describes has landed, promote anything a
+   >    future reader would be wrong without — a measurement, a rejected alternative and
+   >    why it lost, a judgement call that still stands — into `docs/`, `CLAUDE.md` or the
+   >    plan that owns the work, and then DELETE this file. A finished handoff does not go
+   >    quiet; it goes stale while still being read.
    ```
+
+   Item 6 is the half that was missing until 2026-08-28, and it is the half that failed:
+   the writer of a handoff is never the one who finishes the work, so a rule addressed only
+   to the writer reaches nobody at the moment it matters. Six handoffs sat under
+   `development/handoffs/` saying DONE at the top while `CLAUDE.md`, the plans and the
+   CHANGELOG went on citing them as live.
 
 3. **Next Focus** — one paragraph expanding `{next_focus}`.
 4. **Current State** — 1-5 bullets capturing where the session left off (in-flight vs done). High signal only.
 5. **Open Threads** — bulleted list of decisions deferred, unresolved questions, known blockers.
 6. **Git Context** — branch, short SHA, working tree status, last 5 commit subjects (from Step 4). Omit if `git_context = none`.
-7. **References** (only if Step 3 produced entries) — bulleted list of paths and commit/PR identifiers with the role tag from Step 3. Do NOT restate their content.
-8. **Suggested Skills** (only if Step 5 produced entries) — ordered list of `N. {skill-name} — {why}`.
-9. **Out of Scope** — what the next session should NOT pick up.
+7. **Board State** (only when Step 4 found a board) — the URL and pid, the caps beacon and whether the skill reference is stale, every pending request VERBATIM (they are the human's words, not yours to paraphrase), and the last few journal lines with their labels. Name a tab the way the board's own rule says: the name with the id beside it — "the Migration review tab (`ab32`)", never the id alone. Omit if `board_context = none`.
+8. **References** (only if Step 3 produced entries) — bulleted list of paths and commit/PR identifiers with the role tag from Step 3. Do NOT restate their content.
+9. **Suggested Skills** (only if Step 5 produced entries) — ordered list of `N. {skill-name} — {why}`.
+10. **Out of Scope** — what the next session should NOT pick up.
 
 Do NOT include any other sections. Keep the document under ~300 lines.
 
@@ -147,6 +174,12 @@ Scan the assembled document for the following classes of content and redact each
 - Customer or end-user personally identifiable information
 
 Do NOT redact: public file paths, commit SHAs, branch names, framework convention names, configuration keys.
+
+Two more, specific to a board: write repository-relative paths rather than absolute ones
+(`pkg/aboard/ids.go`, not `/home/<user>/…`) — a handoff that hard-codes one machine's
+layout is wrong on every other one — and do not transcribe what is in `.aboard/uploads/`.
+Those are screenshots the human pasted, they can contain anything that was on their
+screen, and a handoff only ever needs the tab and the id that point at them.
 
 ### Step 8: Write the Handoff File
 
