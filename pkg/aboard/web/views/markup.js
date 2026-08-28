@@ -2013,6 +2013,21 @@ export function mountMarkup(root, ctx) {
       cropSel.delete(imageId);
       render();
     } catch (err) {
+      // Before giving up: ask the HOST, if there is one that answers.
+      //
+      // A VS Code panel can put an image on the clipboard even though the page
+      // in it cannot — the extension host is a Node process and can run xclip.
+      // The board does not know or care that it is VS Code: it asks whoever
+      // framed it, and a host that does not implement this simply never
+      // answers, which the timeout turns into the same refusal as before.
+      const viaHost = await askHostToCopy(blob);
+      if (viaHost && viaHost.ok) {
+        copyStatus(`${what} copied — ${canvas.width}×${canvas.height}, paste it with Ctrl+V`);
+        cropSel.delete(imageId);
+        render();
+        return;
+      }
+
       // The clipboard is not always reachable, and in the place this board most
       // wants to be — a VS Code panel — it usually is not. The webview applies a
       // permissions policy the board is inside of, so `clipboard-write` has to
@@ -2026,9 +2041,61 @@ export function mountMarkup(root, ctx) {
       // browser's context menu on it. Right-click, Copy Image — the same gesture
       // they would use on any image on any page, available in a VS Code webview
       // too. A refusal becomes one extra click rather than a dead end.
-      copyStatus('the clipboard is not available here — copy it from the picture instead', true);
-      offerImage(canvas, what, err);
+      copyStatus((viaHost && viaHost.error)
+        ? viaHost.error
+        : 'the clipboard is not available here — copy it from the picture instead', true);
+      // The host's reason if it gave one — "xclip is not installed", which the
+      // human can act on — and the browser's only if nobody answered.
+      offerImage(canvas, what, (viaHost && viaHost.error) ? { message: viaHost.error } : err);
     }
+  }
+
+  // Ask whoever framed this board to put a PNG on the system clipboard.
+  //
+  // Unframed, or framed by something that does not implement it, this resolves
+  // to null and the caller falls through to the picture. There is deliberately
+  // no check for "is this VS Code": the board cannot tell, should not care, and
+  // a host that answers has proved more than any sniff could.
+  let clipboardAsk = 0;
+  const clipboardWaiting = new Map();
+  // The shell authenticates the host message (e.source === window.parent) and
+  // re-emits it here, so this listener sees only messages that already passed
+  // that check and nothing in this file has to repeat it.
+  document.addEventListener('aboard:clipboard-result', (evt) => {
+    const msg = evt.detail || {};
+    const resolve = clipboardWaiting.get(msg.id);
+    if (!resolve) return;
+    clipboardWaiting.delete(msg.id);
+    resolve({ ok: !!msg.ok, error: msg.error, tool: msg.tool });
+  });
+
+  function askHostToCopy(blob) {
+    if (window.parent === window) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const id = (clipboardAsk += 1);
+      const reader = new FileReader();
+      reader.onerror = () => resolve(null);
+      reader.onload = () => {
+        clipboardWaiting.set(id, resolve);
+        try {
+          parent.postMessage({ __aboard: 'clipboard-image', id, dataUrl: String(reader.result) }, '*');
+        } catch {
+          clipboardWaiting.delete(id);
+          resolve(null);
+          return;
+        }
+        // A host that never answers must not leave the human looking at
+        // "copying…" forever. Six seconds is longer than the host's own timeout
+        // on the tool it runs, so a slow xclip reports itself rather than being
+        // overtaken by this.
+        setTimeout(() => {
+          if (!clipboardWaiting.has(id)) return;
+          clipboardWaiting.delete(id);
+          resolve(null);
+        }, 6000);
+      };
+      reader.readAsDataURL(blob);
+    });
   }
 
   // The fallback: the cropped picture in the board's own dialog, at a size worth

@@ -269,6 +269,15 @@ lines and the ones with no user-visible surface — the suite, the extension —
   Moving it onto the picture as an overlay stopped the shuffling and was still clutter, so
   it is gone. How to pan lives where it costs nothing: the zoom readout's tooltip, and the
   help panel, which is generated from the declared gesture in `views/markup.spec.json`.
+- **feat: the board asks its HOST to copy an image when it cannot do it itself.** A VS
+  Code webview blocks the Clipboard API and VS Code offers no way to lift it — but the
+  extension host is a Node process and can run `xclip`. So a refused copy now posts
+  `{__aboard:'clipboard-image', id, dataUrl}` to the parent and waits, briefly, for
+  `{__aboard:'clipboard-result', id, ok, error}`. There is deliberately no check for
+  "am I in VS Code": the board asks whoever framed it, and a host that does not implement
+  it simply never answers, which the timeout turns into the same refusal as before. When
+  the host refuses it is the HOST's reason that is shown — *"xclip is not installed"* is
+  something a human can act on, where *"a permissions policy"* is not.
 - **fix: `side-by-side` means a PAIR, and several images make several pairs.** It set one
   grid column per image, so six screenshots became six columns — and now that a slice
   carries a marks table as well as a picture, a third column is unreadable before it is

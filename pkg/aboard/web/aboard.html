@@ -972,6 +972,13 @@ addEventListener('message', (e) => {
   if (!msg || typeof msg !== 'object') return;
   if (msg.__aboard === 'theme') { applyEmbedderTheme(msg); return; }
   if (msg.__aboard === 'newtab') { openNewTabSheet(); return; }
+  // The host's answer to a clipboard request a renderer made. Delivered as an
+  // event so the shell needs to know nothing about which renderer asked — the
+  // markup view listens for it and matches on the id it sent.
+  if (msg.__aboard === 'clipboard-result' && typeof msg.id === 'number') {
+    document.dispatchEvent(new CustomEvent('aboard:clipboard-result', { detail: msg }));
+    return;
+  }
 });
 
 /* ---------- what a tab is FOR ---------- */

@@ -352,6 +352,93 @@ func TestANewTabRequestFromSomewhereOtherThanTheParentIsIgnored(t *testing.T) {
 	}
 }
 
+/* ---------- {__aboard:'clipboard-image'} ---------- */
+
+// The board asks its HOST to put an image on the clipboard when it cannot do it
+// itself, and takes the host's answer.
+//
+// This exists because a VS Code webview holds a permissions policy that blocks
+// the Clipboard API and VS Code offers no way to lift it — but the extension
+// host is a Node process and can run xclip. The board does not know or care that
+// it is VS Code: it asks whoever framed it, and a host that does not implement
+// this never answers, which is the same as a refusal.
+func TestTheBoardAsksItsHostToCopyAnImage(t *testing.T) {
+	s := openWrapperWithClipboard(t)
+	frame := s.page.FrameLocator("#frame")
+
+	// The browser's own clipboard refuses, which is what a panel does.
+	board := s.boardFrame()
+	if _, err := board.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked by a permissions policy')) },
+		});
+	}`); err != nil {
+		t.Fatalf("blocking the clipboard inside the frame: %v", err)
+	}
+
+	cropInFrame(t, s)
+
+	// The wrapper stands in for the extension: it answers yes.
+	var asks []map[string]any
+	eventually(t, "the board to ask its host", func() bool {
+		s.evalJSON(&asks, `() => window.__clip`)
+		return len(asks) > 0
+	})
+	ask := asks[len(asks)-1]
+	if url, _ := ask["dataUrl"].(string); !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("the board sent %q, want a PNG data URL", firstChars(url, 32))
+	}
+	if _, ok := ask["id"].(float64); !ok {
+		t.Errorf("the request carries no id, so an answer could not be matched to it: %v", ask)
+	}
+
+	// Answered yes, so the board reports a copy and does NOT fall back to the
+	// picture — the dialog is the thing a working host makes unnecessary.
+	if err := expect.Locator(frame.Locator(".markup-copy-status")).ToContainText("copied"); err != nil {
+		got, _ := frame.Locator(".markup-copy-status").TextContent()
+		t.Fatalf("the host said yes and the board did not report a copy (status %q): %v", got, err)
+	}
+	if err := expect.Locator(frame.Locator(".markup-image-dialog[open]")).ToHaveCount(0); err != nil {
+		t.Errorf("the host copied it and the board offered the fallback anyway: %v", err)
+	}
+	// And the selection is spent, exactly as it is after a browser copy.
+	if err := expect.Locator(frame.Locator(".markup-crop")).ToHaveCount(0); err != nil {
+		t.Errorf("the crop rectangle survived a host copy: %v", err)
+	}
+}
+
+// A host that says no gets the picture, and the host's REASON — "xclip is not
+// installed" is something the human can act on, where the browser's
+// "permissions policy" is not.
+func TestAHostThatRefusesGivesItsOwnReason(t *testing.T) {
+	s := openWrapperWithClipboard(t)
+	frame := s.page.FrameLocator("#frame")
+
+	if _, err := s.page.Evaluate(`() => { window.__clipAnswer = { ok: false, error: 'xclip is not installed' }; }`, nil); err != nil {
+		t.Fatalf("arming the refusal: %v", err)
+	}
+	board := s.boardFrame()
+	if _, err := board.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked by a permissions policy')) },
+		});
+	}`); err != nil {
+		t.Fatalf("blocking the clipboard inside the frame: %v", err)
+	}
+
+	cropInFrame(t, s)
+
+	dialog := frame.Locator(".markup-image-dialog[open]")
+	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+		t.Fatalf("a refusing host offered nothing: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("xclip is not installed"); err != nil {
+		t.Errorf("the dialog shows the browser's reason instead of the host's actionable one: %v", err)
+	}
+}
+
 /* ---------- storage refused ---------- */
 
 // Inside a webview the board is a third-party frame, where storage is
@@ -538,6 +625,88 @@ func openSandboxedWrapper(t *testing.T, query string) *session {
 // tabCount is how many tabs the BOARD is showing, read from inside the frame.
 // The strip is hidden under notabs but it is still built, which is what makes it
 // a usable count here — and is itself the thing TestChromeNotabs… pins.
+// openWrapperWithClipboard frames the board in a page that answers clipboard
+// requests the way the extension does — recording them, and replying with
+// whatever `window.__clipAnswer` says (yes, by default).
+func openWrapperWithClipboard(t *testing.T) *session {
+	t.Helper()
+	s := openWrapper(t)
+	// Onto a markup tab: the wrapper's frame opens on whatever the board picks,
+	// and the clipboard lives in one renderer. A fragment-only change fires
+	// hashchange without reloading, which is the same way the real host navigates.
+	if _, err := s.page.Evaluate(`(tab) => {
+		const frame = document.getElementById('frame');
+		frame.src = frame.getAttribute('src').split('#')[0] + '#tab=' + tab;
+	}`, markupTab); err != nil {
+		t.Fatalf("pointing the frame at the markup tab: %v", err)
+	}
+	if err := s.page.FrameLocator("#frame").Locator(".markup-svg").First().
+		WaitFor(playwright.LocatorWaitForOptions{State: playwright.WaitForSelectorStateVisible}); err != nil {
+		t.Fatalf("the markup tab never came up inside the wrapper: %v", err)
+	}
+	if _, err := s.page.Evaluate(`() => {
+		window.__clip = [];
+		window.__clipAnswer = { ok: true, tool: 'xclip' };
+		const frame = document.getElementById('frame');
+		addEventListener('message', (e) => {
+			if (e.source !== frame.contentWindow) return;
+			const m = e.data;
+			if (!m || m.__aboard !== 'clipboard-image') return;
+			window.__clip.push({ id: m.id, dataUrl: m.dataUrl });
+			const answer = window.__clipAnswer;
+			frame.contentWindow.postMessage({
+				__aboard: 'clipboard-result', id: m.id, ok: answer.ok, error: answer.error, tool: answer.tool,
+			}, '*');
+		});
+	}`, nil); err != nil {
+		t.Fatalf("installing the clipboard stand-in: %v", err)
+	}
+	return s
+}
+
+// cropInFrame draws a crop rectangle inside the wrapper's board and presses Copy
+// region. The scroll is the part worth naming: the wrapper's iframe is a window
+// onto a long tab, and an element the board has laid out below that window has
+// page coordinates the mouse cannot reach — the drag lands on nothing and the
+// failure reads as "Copy region is disabled" three steps later.
+func cropInFrame(t *testing.T, s *session) {
+	t.Helper()
+	frame := s.page.FrameLocator("#frame")
+	if err := frame.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	board := s.boardFrame()
+	if _, err := board.Evaluate(`() => document.querySelector('.markup-svg').scrollIntoView({ block: 'center' })`); err != nil {
+		t.Fatalf("scrolling the image into the frame's view: %v", err)
+	}
+	svg := frame.Locator(".markup-svg").First()
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	// Bottom right, which is the one corner of the fixture image with no mark on
+	// it. A crop drag that STARTS on a mark never begins: onPointerDown selects
+	// the mark and returns, so the failure is "Copy region is disabled" three
+	// steps later with nothing to say why.
+	s.dragPointer(
+		point{box.X + box.Width*0.78, box.Y + box.Height*0.78},
+		point{box.X + box.Width*0.95, box.Y + box.Height*0.95},
+	)
+	if err := expect.Locator(frame.Locator(".markup-crop")).ToHaveCount(1); err != nil {
+		t.Fatalf("the drag inside the frame drew no crop rectangle: %v", err)
+	}
+	if err := frame.Locator(`[data-gesture="copy-region"]`).Click(); err != nil {
+		t.Fatalf("clicking Copy region: %v", err)
+	}
+}
+
+func firstChars(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
 func (s *session) tabCount() int {
 	s.t.Helper()
 	n, err := s.page.FrameLocator("#frame").Locator("#tabs .tab").Count()
