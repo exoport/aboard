@@ -2048,13 +2048,10 @@ export function mountMarkup(root, ctx) {
       // Three different failures, three different sentences. They used to share
       // one, so "the host never answered" and "xclip is missing" and "nothing is
       // framing this page" were indistinguishable to the person reading it.
-      const gap = hostClipboardGap();
       const why = (viaHost && viaHost.error) ? viaHost.error
         : window.parent === window
           ? (err && err.message ? String(err.message) : 'the clipboard is not permitted here')
-          : gap
-            ? gap
-            : 'the window framing this board did not answer within six seconds';
+          : hostClipboardGap();
       copyStatus(why, true);
       // The host's reason if it gave one — "xclip is not installed", which the
       // human can act on — and the browser's only if nobody answered.
@@ -2082,21 +2079,36 @@ export function mountMarkup(root, ctx) {
   });
 
   // Why a copy could not go through the host, in words that name the hop rather
-  // than the symptom. Returned instead of `null` so the dialog can say which of
-  // three different situations this is.
+  // than the symptom. Called only AFTER an attempt, so every branch describes
+  // something that has already been tried.
   function hostClipboardGap() {
     if (window.parent === window) return 'nothing is framing this board';
     const host = window.ABOARD_HOST;
-    if (!host) {
-      return 'the window framing this board has not said what it can do — if this is a VS Code panel, '
-        + 'the extension is older than this board (reinstall the .vsix) or the panel needs reloading';
+    if (host && !host.clipboard) {
+      return `the ${host.name} window framing this board cannot write images to the clipboard`;
     }
-    if (!host.clipboard) return `the ${host.name} window framing this board cannot write images to the clipboard`;
-    return null;
+    if (!host) {
+      return 'the window framing this board never said what it can do, and did not answer when asked — '
+        + 'if this is a VS Code panel, the extension is older than this board (reinstall the .vsix) '
+        + 'or the panel needs reloading';
+    }
+    return `the ${host.name} window framing this board did not answer within six seconds`;
   }
 
+  // An announcement makes the FAILURE legible; it is not permission to try.
+  //
+  // This gate used to require one, which turned a diagnostic into a regression:
+  // a panel one build older announces nothing and yet can copy perfectly well,
+  // so the board refused to ask a host that would have said yes, and then
+  // reported the silence it had caused itself. Found on 2026-08-28, the same
+  // morning the announcement was added, and by the person it was added for.
+  //
+  // So: ask unless there is nobody to ask, or the host has said in so many words
+  // that it cannot. Silence is answered by the timeout, as it was before.
   function askHostToCopy(blob) {
-    if (hostClipboardGap()) return Promise.resolve(null);
+    if (window.parent === window) return Promise.resolve(null);
+    const host = window.ABOARD_HOST;
+    if (host && !host.clipboard) return Promise.resolve(null);
     return new Promise((resolve) => {
       const id = (clipboardAsk += 1);
       const reader = new FileReader();

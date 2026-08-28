@@ -229,8 +229,13 @@ The board asking a host to put a PNG on the system clipboard, because it cannot.
 webview applies a permissions policy that blocks the Clipboard API and the host cannot
 lift it; an extension host is an ordinary process and can run `xclip`.
 
-Only sent when the host has announced `clipboard: true`, and only after the board's own
-`navigator.clipboard.write` has been refused. `id` is echoed back because more than one
+Sent after the board's own `navigator.clipboard.write` has been refused — to any host at
+all, announced or not. **The announcement makes a failure legible; it is not permission to
+try.** Requiring one was a regression the day it landed: a host one build older announces
+nothing and can copy perfectly well, so the board refused to ask something that would have
+said yes, and then reported the silence it had caused itself. The one host it does not ask
+is one that announced `clipboard: false`, which is a host saying no rather than saying
+nothing. `id` is echoed back because more than one
 copy can be in flight and a reply that cannot be matched to its request is one that has to
 be guessed at. A host that accepts and then never replies is given six seconds.
 

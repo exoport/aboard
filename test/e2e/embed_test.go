@@ -439,16 +439,16 @@ func TestAHostThatRefusesGivesItsOwnReason(t *testing.T) {
 	}
 }
 
-// A host that never says what it can do gets NAMED as the reason, rather than
-// the board timing out and showing the browser's error.
+// A host that never announced is still ASKED, and only then named.
 //
-// This is the case that could not be diagnosed on 2026-08-28: the panel showed
-// the fallback after several seconds and the message was Chromium's permissions
-// policy — which is true and useless, because it is equally true when everything
-// is working and the host is about to do the copy. A timeout cannot tell
-// "nothing framed me" from "an old host" from "a host that broke", so the board
-// stops guessing and says which of them it is looking at.
-func TestAHostThatNeverAnnouncedIsNamedAsTheReason(t *testing.T) {
+// The announcement exists to make a failure legible, not to gate the attempt.
+// Gating it was a regression the day it shipped: a panel one build older
+// announces nothing and copies perfectly well, so the board refused to ask a
+// host that would have said yes, then reported the silence it had caused.
+//
+// This wrapper announces nothing AND answers nothing, which is the only case
+// where the "never said what it can do" sentence is the true one.
+func TestAHostThatNeverAnnouncedIsAskedAnyway(t *testing.T) {
 	s := openWrapper(t) // deliberately NOT the announcing wrapper
 	frame := s.page.FrameLocator("#frame")
 
@@ -463,6 +463,17 @@ func TestAHostThatNeverAnnouncedIsNamedAsTheReason(t *testing.T) {
 		t.Fatalf("the markup tab never came up: %v", err)
 	}
 
+	// Record what reaches the parent, so the ask itself can be asserted rather
+	// than inferred from the message the human ends up reading.
+	if _, err := s.page.Evaluate(`() => {
+		window.__asks = [];
+		window.addEventListener('message', (e) => {
+			if (e.data && e.data.__aboard === 'clipboard-image') window.__asks.push(e.data.id);
+		});
+	}`); err != nil {
+		t.Fatalf("watching for the ask: %v", err)
+	}
+
 	board := s.boardFrame()
 	if _, err := board.Evaluate(`() => {
 		Object.defineProperty(navigator, 'clipboard', {
@@ -474,22 +485,32 @@ func TestAHostThatNeverAnnouncedIsNamedAsTheReason(t *testing.T) {
 	}
 	cropInFrame(t, s)
 
+	// The ask goes out even though nothing announced itself. This is the
+	// assertion the regression would have failed. Waited for rather than read
+	// once: the ask is two async hops behind the click — the clipboard write has
+	// to be refused first, and the PNG has to be read as a data URL.
+	if _, err := s.page.WaitForFunction(`() => window.__asks.length > 0`, playwright.PageWaitForFunctionOptions{
+		Timeout: playwright.Float(5000),
+	}); err != nil {
+		t.Fatalf("the board did not ask a host that had not announced: %v", err)
+	}
+
+	// And then, having waited and heard nothing, it says both halves: the host
+	// never announced, and it did not answer either.
 	dialog := frame.Locator(".markup-image-dialog[open]")
-	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+	if err := expect.Locator(dialog).ToBeVisible(playwright.LocatorAssertionsToBeVisibleOptions{
+		Timeout: playwright.Float(12000), // the ask waits six seconds first
+	}); err != nil {
 		t.Fatalf("no dialog: %v", err)
 	}
-	// It names the hop and what to do about it, and does NOT hand back the
-	// browser's message, which says nothing about the host at all.
-	if err := expect.Locator(dialog).ToContainText("has not said what it can do"); err != nil {
+	if err := expect.Locator(dialog).ToContainText("never said what it can do"); err != nil {
 		t.Errorf("the dialog does not name the silent host: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("did not answer when asked"); err != nil {
+		t.Errorf("the dialog does not say it tried anyway: %v", err)
 	}
 	if err := expect.Locator(dialog).ToContainText(".vsix"); err != nil {
 		t.Errorf("the dialog does not say what to do about it: %v", err)
-	}
-	// And it does not wait six seconds to find out: with no announcement there is
-	// nothing to ask, so the answer is immediate.
-	if err := expect.Locator(dialog).Not().ToContainText("did not answer within"); err != nil {
-		t.Errorf("the board waited for a host it already knew was not there: %v", err)
 	}
 }
 
