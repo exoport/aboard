@@ -740,10 +740,12 @@ func TestACropCanBeAddedToTheTabAsANewImage(t *testing.T) {
 // The "how to pan" hint started life as a span in the image's head row, so it
 // pushed every button beside it sideways when it appeared and back again when it
 // went — the toolbar jumped about as you zoomed, which is worse than the
-// discoverability problem it was added to solve. Reported 2026-08-27.
+// discoverability problem it was added to solve. Moving it onto the picture
+// stopped the shuffling and was still clutter, so it is gone. Both were reported
+// on 2026-08-27, an hour apart.
 //
-// It is an overlay on the picture now, which is to say it is outside layout, so
-// this measures the one thing that matters: the buttons do not move.
+// What survives is the measurement, which outlasted three versions of the thing
+// it was measuring: zooming does not move the buttons.
 func TestZoomingDoesNotMoveTheImageButtons(t *testing.T) {
 	id := makeScratchTab(t, "Steady buttons")
 	d := readDoc(t)
@@ -785,9 +787,17 @@ func TestZoomingDoesNotMoveTheImageButtons(t *testing.T) {
 		}
 	}
 
-	// The hint is still SHOWN — it just does not push anything.
-	if err := expect.Locator(first.Locator(".markup-pan-hint")).ToBeVisible(); err != nil {
-		t.Errorf("no pan hint after zooming in: %v", err)
+	// And nothing was ADDED to the picture either. The hint went through a head-row
+	// span and then a fading overlay before being removed outright: a permanent
+	// instruction is clutter for everyone who has read it once, and the gesture is
+	// declared in views/markup.spec.json, so the help panel carries it for anybody
+	// looking. The readout's tooltip says it too, at no cost in layout.
+	if err := expect.Locator(first.Locator(".markup-pan-hint")).ToHaveCount(0); err != nil {
+		t.Errorf("the pan hint is back on screen: %v", err)
+	}
+	title, err := first.Locator(".markup-zoom-label").GetAttribute("title")
+	if err != nil || !strings.Contains(title, "pan") {
+		t.Errorf("the zoom readout's tooltip does not mention panning (title %q, err %v)", title, err)
 	}
 
 	// Back to Fit, and the buttons are still where they were.

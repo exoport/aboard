@@ -104,7 +104,6 @@ export function mountMarkup(root, ctx) {
     zoomState.set(rec.id, view);
     rec.zoomEl.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
     rec.stageEl.dataset.zoomed = view.z > 1 ? 'yes' : 'no';
-    showPanHint(rec, view.z > 1);
     if (!rec.zoomLabel) return;
     // What the reader can actually measure off the screen: the size of a pixel
     // of the ORIGINAL, not the zoom factor. A screenshot wider than the row is
@@ -117,8 +116,16 @@ export function mountMarkup(root, ctx) {
     const shown = rec.imgEl.clientWidth;
     const effective = nat > 0 && shown > 0 ? (shown / nat) * view.z : view.z;
     rec.zoomLabel.textContent = Math.round(effective * 100) + '%';
+    // Everything worth saying about zoom, in the one place that costs no layout:
+    // the readout's own tooltip. There WAS an on-screen hint about panning — in
+    // the head row, where it shuffled every button beside it, and then as a
+    // fading overlay on the picture. Both were reported as annoying, and they
+    // were: a permanent instruction is clutter for everyone who has read it
+    // once. The gesture is declared in views/markup.spec.json, so the help panel
+    // lists it for anybody looking for it, which is where somebody looks.
     rec.zoomLabel.title = nat > 0
-      ? `${Math.round(effective * 100)}% of the original ${nat}px — Fit is whatever makes it fill the row`
+      ? `${Math.round(effective * 100)}% of the original ${nat}px. Fit is whatever fills the row.`
+        + ' Drag to pan with the Move tool, or with the middle button and any tool.'
       : '';
   }
 
@@ -135,26 +142,6 @@ export function mountMarkup(root, ctx) {
     view.z = next;
     zoomState.set(rec.id, view);
     applyZoom(rec);
-  }
-
-  // Shown on a zoom change and taken away again a few seconds later. The timer
-  // is per image and cleared before it is set, so repeated zooming keeps it up
-  // rather than half-hiding it mid-gesture.
-  function showPanHint(rec, wanted) {
-    if (!rec.panHint) return;
-    if (rec.panHintTimer) {
-      clearTimeout(rec.panHintTimer);
-      rec.panHintTimer = null;
-    }
-    if (!wanted) {
-      rec.panHint.hidden = true;
-      return;
-    }
-    rec.panHint.hidden = false;
-    rec.panHintTimer = setTimeout(() => {
-      rec.panHint.hidden = true;
-      rec.panHintTimer = null;
-    }, 5000);
   }
 
   function resetZoom(imageId) {
@@ -1393,23 +1380,6 @@ export function mountMarkup(root, ctx) {
     failEl.hidden = true;
     stageEl.append(failEl); // outside the zoom: a failure message is chrome, not content
 
-    // How to pan, said ON the picture rather than in the head row.
-    //
-    // It was a span in the head row, and appearing and disappearing there
-    // reflowed every button beside it — the toolbar jumped about as you zoomed,
-    // which is worse than the problem it was solving. Reported 2026-08-27.
-    //
-    // Absolutely positioned inside the stage, so it takes part in no layout at
-    // all: it cannot move anything, whether it is there or not. And it fades
-    // after a few seconds instead of sitting on the picture forever — a hint is
-    // for the first time you zoom, not the fiftieth. Any zoom change brings it
-    // back, so it is there whenever somebody is doing the thing it is about.
-    const panHint = document.createElement('p');
-    panHint.className = 'markup-pan-hint';
-    panHint.textContent = 'drag to pan — Move tool, or the middle button with any tool';
-    panHint.hidden = true;
-    stageEl.append(panHint);
-
     let svgEl = null;
     let labelsEl = null;
     let handlesEl = null;
@@ -1518,7 +1488,7 @@ export function mountMarkup(root, ctx) {
     return {
       id: imageId, figureEl, capEl, hideBtn, clearBtn,
       stageEl, zoomEl, imgEl, failEl, svgEl, labelsEl, handlesEl,
-      listEl, colHeadEl, listEmptyEl, zoomLabel, panHint,
+      listEl, colHeadEl, listEmptyEl, zoomLabel,
       annotatable, failed: false,
     };
   }
@@ -2361,24 +2331,6 @@ function ensureStyles() {
   stroke-dasharray: 6 4;
 }
 [data-view="markup"] .markup-copy-status { margin: 0 0 0 4px; }
-/* On the picture, not in the toolbar: absolutely positioned so it is outside
-   layout entirely and cannot move a single button by appearing. */
-[data-view="markup"] .markup-pan-hint {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  z-index: 2;
-  margin: 0;
-  padding: 3px 8px;
-  border-radius: 3px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.72rem;
-  pointer-events: none;
-}
-[data-view="markup"] .markup-pan-hint[hidden] { display: none; }
-[data-view="markup"] .markup-image-dialog p { margin: 0 0 10px; }
 [data-view="markup"] .markup-offer-img {
   display: block;
   max-width: min(70vw, 900px);
