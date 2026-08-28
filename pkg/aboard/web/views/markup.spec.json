@@ -71,6 +71,11 @@
       "doc": "Copy the selected rectangle with its marks drawn on."
     },
     {
+      "id": "crop-to-image",
+      "label": "Add as image",
+      "doc": "Put the selected rectangle on this tab as a new image to draw on."
+    },
+    {
       "id": "swatch",
       "label": "",
       "title": "Colour",
@@ -140,7 +145,7 @@
     "each mark is badged on the image with its id, so the image, the list and a sentence all use one identifier",
     "Ctrl/Cmd+wheel over an image to zoom it (the readout is its size against the original, not the zoom factor); pan a zoomed one by dragging with Move, or with the middle button and any tool",
     "each image is its own slice — caption, buttons, the picture, then that image's own marks",
-    "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks"
+    "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks, or add it to this tab as a new image to draw on"
   ],
   "keys": [],
   "notes": [

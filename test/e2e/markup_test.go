@@ -655,6 +655,86 @@ func TestCopyViewCapturesTheWholeVisibleArea(t *testing.T) {
 	}
 }
 
+// The crop, added straight to the tab as a new image — no clipboard involved.
+//
+// This is what the clipboard was for here: "copy a rectangle so it could then be
+// pasted as a new image, like a closeup". In a VS Code panel the clipboard is
+// blocked by a permissions policy the board cannot change, so the round trip
+// through it was the one part that could not be made to work. This route needs
+// no permission at all.
+func TestACropCanBeAddedToTheTabAsANewImage(t *testing.T) {
+	covers(t, "markup", "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks, or add it to this tab as a new image to draw on")
+
+	id := makeScratchTab(t, "Closeup")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{
+			"id": "one", "src": "assets/mock-screen.svg", "caption": "source.svg",
+			"regions": []any{map[string]any{"id": "bb501", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2, "color": "danger"}},
+		}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+
+	if err := view.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	svg := view.Locator(".markup-svg").First()
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	s.dragPointer(
+		point{box.X + box.Width*0.4, box.Y + box.Height*0.4},
+		point{box.X + box.Width*0.8, box.Y + box.Height*0.8},
+	)
+	if err := view.Locator(`[data-gesture="crop-to-image"]`).Click(); err != nil {
+		t.Fatalf("clicking Add as image: %v", err)
+	}
+
+	// A second image on the tab, uploaded and stored like any pasted one.
+	eventually(t, "the closeup to reach the server", func() bool {
+		st := readDoc(t).state(t, id)
+		images, _ := st["images"].([]any)
+		return len(images) == 2
+	})
+	images, _ := readDoc(t).state(t, id)["images"].([]any)
+	added, _ := images[1].(map[string]any)
+	src, _ := added["src"].(string)
+	if !strings.HasPrefix(src, "uploads/") {
+		t.Errorf("the closeup was stored at %q, want it under uploads/", src)
+	}
+	if caption, _ := added["caption"].(string); !strings.Contains(caption, "closeup") {
+		t.Errorf("the closeup is captioned %q — it should say where it came from", caption)
+	}
+	// Its own slice, its own (empty) table: it is a first-class image, not an
+	// attachment of the one it was cut from.
+	if err := expect.Locator(view.Locator(".markup-figure")).ToHaveCount(2); err != nil {
+		t.Errorf("the closeup did not get a slice of its own: %v", err)
+	}
+
+	// CLEAN: the source's mark is not baked into it. A closeup exists to be drawn
+	// on, and pixels of an old mark cannot be selected, recoloured or deleted.
+	if regions, _ := added["regions"].([]any); len(regions) != 0 {
+		t.Errorf("the closeup arrived with marks on it: %v", regions)
+	}
+
+	// And it is a real image the server will serve.
+	res, err := s.page.Request().Get(boardURL + "/" + src)
+	if err != nil || !res.Ok() {
+		t.Fatalf("the uploaded closeup does not serve: %v", err)
+	}
+
+	// The selection is spent, like it is after a copy.
+	if err := expect.Locator(view.Locator(".markup-crop")).ToHaveCount(0); err != nil {
+		t.Errorf("the crop rectangle survived being turned into an image: %v", err)
+	}
+}
+
 // Panning a zoomed image with the Move tool, which is the only way to reach the
 // parts of a magnified screenshot that are off the stage.
 func TestPanningAZoomedMarkupImage(t *testing.T) {
@@ -755,7 +835,7 @@ func TestChoosingAToolDoesNotScrollThePage(t *testing.T) {
 // everything else you can drag on this image is stored, and a rectangle that
 // looked like a mark but vanished on reload would be the worst of both.
 func TestTheCropToolSelectsWithoutMarking(t *testing.T) {
-	covers(t, "markup", "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks")
+	covers(t, "markup", "drag with the crop tool to select a rectangle, then copy it to the clipboard with or without its marks, or add it to this tab as a new image to draw on")
 
 	id := makeScratchTab(t, "Crop me")
 	d := readDoc(t)

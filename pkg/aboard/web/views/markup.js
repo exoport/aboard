@@ -209,7 +209,9 @@ export function mountMarkup(root, ctx) {
   copyRegionBtn.addEventListener('click', () => copyCrop(false));
   const copySeenBtn = ctl('copy-seen');
   copySeenBtn.addEventListener('click', () => copyCrop(true));
-  toolbarEl.append(copyRegionBtn, copySeenBtn);
+  const cropAddBtn = ctl('crop-to-image');
+  cropAddBtn.addEventListener('click', () => { void cropToImage(); });
+  toolbarEl.append(copyRegionBtn, copySeenBtn, cropAddBtn);
 
   const copyStatusEl = document.createElement('span');
   copyStatusEl.className = 'hint markup-copy-status';
@@ -304,6 +306,10 @@ export function mountMarkup(root, ctx) {
   imageDialogEl.append(imageDialogImg);
   const imageDialogActions = document.createElement('div');
   imageDialogActions.className = 'dialog-actions';
+  // The way out that needs no clipboard at all, offered where the refusal is
+  // read rather than only in a toolbar the human has just been let down by.
+  const imageDialogAdd = button('Add it to this tab instead', '', { onClick: () => { void cropToImage(); } });
+  imageDialogActions.append(imageDialogAdd);
   imageDialogActions.append(button('Close', '', { className: 'primary-btn', onClick: () => imageDialogEl.close() }));
   imageDialogEl.append(imageDialogActions);
   panel.append(imageDialogEl);
@@ -1167,6 +1173,10 @@ export function mountMarkup(root, ctx) {
     const has = tool === 'crop' && cropSel.size > 0;
     copyRegionBtn.disabled = !has;
     copySeenBtn.disabled = !has;
+    cropAddBtn.disabled = !has;
+    cropAddBtn.title = has
+      ? 'Put the selected rectangle on this tab as a new image to draw on'
+      : (tool === 'crop' ? 'Draw a rectangle with the crop tool first.' : 'Choose the crop tool and draw a rectangle first.');
     const why = tool === 'crop' ? 'Draw a rectangle with the crop tool first.' : 'Choose the crop tool and draw a rectangle first.';
     copyRegionBtn.title = has ? 'Copy just the pixels inside the rectangle' : why;
     copySeenBtn.title = has ? 'Copy the rectangle with its marks drawn on' : why;
@@ -1917,17 +1927,20 @@ export function mountMarkup(root, ctx) {
   // is smaller the further you zoom in — and exactly backwards from what the
   // button says. Zooming in to look at something and then copying it must not
   // hand back something smaller than what you were looking at.
-  async function copyRect(imageId, rect, withMarks, what, outWidth) {
+  // The picture, drawn. Split out of copyRect because the clipboard is only ONE
+  // thing to do with a crop — putting it on the tab as a new image is the other,
+  // and it is the one that works in a VS Code panel.
+  function drawCrop(imageId, rect, withMarks, outWidth) {
     const rec = imageRecords.get(imageId);
     const im = readState().images.find((x) => x.id === imageId);
-    if (!rec || !im || !rec.imgEl.naturalWidth) { copyStatus('nothing to copy', true); return; }
+    if (!rec || !im || !rec.imgEl.naturalWidth) { copyStatus('nothing to copy', true); return null; }
     const nw = rec.imgEl.naturalWidth;
     const nh = rec.imgEl.naturalHeight;
     const sx = Math.max(0, rect.x * nw);
     const sy = Math.max(0, rect.y * nh);
     const sw = Math.min(nw - sx, rect.w * nw);
     const sh = Math.min(nh - sy, rect.h * nh);
-    if (sw < 1 || sh < 1) { copyStatus('that selection is empty', true); return; }
+    if (sw < 1 || sh < 1) { copyStatus('that selection is empty', true); return null; }
 
     const scale = outWidth && sw > 0 ? outWidth / sw : 1;
     const canvas = document.createElement('canvas');
@@ -1938,15 +1951,25 @@ export function mountMarkup(root, ctx) {
       cx.drawImage(rec.imgEl, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     } catch {
       copyStatus('the image could not be read into a canvas', true);
-      return;
+      return null;
     }
     if (withMarks) drawMarksOnto(cx, { ...im, naturalW: nw, naturalH: nh }, sx, sy, sw, sh, scale);
+    return canvas;
+  }
+
+  function canvasBlob(canvas) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned nothing'))), 'image/png');
+    });
+  }
+
+  async function copyRect(imageId, rect, withMarks, what, outWidth) {
+    const canvas = drawCrop(imageId, rect, withMarks, outWidth);
+    if (!canvas) return;
 
     let blob;
     try {
-      blob = await new Promise((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned nothing'))), 'image/png');
-      });
+      blob = await canvasBlob(canvas);
     } catch {
       copyStatus('this image cannot be copied (the canvas is tainted)', true);
       return;
@@ -2001,6 +2024,7 @@ export function mountMarkup(root, ctx) {
   // nothing at all.
   function offerImage(canvas, what, err) {
     imageDialogTitle.textContent = 'Right-click the picture to copy or save it';
+    imageDialogAdd.hidden = cropSel.size === 0;
     imageDialogWhy.textContent = 'The clipboard could not be written to directly: '
       + (err && err.message ? err.message : 'it is not permitted in this window')
       + ' — this is the same ' + what + ', ' + canvas.width + '×' + canvas.height + '.';
@@ -2012,6 +2036,42 @@ export function mountMarkup(root, ctx) {
   // The crop tool's selection. `withMarks` is the difference between the two
   // buttons: a clean closeup to annotate afresh, or the region as it looks now
   // to paste somewhere outside the board.
+  // The crop, straight onto the tab as a new image.
+  //
+  // This is what the clipboard was ever FOR here — the ask was "copy a rectangle
+  // so it could then be pasted as a new image, like a closeup" — and it is the
+  // route that works in a VS Code panel, where the clipboard is blocked by a
+  // permissions policy the board sits inside of and cannot change. It reuses the
+  // paste/drop path exactly: POST /upload, then a new entry in `images`. Same
+  // code, so a closeup added this way is indistinguishable from one pasted in.
+  //
+  // CLEAN pixels, deliberately. A closeup exists to be drawn on, and the marks
+  // from the picture it came out of would be baked in as pixels that cannot be
+  // selected, recoloured or deleted — sitting under the new marks you are about
+  // to make.
+  async function cropToImage() {
+    const entries = [...cropSel.entries()];
+    if (!entries.length) { copyStatus('draw a rectangle with the crop tool first', true); return; }
+    const [imageId, rect] = entries[entries.length - 1];
+    copyStatus('adding…');
+    const canvas = drawCrop(imageId, rect, false);
+    if (!canvas) return;
+    let blob;
+    try {
+      blob = await canvasBlob(canvas);
+    } catch {
+      copyStatus('this image cannot be read (the canvas is tainted)', true);
+      return;
+    }
+    const source = readState().images.find((x) => x.id === imageId);
+    const base = (source && source.caption ? source.caption.replace(/\.[a-z0-9]+$/i, '') : 'image');
+    const file = new File([blob], base + '-closeup.png', { type: 'image/png' });
+    cropSel.delete(imageId);
+    copyStatus(`added as a new image — ${canvas.width}×${canvas.height}`);
+    await addImageFile(file);
+    if (imageDialogEl.open) imageDialogEl.close();
+  }
+
   function copyCrop(withMarks) {
     // Says something SYNCHRONOUSLY, before any of the async work. Everything
     // below this line is a promise — toBlob, then the clipboard — and a press

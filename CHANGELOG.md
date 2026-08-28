@@ -263,6 +263,17 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **feat: a crop can be added to the tab as a new image, with no clipboard involved.**
+  This is what the clipboard was ever for here — *"copy a rectangle so it could then be
+  pasted as a new image, like a closeup"* — and it is the one route that works in a VS
+  Code panel, where the board sits inside a permissions policy it cannot change and
+  Chromium blocks `clipboard.write` outright. **Add as image** takes the selected
+  rectangle down the same path a pasted screenshot takes: `POST /upload`, then a new entry
+  in `images`, so a closeup added this way is indistinguishable from one pasted in. It
+  gets its own slice and its own marks table. The pixels are **clean** — the source's
+  marks are not baked in, because a closeup exists to be drawn on and pixels of an old
+  mark cannot be selected, recoloured or deleted. The refusal dialog offers the same
+  button, where the human is actually reading about the refusal. `capsHash` → `8ee029a2`.
 - **fix: Copy view captures what you are looking at, at the size you are looking at it.**
   It took a region of the SOURCE and copied it at source resolution — so the further you
   zoomed IN, the smaller the copy got. On a small pasted image at 244% that came back
