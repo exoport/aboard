@@ -2,31 +2,40 @@
 
 There are two ways to put a board inside VS Code, and they solve different problems.
 
-- **The Simple Browser** needs nothing installed: paste the board's URL into a built-in webview and it docks as an editor tab. That is [How to run aboard inside VS Code](run-in-vscode.md), and it is what most people should use today.
+- **The Simple Browser** needs nothing installed: paste the board's URL into a built-in webview and it docks as an editor tab. That is [How to run aboard inside VS Code](run-in-vscode.md), and it is the shorter route if you do not want to build anything.
 - **The extension** adds a sidebar: a tree of the board's tabs, with the board itself in a panel beside your code, and the handful of actions only a human is allowed to take. This page is about that.
 
-> **Status: verified in a real VS Code on 2026-08-26, twice, and not packaged.** The human
-> worked the extension's hand-verification checklist through in an Extension Development
-> Host over two passes. Observed working: activation and discovery (including a board
-> started *after* the window was open), the tree, the panel rendering the board without its
-> own tab strip, tab switching with no page reload, the panel surviving a drag to another
-> editor group, `html` tabs painting with a clean console, dots arriving live, removal
-> requests answered from the sidebar, rename and set-note, `]` inside the panel moving the
-> sidebar highlight, two viewers disagreeing about chrome, a server restart, a forced `409`,
-> the Start-the-board fallback, and the board following the VS Code theme. **Still
-> unobserved**: the extension's own reconnect backoff against a board that will not come
-> back, the old-binary warning, Remote SSH / Codespaces, and the two fixes that came out of
-> the second pass (the notify bell and Copy Reference) — those are proven by tests, not by
-> eye. The extension's own `README.md` is the live status; there is no `.vsix`.
+> **Status: packaged, installed and in daily use here since 2026-08-27.** It is built as
+> a `.vsix` and installed into a normal editor — not run under F5 — and the board this
+> repository develops against is read through it. Observed working in a real editor:
+> activation and discovery (including a board started *after* the window was open), the
+> tree, the panel rendering the board without its own tab strip, tab switching with no
+> page reload, the panel surviving a drag to another editor group, `html` tabs painting
+> with a clean console, dots arriving live, removal requests answered from the sidebar,
+> rename and set-note, `]` inside the panel moving the sidebar highlight, two viewers
+> disagreeing about chrome, a server restart, a forced `409`, the Start-the-board
+> fallback, the board following the editor theme (including both high-contrast themes),
+> the sidebar's **New Tab** button, the **nudge** button releasing a parked session, and
+> a cropped image reaching the system clipboard through `xclip`. **Still unobserved**:
+> the extension's own reconnect backoff against a board that will not come back, the
+> old-binary `?chrome=` warning, and Remote SSH / Codespaces. The extension's own
+> `README.md` is the live status.
 >
-> Six defects came out of those two passes — five by the human looking at the screen and
-> one while reviewing a fix — and every one was invisible to a suite that had been green
-> for days. Five were in the extension; one was in *this* repository, and it is the
-> one worth knowing about here: the board called `window.confirm`, which a webview
-> swallows, so the removal banner's **Remove tab** did nothing at all. That is fixed — see
-> [why the board never pops up an OS
-> dialog](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog). If you want a board
-> in VS Code with nothing installed, the Simple Browser is still the shorter route.
+> **What that use has been worth, and it is the argument for installing rather than
+> reading:** every defect of consequence in this pairing was found by a human looking at
+> a screen, and not one was visible to either test suite. Two `F5` passes on 2026-08-26
+> produced six; installing the `.vsix` on 2026-08-27 produced four more that F5 had not
+> (a purpose strip that read as a notification, the `+` costing a row of a small panel,
+> and the palette mapping wrong twice, both times built from individually valid
+> colours); the clipboard round trip on 2026-08-28 produced three, one of which was a
+> failure the board could not describe because it had been discovering its host by
+> timing out. The one that belongs on this page: the board called `window.confirm`,
+> which a webview swallows, so the removal banner's **Remove tab** did nothing at all —
+> fixed, and explained in [why the board never pops up an OS
+> dialog](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog).
+>
+> If you want a board in VS Code with nothing installed, the Simple Browser is still the
+> shorter route.
 
 ## Where it lives
 
@@ -52,6 +61,8 @@ What it puts on screen:
 - **A dot per tab that needs attention** — periwinkle for a change an agent made, red for a pending removal request, removal winning when a tab has both. The view's badge counts the changed ones.
 - **The board itself in a webview panel**, in an `<iframe>` on the running server, with VS Code's port mapping so it also works over Remote SSH and Codespaces.
 - **More than one board at once** — a multi-root workspace, or one project serving a [named board](run-a-second-board.md) beside its default, gets a row each.
+- **A New Tab button in the view's title bar**, because `?chrome=notabs` hides the board's own `+` along with the strip. It posts `{__aboard: 'newtab'}` and the BOARD draws the sheet: the host knows nothing about types or empty states, which is what keeps this extension free of the board's schema.
+- **A nudge button**, which releases every session parked on `aboard wait`. It was a bell until 2026-08-27, and a bell reads as "notifications about the board" — the opposite of what it does, which is to poke an agent.
 
 The actions it offers are the writes the board permits from a human: dismiss a change
 marker, approve or deny a removal request, rename a tab, set its `note`, release a
@@ -98,6 +109,33 @@ nothing that behaves differently inside the panel from a browser tab. The reason
 what it looked like when it was not true, is in [How to run aboard inside VS
 Code](run-in-vscode.md#why-the-board-never-pops-up-an-os-dialog).
 
+## Copying an image out of a panel
+
+A `markup` tab can copy a cropped region, or the current view, to the system clipboard.
+In a browser that is `navigator.clipboard.write` and there is nothing to arrange. **In a
+webview it cannot work and never will**: Chromium refuses with *"The Clipboard API has
+been blocked because of a permissions policy applied to the current document"*, the
+webview document holds that policy, and VS Code exposes no way to lift it — there is no
+permission field on `WebviewOptions`, and `vscode.env.clipboard` is text only.
+
+So the extension does it instead, because an extension host is an ordinary process and
+can run a program. The board posts the PNG out of the frame, the host writes a temp file
+and runs **`xclip`** (or `wl-copy` on Wayland), and the answer comes back. Install one of
+them:
+
+```bash
+sudo apt install xclip     # or: sudo apt install wl-clipboard
+```
+
+With neither installed the board says so by name and offers the picture in a dialog, with
+a button that adds it to the tab as a new image — the one route that asks permission from
+nobody.
+
+Two things worth knowing when it does not work:
+
+- **The board is told what its host can do, rather than finding out by trying.** The panel announces `{__aboard: 'host', name, clipboard}` on every frame load. Without that announcement a failure is a six-second silence, and a silence cannot distinguish "nothing framed me" from "an older extension framed me" from "the host broke" — nor any of them from a working host a moment before it succeeds. One failure survived three rounds of reinstall-and-restart on exactly that evidence.
+- **An announcement explains a failure; it does not authorise the attempt.** The board asks any host at all, announced or not, and only skips one that has said `clipboard: false`. Gating the ask on the announcement was a regression that lasted about an hour: a panel one build older announces nothing and copies perfectly well.
+
 The full coupling between the two repositories is a **contract, not a shared file**: it
 is `docs/reference/http-api.md` in this repository, reduced to the parts a viewer uses —
 `/health`, `/aboard.json`, `/events`, `/capabilities`, `POST /aboard.json`, `/poke`,
@@ -112,13 +150,20 @@ packages.
 
 ```sh
 npm ci
-npm run build     # → dist/extension.js
-npm test          # node --test, no framework
+npm run build       # → dist/extension.js
+npm test            # node --test, no framework
+npm run install:dev # package a .vsix, install it, and print the version that landed
 ```
 
-`npm test` should end with `# fail 0` — it reported `# tests 191` across `# suites 49`
-from a clean copy on 2026-08-27, and the counter to read is the failure one, not the
+`npm test` should end with `# fail 0` — it reported `# tests 221` across `# suites 56`
+from a clean copy on 2026-08-28, and the counter to read is the failure one, not the
 total.
+
+`install:dev` prints the installed version as its last line, and that line is the point
+of it: a dev build that fails to land looks exactly like a bug in whatever you were
+testing. Reload the window afterwards (*Developer: Reload Window*) — a new version is a
+new folder under `~/.vscode/extensions/`, and the extension host picks it up on a
+reload.
 Everything with a rule worth arguing about — the discovery walk, the document-to-tree
 mapping, the edits, the SSE frame parsing, the URL construction — lives on the
 non-`vscode` side of the code so that it can be reached without a running editor. That
@@ -129,19 +174,17 @@ editor.
 
 `F5` from the repository opens an **Extension Development Host** — a second VS Code
 window with the extension loaded. Open a project that has a board running, and the
-sidebar should populate.
+sidebar should populate. `npm run install:dev` is the other way, and the two are not
+equivalent: F5 runs from the source tree with a debugger attached, while an installed
+`.vsix` runs from the packaged file list with none. Four defects have been found only by
+the second, one of them a `.vscodeignore` question and one an inspector interfering with
+the SSE stream.
 
-**Expect to find bugs.** Two passes through the checklist in a real host produced six of
-them, and none was visible to `node --test`; the extension's failure mode is *silence*, so
-the thing to do is look at the screen rather than at the output channel. There is no
-`.vsix` to install and no `vsce` in the dependency list, on purpose: packaging comes after
-somebody has used it, not before.
-
-If you are *contributing* to aboard rather than using it, note that the extension's own
-`README.md` asks you not to be the one who takes that step: packaging or installing a
-`.vsix` is gated on the maintainer's first run, so that the first report comes from
-somebody who can act on it. Pressing `F5` in your own clone to look around is a
-different thing, and it is yours to do.
+**Expect to find bugs.** Every defect of consequence here was found by looking at the
+screen, and none was visible to `node --test`; the extension's failure mode is *silence*.
+When something appears to do nothing, the **Aboard** output channel is the first place to
+look — it names the running version at activation and logs each clipboard request with
+its outcome and timing.
 
 Every board request the extension makes is a read or a write the board already permits,
 so the worst case there is an empty sidebar or a failed action — it cannot corrupt a

@@ -179,7 +179,7 @@ For scripted screenshots, two things bite and both have the same fix — use the
 ## See also
 
 - [Your first board](../tutorials/first-board.md) — the whole loop including this step.
-- [How to use the VS Code extension](use-the-vscode-extension.md) — the other way to get a board into VS Code: a sidebar tree and a panel, rather than one browser tab. Run once in a real editor, and unverified for everything that run did not reach.
+- [How to use the VS Code extension](use-the-vscode-extension.md) — the other way to get a board into VS Code: a sidebar tree and a panel, rather than one browser tab. Packaged and in daily use; it also carries the clipboard bridge, which a Simple Browser tab does not need and cannot have.
 - [How to put aboard behind a reverse proxy](serve-under-a-path-prefix.md) — the prefix above, in full, including the traps a proxy adds.
 - [The `.aboard/` layout](../reference/layout.md) — the instance file the URL comes from.
 - [HTTP API](../reference/http-api.md) — the routes the page is using while you watch it.

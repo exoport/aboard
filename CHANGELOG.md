@@ -6,6 +6,41 @@ Everything below closes `development/planning/plan-2_finish-line.md`, which is c
 The entries are one per user-visible change, so the larger plan items appear as several
 lines and the ones with no user-visible surface — the suite, the extension — appear as one.
 
+- **BREAKING: ids are tagged `ab`, not `bb`.** The tag exists so an id survives being
+  written in a sentence, and `ab` says the name of the tool where `bb` said the name of a
+  category ("bulletin board") that appears nowhere else. **Nothing has to be migrated**:
+  every parser has always read `^[a-z]*(\d+)$`, so a board written before this resolves
+  every id it holds and only new ids look different. The retired forms — the spike's `n7`
+  and this project's `bb7` — are pinned as rows in the id-counter table, because a board
+  full of them must keep raising `nextId` or the first write after an upgrade hands out an
+  id that already names something.
+- **BREAKING: the board document's `version` resets to 1.** It read 3, counting two
+  layout changes made on the spike this was ported from — so a first release would have
+  arrived at `"version": 3` inviting its reader to look for two earlier shapes that no
+  user could have. Reset **only** because nothing is published; once a tag exists this
+  number goes up and never back. `aboard init` writes 1, the server stamps 1, and a
+  document arriving with anything else is stamped and rendered as before.
+- **fix: the schema version is checked in both places it is declared.** It lives in Go
+  and in the shell, and resetting one without the other made every board come up with an
+  **empty tab strip, no console error, and a perfectly valid document** — `repaint()`
+  compares the document's version against the shell's constant and clears the strip when
+  they differ, which is right for a page left open across an upgrade and catastrophic
+  when it is the constants that disagree. Six browser tests reported it as "the tab strip
+  never appeared", which reads like a broken suite. A test now parses the constant out of
+  `aboard.html` and compares it.
+- **feat: a host tells the board what it can do, instead of being asked and timing out.**
+  `{__aboard: 'host', name, clipboard}` on every frame load, recorded as
+  `window.ABOARD_HOST` and re-emitted as an `aboard:host` event. It exists because a
+  timeout cannot tell "nothing framed me" from "an old host" from "a host that broke" —
+  nor any of them from a working host a moment before it succeeds. A clipboard failure
+  survived three rounds of reinstall-and-restart on exactly that evidence, and each of
+  those cases is now its own sentence naming its own hop.
+- **fix: the announcement explains a failure; it does not authorise the attempt.** Gating
+  the clipboard ask on having heard an announcement was a regression on the code path it
+  was added to diagnose: a host one build older announces nothing and copies perfectly
+  well, so the board refused to ask something that would have said yes and then reported
+  the silence it had caused itself. It now asks any host at all, and short-circuits only
+  on one that announced `clipboard: false` — a host saying no rather than saying nothing.
 - **feat: a dark/light switch, a project house style, and no product name in the palette.**
   `app.css` used to describe its colours as coming from a named VS Code theme; it now
   describes them by what they are — a neutral near-black surface ramp, one olive accent,
@@ -678,14 +713,18 @@ lines and the ones with no user-visible surface — the suite, the extension —
 - **hardening: an `html` tab's CSP carries `sandbox allow-scripts`**, so the opaque
   origin holds when the document is fetched standalone rather than framed.
   `connect-src 'none'` is still the containment.
-- **`capsHash` ends this release at `4a42dfe3`.** It moved three times on the way:
+- **`capsHash` ends this release at `207b5d93`.** It moved five times on the way:
+  `4a42dfe3` → `8ee029a2` when `markup` gained the crop, zoom and copy controls, and
+  `8ee029a2` → `207b5d93` when the document schema reset to 1, because the manifest
+  states the schema version and a reader has to be able to see that it moved. The three
+  earlier moves:
   `9facfc76` → `6ff337ed` when the command table gained subcommands, so
   `recipes list`, `recipes show` and their flags became part of the described
   surface; `6ff337ed` → `9defc6c6` when `history`, `rendered`, `uploads` and
   `apply`'s `--check`/`--strict`/`--label`/`--force` did; and `9defc6c6` →
   `4a42dfe3` when the journal record widened, because the manifest's own line for
   `GET /journal` said `before` held a previous STATE and that stopped being the
-  whole truth. All three moves are correct and all three are recorded, because the
+  whole truth. All five moves are correct and all five are recorded, because the
   intermediate value is the one a half-updated skill will be carrying — and `aboard status` comparing a skill's stamp against
   the binary's is how a session finds out its reference describes a board that no
   longer exists.
