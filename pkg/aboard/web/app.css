@@ -687,7 +687,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .help-list { grid-template-columns: 1.2ch 1fr; }
 
 /* The term column sizes to its longest term instead of a guessed width, and is
-   allowed to wrap. A fixed 15ch let "#tab=bb71&node=bb58" and words like
+   allowed to wrap. A fixed 15ch let "#tab=ab71&node=ab58" and words like
    "heartbeat" overflow and print straight through the description beside them. */
 .help-keys { grid-template-columns: minmax(9ch, max-content) 1fr; align-items: baseline; }
 .help-keys dt {

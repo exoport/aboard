@@ -14,14 +14,14 @@ import (
 func TestCSVRefusalOffersAFlagThatExists(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","name":"Notes","type":"notes","state":{"text":"nothing tabular here"}}
+	if err := os.WriteFile(state, []byte(`{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","name":"Notes","type":"notes","state":{"text":"nothing tabular here"}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	var out, errOut bytes.Buffer
-	err := Export(state, "bb1", "csv", &out, &errOut)
+	err := Export(state, "ab1", "csv", &out, &errOut)
 	if err == nil {
 		t.Fatal("a notes tab produced a csv")
 	}
@@ -39,9 +39,9 @@ func TestCSVRefusalOffersAFlagThatExists(t *testing.T) {
 func TestExportNeedsNoServer(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","key":"decisions","name":"Decisions","type":"gate","state":{"pending":[],"decided":[
-	    {"id":"bb2","title":"Ship it","verdict":"allow","reason":"because","at":"2026-08-25T00:00:00Z","by":"human"}
+	if err := os.WriteFile(state, []byte(`{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","key":"decisions","name":"Decisions","type":"gate","state":{"pending":[],"decided":[
+	    {"id":"ab2","title":"Ship it","verdict":"allow","reason":"because","at":"2026-08-25T00:00:00Z","by":"human"}
 	  ]}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -63,10 +63,10 @@ func TestExportNeedsNoServer(t *testing.T) {
 func TestATableExportsAsCSVHeadedByItsIds(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"nextId":5,"tabs":[
-	  {"id":"bb1","key":"table-example","name":"Rows","type":"table","state":{
+	if err := os.WriteFile(state, []byte(`{"version":1,"nextId":5,"tabs":[
+	  {"id":"ab1","key":"table-example","name":"Rows","type":"table","state":{
 	    "columns":[{"id":"thing","label":"cell type","type":"text"},{"id":"count","label":"number","type":"number"}],
-	    "rows":[{"id":"bb2","thing":"text","count":1},{"id":"bb3","thing":"number","count":42}]}}
+	    "rows":[{"id":"ab2","thing":"text","count":1},{"id":"ab3","thing":"number","count":42}]}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestATableExportsAsCSVHeadedByItsIds(t *testing.T) {
 	if !strings.HasPrefix(first, "id") {
 		t.Errorf("the CSV is not headed by the id column: %q", first)
 	}
-	if !strings.Contains(out.String(), "bb3") {
+	if !strings.Contains(out.String(), "ab3") {
 		t.Errorf("a row is missing from the CSV:\n%s", out.String())
 	}
 }
@@ -89,8 +89,8 @@ func TestATableExportsAsCSVHeadedByItsIds(t *testing.T) {
 func TestExportRefusesAnUnknownTab(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","name":"Notes","type":"notes","state":{"text":"hello"}}
+	if err := os.WriteFile(state, []byte(`{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","name":"Notes","type":"notes","state":{"text":"hello"}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +110,8 @@ func TestExportRefusesAnUnknownTab(t *testing.T) {
 func TestAMarkdownExportLeadsWithAHeading(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","key":"decisions","name":"Decisions","type":"gate","state":{"pending":[],"decided":[]}}
+	if err := os.WriteFile(state, []byte(`{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","key":"decisions","name":"Decisions","type":"gate","state":{"pending":[],"decided":[]}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}

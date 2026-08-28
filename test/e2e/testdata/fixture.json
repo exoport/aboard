@@ -9,13 +9,13 @@
     "what a driver needs to have something to grab.",
     "",
     "`patch` merges recursively into the tab with that id \u2014 objects merge, arrays",
-    "replace whole \u2014 so `bb128.state.pending` arrives without erasing the decided",
+    "replace whole \u2014 so `ab128.state.pending` arrives without erasing the decided",
     "row the `undo` control lives on. `add` appends new tabs.",
     "",
-    "`bb132` gains options because the example ships the vote tab with an empty ballot \u2014 a vote with nothing to score renders its empty state, and every scoring gesture would be untestable against it."
+    "`ab132` gains options because the example ships the vote tab with an empty ballot \u2014 a vote with nothing to score renders its empty state, and every scoring gesture would be untestable against it."
   ],
   "patch": {
-    "bb22": {
+    "ab22": {
       "state": {
         "layout": "side-by-side",
         "images": [
@@ -76,11 +76,11 @@
         ]
       }
     },
-    "bb128": {
+    "ab128": {
       "state": {
         "pending": [
           {
-            "id": "bb201",
+            "id": "ab201",
             "by": "agent-e2e",
             "risk": "low",
             "title": "Run the browser suite against this board",
@@ -90,7 +90,7 @@
         ]
       }
     },
-    "bb132": {
+    "ab132": {
       "state": {
         "options": [
           {
@@ -114,7 +114,7 @@
   },
   "add": [
     {
-      "id": "bb202",
+      "id": "ab202",
       "key": "scratch",
       "name": "Scratch",
       "type": "notes",

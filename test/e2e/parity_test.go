@@ -234,9 +234,9 @@ func TestTypesInitMatchesTheSpecs(t *testing.T) {
 // demonstrated only in the case that works is untested, so the gallery has both
 // and this asserts the bound one.
 func TestAKvComponentResolvesABind(t *testing.T) {
-	s := open(t, "tab=bb133")
+	s := open(t, "tab=ab133")
 	openGalleryPanel(t, s, "Data")
-	view := s.view("bb133")
+	view := s.view("ab133")
 
 	// The bound kv is the one whose first key names a field of state.data.
 	bound := view.Locator(".uic-kv").Filter(playwright.LocatorFilterOptions{
@@ -258,7 +258,7 @@ func TestAKvComponentResolvesABind(t *testing.T) {
 	// document so the assertion is about resolution rather than about typing.
 	written := "resolved by the browser suite"
 	d := readDoc(t)
-	data, _ := d.state(t, "bb133")["data"].(map[string]any)
+	data, _ := d.state(t, "ab133")["data"].(map[string]any)
 	demo, _ := data["demo"].(map[string]any)
 	demo["text"] = written
 	apply(t, d)
@@ -276,20 +276,20 @@ func TestAKvComponentResolvesABind(t *testing.T) {
 
 // A deliberately-invalid node renders a VISIBLE marker rather than nothing.
 //
-// `bb133`'s "Unknown" panel contains a `sparkline` on purpose, and every write
+// `ab133`'s "Unknown" panel contains a `sparkline` on purpose, and every write
 // touching that tab warns about it — that is the checker working, not a defect
 // to fix by deleting the demonstration. What the browser has to do with it is
 // show something: an unknown component type shows a marker, and an unknown PROP
 // shows nothing at all, which is why `apply` succeeding is not evidence that
 // anything rendered.
 func TestAnUnknownUiComponentRendersAMarker(t *testing.T) {
-	s := open(t, "tab=bb133")
+	s := open(t, "tab=ab133")
 	openGalleryPanel(t, s, "Unknown")
 
-	if err := expect.Locator(s.view("bb133").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
 		t.Fatalf("an unknown component drew nothing at all: %v", err)
 	}
-	if err := expect.Locator(s.view("bb133").Locator(".uic-unknown").First()).ToContainText("sparkline"); err != nil {
+	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToContainText("sparkline"); err != nil {
 		t.Errorf("the marker does not name the component nobody implemented: %v", err)
 	}
 }
@@ -298,14 +298,14 @@ func TestAnUnknownUiComponentRendersAMarker(t *testing.T) {
 // tab. Counting entries alone passed on history: a journal file left from an
 // earlier session satisfied ">= 1" without the write path being exercised at all.
 func TestTheJournalRecordsTheWriteThatJustHappened(t *testing.T) {
-	s := open(t, "tab=bb202")
+	s := open(t, "tab=ab202")
 
 	written := "journalled at " + strconv.Itoa(len(readDoc(t)))
-	if err := s.view("bb202").Locator(".notes-area").Fill(written); err != nil {
+	if err := s.view("ab202").Locator(".notes-area").Fill(written); err != nil {
 		t.Fatalf("typing: %v", err)
 	}
 	eventually(t, "the edit to reach the server", func() bool {
-		text, _ := readDoc(t).state(t, "bb202")["text"].(string)
+		text, _ := readDoc(t).state(t, "ab202")["text"].(string)
 		return text == written
 	})
 
@@ -325,7 +325,7 @@ func TestTheJournalRecordsTheWriteThatJustHappened(t *testing.T) {
 	}
 	found := false
 	for _, id := range last.Tabs {
-		if id == "bb202" {
+		if id == "ab202" {
 			found = true
 		}
 	}

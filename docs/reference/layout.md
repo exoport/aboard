@@ -157,10 +157,10 @@ be repeated on every command.
 | `recipes/`                    | the project — **shared** |
 
 The five that are per board are per board for one reason: **tab ids are allocated per
-board.** Each document has its own `nextId`, so a fresh named board starts at `bb1`
+board.** Each document has its own `nextId`, so a fresh named board starts at `ab1`
 exactly as the default one did, and any record keyed by tab id — a journal entry, a
 mount receipt, a sidecar log — held two different tabs under one key when the file was
-shared. `aboard history bb1` on a named board would offer you the *other* board's
+shared. `aboard history ab1` on a named board would offer you the *other* board's
 version of that id as a document to restore.
 
 The two that stay shared are shared **by design**, and neither is keyed by tab id:
@@ -178,11 +178,11 @@ belong to the default board's history from now on.
 
 `.aboard/uploads/` is shared, so its accounting reads **every** board's document — the
 default one and every `aboard.<name>.json`. A tab id from a named board is printed
-qualified, `review:bb1`, since a bare id would not say which board it is on:
+qualified, `review:ab1`, since a bare id would not say which board it is on:
 
 ```console
 $ aboard uploads
-  only-on-review.png                                 1 B  review:bb1
+  only-on-review.png                                 1 B  review:ab1
 * orphan.png                                         1 B  no tab mentions it
 
 2 files, 2 B in /home/you/work/your-project/.aboard/uploads

@@ -65,7 +65,7 @@ Both servers can run at once. They are two processes on two ports serving two fi
 ```bash
 aboard status --name review
 aboard apply  --name review --by agent-2 < next.json
-aboard export --name review bb7
+aboard export --name review ab7
 ```
 
 If a whole session is working on the named board, set the environment variable once
@@ -91,10 +91,10 @@ as the default board's), the journal, the mount receipts and the sidecar logs:
 | `run/logs/<tab>.log`                | `run/logs/review/<tab>.log`  |
 
 The reason all five are per board is one fact: **tab ids are allocated per board.** Each
-document has its own `nextId`, so a fresh named board starts at `bb1` exactly as the
+document has its own `nextId`, so a fresh named board starts at `ab1` exactly as the
 default one did, and every record above is keyed by tab id. One shared file meant two
 different tabs under one key — a journal that needed the tab's *name* read to say which
-board an entry came from, and an `aboard history bb1` that could offer you the other
+board an entry came from, and an `aboard history ab1` that could offer you the other
 board's version of that id as a document to restore.
 
 Two things stay shared, and both are shared on purpose:
@@ -125,7 +125,7 @@ aboard uploads          # --name does not narrow it; the directory is the projec
 ```
 
 ```
-  only-on-review.png                                 1 B  review:bb1
+  only-on-review.png                                 1 B  review:ab1
 * orphan.png                                         1 B  no tab mentions it
 
 2 files, 2 B in /home/you/work/your-project/.aboard/uploads

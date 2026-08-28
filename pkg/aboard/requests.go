@@ -1,9 +1,9 @@
 // requests.go — the human's notes to an agent, from the terminal.
 //
 //	aboard requests                      what is waiting on you, oldest first
-//	aboard requests --tab bb14           just that tab's
+//	aboard requests --tab ab14           just that tab's
 //	aboard requests --all                the done ones too
-//	aboard requests done bb199 --by agent-1 --note "redrew it"
+//	aboard requests done ab199 --by agent-1 --note "redrew it"
 //
 // Everything else on a board flows one way: an agent shows the human something
 // and reads back what they changed. A request is the other direction — the human
@@ -41,7 +41,7 @@ import (
 // The tab's NAME travels with its id and that is not decoration. An id is enough
 // coming from the human and not enough going to them — and it is not enough going
 // to an agent either, mid-task, three tabs into a board it opened yesterday.
-// "Architecture (bb14)" is a thing to act on; "bb14" is a lookup.
+// "Architecture (ab14)" is a thing to act on; "ab14" is a lookup.
 type Request struct {
 	ID      string        `json:"id"                yaml:"id"`
 	Tab     string        `json:"tab"               yaml:"tab"`

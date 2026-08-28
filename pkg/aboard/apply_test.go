@@ -65,8 +65,8 @@ func runApplyWith(t *testing.T, root Root, options ApplyOptions, doc string) (ou
 func TestApplyRefusesADocumentWithNoBase(t *testing.T) {
 	root, last := applyTarget(t)
 
-	out, errOut, err := runApply(t, root, false, `{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
+	out, errOut, err := runApply(t, root, false, `{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
 	if err == nil {
 		t.Fatalf("a document with no base was applied: %s %s", out, errOut)
 	}
@@ -86,8 +86,8 @@ func TestApplyRefusesADocumentWithNoBase(t *testing.T) {
 func TestApplyForceWritesWithoutCompareAndSetAndSaysSo(t *testing.T) {
 	root, last := applyTarget(t)
 
-	_, errOut, err := runApply(t, root, true, `{"version":3,"nextId":2,"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
+	_, errOut, err := runApply(t, root, true, `{"version":1,"nextId":2,"tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
 	if err != nil {
 		t.Fatalf("--force was refused: %v (%s)", err, errOut)
 	}
@@ -103,8 +103,8 @@ func TestApplyForceWritesWithoutCompareAndSetAndSaysSo(t *testing.T) {
 func TestApplySendsTheRevisionAsItsBase(t *testing.T) {
 	root, last := applyTarget(t)
 
-	if _, _, err := runApply(t, root, false, `{"version":3,"rev":12,"nextId":2,"updatedAt":"T-old","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`); err != nil {
+	if _, _, err := runApply(t, root, false, `{"version":1,"rev":12,"nextId":2,"updatedAt":"T-old","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`); err != nil {
 		t.Fatal(err)
 	}
 	if got := last.doc["__base"]; got != "12" {
@@ -118,8 +118,8 @@ func TestApplySendsTheRevisionAsItsBase(t *testing.T) {
 func TestApplyFallsBackToTheTimestampWhenThereIsNoRev(t *testing.T) {
 	root, last := applyTarget(t)
 
-	if _, _, err := runApply(t, root, false, `{"version":3,"nextId":2,"updatedAt":"T-old","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`); err != nil {
+	if _, _, err := runApply(t, root, false, `{"version":1,"nextId":2,"updatedAt":"T-old","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`); err != nil {
 		t.Fatal(err)
 	}
 	if got := last.doc["__base"]; got != "T-old" {

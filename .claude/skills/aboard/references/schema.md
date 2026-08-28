@@ -2,7 +2,7 @@
 
 ```jsonc
 {
-  "version": 3,                          // server-managed; the schema the renderers read
+  "version": 1,                          // server-managed; the schema the renderers read
   "rev": 41,                             // server-managed; apply uses it as the CAS base
   "updatedAt": "2026-08-22T11:03:09Z",   // server-managed; when, for a human reading this
   "lastEditedBy": "agent-1",             // "human", or whatever --by was passed
@@ -35,11 +35,11 @@ shape; `--name` (env `ABOARD_NAME`) selects it.
 
 ## Ids
 
-**Ids are board-wide monotonic, tagged `bb`, and never reused.** Allocate one by
+**Ids are board-wide monotonic, tagged `ab`, and never reused.** Allocate one by
 taking `doc.nextId`, using it, and incrementing:
 
 ```js
-const id = 'bb' + doc.nextId; doc.nextId += 1;
+const id = 'ab' + doc.nextId; doc.nextId += 1;
 ```
 
 Why it matters: renderers used to allocate "highest suffix in this container + 1".
@@ -53,8 +53,8 @@ Two consequences of a single counter:
 - **An id is unique board-wide, so it never needs qualifying by tab.** This is
   the only thing that works inside a `stack` tab holding two kanbans or two
   images, where the tab cannot disambiguate at all.
-- **One namespace tag, no type prefix.** `bb` ("bulletin board") is there so an
-  id survives being written in prose: `bb147` is unmistakably a board object
+- **One namespace tag, no type prefix.** `ab` ("bulletin board") is there so an
+  id survives being written in prose: `ab147` is unmistakably a board object
   where `147` is any number at all. It says nothing about kind, so it cannot be
   guessed wrong. A per-kind vocabulary (`node-7`, `tab-3`) stays rejected — a
   closed set in a system where you can invent new kinds of object (an `html`
@@ -64,7 +64,7 @@ Two consequences of a single counter:
 
 Bare (`147`) and legacy (`n7`, `t3`) ids are still recognised wherever they
 survive: every parser uses `/^[a-z]*(\d+)$/`. Only writes carry the tag, and the
-`bb` migration prefixed ids without renumbering them, so `49` and `bb49` are the
+`ab` migration prefixed ids without renumbering them, so `49` and `ab49` are the
 same object.
 
 The server enforces the invariant: `nextId` never decreases, and is always above
@@ -80,7 +80,7 @@ independently of whatever tab or stack block holds it.
 
 ```jsonc
 {
-  "id": "bb3",                // "bb<number>"; new ids continue from doc.nextId
+  "id": "ab3",                // "bb<number>"; new ids continue from doc.nextId
   "key": "architecture",      // OPTIONAL stable handle — find by this to update
                               // the same tab next turn instead of opening another
   "name": "Architecture",     // what the user sees; you choose it
@@ -96,14 +96,14 @@ independently of whatever tab or stack block holds it.
 
   "requests": [               // the human's notes TO you about this tab. Theirs to
                               // write; yours only to stamp. `aboard requests` lists
-    { "id": "bb199",          // them and `aboard requests done <id>` answers one.
+    { "id": "ab199",          // them and `aboard requests done <id>` answers one.
       "at": "2026-08-26T09:12:00Z",
       "by": "human",
       "text": "the arrow points the wrong way",
       "done": { "by": "agent-1", "at": "…", "note": "flipped it" } }
   ],
 
-  "stateFrom": "bb1",         // OPTIONAL: render another tab's state with this
+  "stateFrom": "ab1",         // OPTIONAL: render another tab's state with this
                               // type — a kanban and a DAG over one dataset
 
   "touched": {                // set BY THE SERVER when an agent changed the tab
@@ -142,7 +142,7 @@ Three fields you do not control:
   "density": 130,                        // dag only, optional: node spacing
   "readOnly": true,                      // kanban only, optional: agent-owned, human reads
   "nodes": [
-    { "id": "bb7", "title": "Short label", "parent": "bb5", "status": "doing",
+    { "id": "ab7", "title": "Short label", "parent": "ab5", "status": "doing",
       "order": 3, "note": "Longer text — also where the user writes to you",
       "pos": { "x": 120, "y": 208 } }   // only if the user dragged it; delete to re-tidy
   ] }
@@ -168,7 +168,7 @@ one dataset. Do not create a `parent` cycle.
                { "id": "cost", "label": "Cost", "type": "number" },
                { "id": "ok", "label": "Done", "type": "checkbox" },
                { "id": "why", "label": "Why", "type": "longtext" } ],
-  "rows": [ { "id": "bb51", "file": "main.go", "risk": "high", "cost": 3, "ok": false, "why": "…" } ] }
+  "rows": [ { "id": "ab51", "file": "main.go", "risk": "high", "cost": 3, "ok": false, "why": "…" } ] }
 ```
 
 Cell types: `text`, `number`, `select`, `checkbox`, `longtext`. Sort order and
@@ -177,9 +177,9 @@ column width are per-viewer and never written. `readOnly` as on the kanban.
 ### gate
 
 ```jsonc
-{ "pending": [ { "id": "bb129", "title": "…", "risk": "high", "detail": "…",
+{ "pending": [ { "id": "ab129", "title": "…", "risk": "high", "detail": "…",
                  "command": "…", "by": "agent-1" } ],
-  "decided": [ { "id": "bb129", "title": "…", "verdict": "allow|deny|edit",
+  "decided": [ { "id": "ab129", "title": "…", "verdict": "allow|deny|edit",
                  "reason": "…", "editedTo": "…", "at": "…", "by": "human" } ] }
 ```
 
@@ -190,11 +190,11 @@ they gated something that already ran.
 ### log
 
 ```jsonc
-{ "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
+{ "source": "ab126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
 The lines live in a sidecar file (`.aboard/run/logs/<tab>.log`), NOT in this
-state: `<cmd> 2>&1 | aboard log bb126`.
+state: `<cmd> 2>&1 | aboard log ab126`.
 
 ### trace
 
@@ -258,7 +258,7 @@ fill, coloured border) over solid fills. In `requirementDiagram`, quote any
 ### form
 
 ```jsonc
-{ "id": "bb46",                            // the form's own id (generated)
+{ "id": "ab46",                            // the form's own id (generated)
   "title": "Cutover", "intro": "Answer and I will act.",
   "fields": [                            // field ids stay semantic, not generated
     { "id": "strategy", "type": "select", "label": "Strategy",
@@ -279,13 +279,13 @@ mean "not answered yet" — if it matters, ask.
 ```jsonc
 { "layout": "side-by-side",              // or "stacked"
   "images": [
-    { "id": "bb1", "src": "uploads/before.png", "caption": "Before",
+    { "id": "ab1", "src": "uploads/before.png", "caption": "Before",
       "annotatable": true,
-      "regions": [ { "id": "bb2", "x": 0.472, "y": 0.271, "w": 0.235, "h": 0.186,
+      "regions": [ { "id": "ab2", "x": 0.472, "y": 0.271, "w": 0.235, "h": 0.186,
                      "note": "this needs a different scale", "color": "mark",
                      "shape": "ellipse" } ],   // absent or "rect" = rectangle
-      "strokes": [ { "id": "bb3", "points": "0.101,0.427 0.095,0.423", "note": "" } ] },
-    { "id": "bb4", "src": "uploads/after.png", "caption": "After", "annotatable": false }
+      "strokes": [ { "id": "ab3", "points": "0.101,0.427 0.095,0.423", "note": "" } ] },
+    { "id": "ab4", "src": "uploads/after.png", "caption": "After", "annotatable": false }
   ] }
 ```
 
@@ -315,9 +315,9 @@ clearing marks. The toolbar swatch sets the colour of *new* marks only.
 ```jsonc
 { "height": "62vh",                      // optional, as above
   "messages": [
-    { "id": "bb5", "at": "2026-08-22T09:14:00Z", "by": "agent-1",
+    { "id": "ab5", "at": "2026-08-22T09:14:00Z", "by": "agent-1",
       "text": "Taking the schema work." },
-    { "id": "bb6", "at": "…", "by": "human", "text": "Do the migration first." }
+    { "id": "ab6", "at": "…", "by": "human", "text": "Do the migration first." }
 ] }
 ```
 
@@ -374,9 +374,9 @@ widget should touch directly; use the four calls above.
 
 ```jsonc
 { "blocks": [
-    { "id": "bb61", "type": "dag",    "title": "Dependencies", "state": { /* dag state */ } },
-    { "id": "bb62", "type": "form",   "title": "Decide",       "state": { /* form state */ } },
-    { "id": "bb63", "type": "markup", "title": "On screen",    "state": { /* markup state */ } }
+    { "id": "ab61", "type": "dag",    "title": "Dependencies", "state": { /* dag state */ } },
+    { "id": "ab62", "type": "form",   "title": "Decide",       "state": { /* form state */ } },
+    { "id": "ab63", "type": "markup", "title": "On screen",    "state": { /* markup state */ } }
 ] }
 ```
 

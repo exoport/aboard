@@ -210,7 +210,7 @@ E2E_RUN ?= .
 e2e: build         ## LOCAL ONLY: the real browser suite (playwright-go, //go:build e2e). No server or PROJECT needed.
 	go test -tags e2e -count=1 -timeout 10m -run '$(E2E_RUN)' -v ./test/e2e
 
-# SHOT_TABS is passed straight through: `make shot SHOT_TABS="bb133 bb22#help"`.
+# SHOT_TABS is passed straight through: `make shot SHOT_TABS="ab133 ab22#help"`.
 # With none, shot.sh shoots its default set. LOOK at the pictures — every visual
 # regression this project has shipped passed the DOM assertions first.
 # PROJECT picks the board, and here it is optional and defaults to this
@@ -220,7 +220,7 @@ e2e: build         ## LOCAL ONLY: the real browser suite (playwright-go, //go:bu
 # looking at a picture of the board you are actually working on is a different
 # job.
 .PHONY: shot
-shot:              ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="bb1 bb22#help"); a running server is required.
+shot:              ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="ab1 ab22#help"); a running server is required.
 	PROJECT="$(PROJECT)" ./test/shot.sh $(SHOT_TABS)
 
 .PHONY: dev

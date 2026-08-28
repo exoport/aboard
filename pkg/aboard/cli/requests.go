@@ -25,7 +25,7 @@ watching.
 Run this at the start of a turn, next to ` + "`aboard status`" + ` (which prints the
 count). Then say you did one:
 
-  aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+  aboard requests done ab199 --by agent-1 --note "redrew the arrow"
 
 Only the human writes these. An agent write that creates, edits, reorders or
 deletes one has it restored by the server; adding a done stamp is the one change
@@ -35,7 +35,7 @@ note is how it goes away.
 Needs no running board: it falls back to the state file. Stamping one does need
 the board, for the same reason ` + "`aboard apply`" + ` does.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard requests\n  aboard requests --tab bb14 --all",
+		Example: "  aboard requests\n  aboard requests --tab ab14 --all",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err
@@ -84,7 +84,7 @@ and writes nothing.
 --by human is refused: the stamp says which SESSION acted, and the human answers
 their own requests by deleting them.`,
 		Args:    cobra.ExactArgs(1),
-		Example: `  aboard requests done bb199 --by agent-1 --note "redrew the arrow"`,
+		Example: `  aboard requests done ab199 --by agent-1 --note "redrew the arrow"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {

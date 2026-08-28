@@ -299,9 +299,9 @@ func (r Root) InstanceGlob() string { return filepath.Join(r.RunDir(), "instance
 // It used to be one file for the whole project, on the argument that the journal
 // answers "who changed what in this project" and a second named board is part of
 // the same conversation. That argument survived contact with two boards for about
-// a minute: tab ids are allocated PER BOARD, so both documents start at bb1, and a
+// a minute: tab ids are allocated PER BOARD, so both documents start at ab1, and a
 // shared journal held two entries naming the same id and meaning different tabs
-// with only the tab's name to tell them apart. `history bb1` then offered the
+// with only the tab's name to tell them apart. `history ab1` then offered the
 // OTHER board's version of that id as something to restore. A record you have to
 // disambiguate by eye is not a record, so a named board owns its own.
 //
@@ -317,7 +317,7 @@ func (r Root) JournalFile(name string) string {
 //
 // A SUBDIRECTORY rather than a suffix, unlike the journal and the receipts: the
 // leaf here is already `<tab>.log` and the tab id is the thing a reader greps
-// for, so `logs/review/bb12.log` keeps that name intact where `logs/bb12.review.log`
+// for, so `logs/review/ab12.log` keeps that name intact where `logs/ab12.review.log`
 // would put the board name where the extension is about to be.
 func (r Root) LogsDir(name string) string {
 	if name == "" {

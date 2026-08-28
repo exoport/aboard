@@ -204,7 +204,7 @@ func (s *server) handleUploads(w http.ResponseWriter, _ *http.Request) {
 // UploadRow is one file in `.aboard/uploads/`: what it costs, and who names it.
 //
 // `Tabs` holds every tab in the PROJECT that mentions the file, qualified by
-// board: a bare `bb12` is the default board's, `review:bb12` is the named board
+// board: a bare `ab12` is the default board's, `review:ab12` is the named board
 // `review`'s. Qualified by name and never by "the board you asked about", so two
 // runs of this command from two different boards print the same string for the
 // same tab.
@@ -348,7 +348,7 @@ func tabsMentioning(boards []boardDoc, file string) []string {
 }
 
 // qualifiedTab names a tab across the whole project. Tab ids are allocated PER
-// BOARD, so both documents in a two-board project have a `bb1` and they are
+// BOARD, so both documents in a two-board project have a `ab1` and they are
 // different tabs; an unqualified id in a project-wide listing is therefore not an
 // answer. The default board's ids stay bare, so a one-board project — which is
 // almost every project — prints exactly what it printed before.
@@ -404,7 +404,7 @@ func (r UploadReport) Human(prune bool) string {
 	// Which documents the references were looked for in. `uploads/` belongs to
 	// the PROJECT, so "no tab mentions it" is a claim about every board in it,
 	// and on a project with two boards the reader has to be able to see that both
-	// were read — and that a `review:bb1` in the listing is not a tab of theirs.
+	// were read — and that a `review:ab1` in the listing is not a tab of theirs.
 	if len(r.Boards) > 1 {
 		fmt.Fprintf(&b, "references scanned in %d board documents: %s  (a tab id is prefixed with its board name)\n",
 			len(r.Boards), strings.Join(r.Boards, ", "))

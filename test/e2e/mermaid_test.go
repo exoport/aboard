@@ -77,9 +77,9 @@ func TestAMermaidFenceInANoteRendersAndFallsBackToItsSource(t *testing.T) {
 // exactly what left an html block rendering blank once.
 func TestAMermaidFenceRendersInsideAStackNotesBlock(t *testing.T) {
 	s := open(t, "")
-	s.tab("bb32")
+	s.tab("ab32")
 
-	block := s.view("bb32").Locator(`[data-block-id="bb40"]`)
+	block := s.view("ab32").Locator(`[data-block-id="ab40"]`)
 	if err := expect.Locator(block.Locator(".md .md-mermaid svg")).ToBeVisible(); err != nil {
 		t.Fatalf("the example's notes block did not render its mermaid figure: %v", err)
 	}

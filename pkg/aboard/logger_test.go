@@ -22,14 +22,14 @@ func TestADroppedTabIsReportedThroughOptionsLogger(t *testing.T) {
 	var logged strings.Builder
 	logger := log.New(&logged, "", 0)
 
-	current := []byte(`{"tabs":[{"id":"bb1","name":"Queue","type":"kanban","state":{}}]}`)
+	current := []byte(`{"tabs":[{"id":"ab1","name":"Queue","type":"kanban","state":{}}]}`)
 	incoming := []byte(`{"tabs":[]}`)
 
 	if _, err := reconcileTabs(current, incoming, "agent-1", logger); err != nil {
 		t.Fatal(err)
 	}
 	out := logged.String()
-	if !strings.Contains(out, "Queue") || !strings.Contains(out, "bb1") {
+	if !strings.Contains(out, "Queue") || !strings.Contains(out, "ab1") {
 		t.Errorf("the dropped tab was not reported through the logger: %q", out)
 	}
 }

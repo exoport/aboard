@@ -22,7 +22,7 @@ read out a conclusion.
 The strategy is not to promote early. It is to make LATE promotion cheap, and
 retyping was the cost that made it expensive.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  aboard export bb128\n  aboard export table-example --format csv",
+		Example: "  aboard export ab128\n  aboard export table-example --format csv",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch format {
 			case "md", "csv":

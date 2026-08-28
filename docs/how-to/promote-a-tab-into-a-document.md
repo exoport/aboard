@@ -9,7 +9,7 @@ Promotion is four steps, and only the first one is a command.
 ## 1. Get the text out
 
 ```bash
-aboard export bb128
+aboard export ab128
 aboard export decisions            # the same tab, by its `key`
 ```
 
@@ -64,7 +64,7 @@ aboard export table-example --format csv
 
 ```csv
 id,cell type,number,select,checkbox,longtext
-bb188,text,1,low,yes,"A single line. Saves as you type; the cell flashes ""saved"" on blur."
+ab188,text,1,low,yes,"A single line. Saves as you type; the cell flashes ""saved"" on blur."
 ```
 
 On a tab with neither, `--format csv` exits `1` and tells you to use `--format md`. A tab
@@ -78,7 +78,7 @@ the export carries things a document must not:
 
 - **Rejected branches.** A diagram you argued with still holds the options you turned down, and a reader cannot tell what was decided from what was merely considered.
 - **Process.** "Waiting on the human", "agent-1 has this", a `doing` status — true on a board, meaningless in a spec.
-- **Ids.** `bb128` means nothing to anyone else, or to you next month. Never carry a tab id into a document, a commit message or a PR description. Cite the artifact, not the tab.
+- **Ids.** `ab128` means nothing to anyone else, or to you next month. Never carry a tab id into a document, a commit message or a PR description. Cite the artifact, not the tab.
 
 Keep the **reason**, always. The decision usually survives on its own; the reason is what
 evaporates, and it is the half that stops the argument recurring six weeks later. If a

@@ -33,7 +33,7 @@ import (
 // cleaner; it would also be forty `aboard init --example` seedings and forty
 // ports. So the tests share a board and are written not to fight over it: each
 // one touches its own tab where it can, and the few that must write to a shared
-// one (the conflict tests, which need `bb202`'s note) put back what they found.
+// one (the conflict tests, which need `ab202`'s note) put back what they found.
 var (
 	pw       *playwright.Playwright
 	browser  playwright.Browser
@@ -177,9 +177,9 @@ func seedLog(root aboard.Root) error {
 	}
 	// 0o644, like everything else the board writes: see the file-mode note in
 	// init.go.
-	logFile, ok := root.LogFile("", "bb126")
+	logFile, ok := root.LogFile("", "ab126")
 	if !ok {
-		return errors.New(`the fixture log tab id "bb126" is not one a path can be built from`)
+		return errors.New(`the fixture log tab id "ab126" is not one a path can be built from`)
 	}
 	return os.WriteFile(logFile, []byte(b.String()), 0o644)
 }

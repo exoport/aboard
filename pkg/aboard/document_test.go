@@ -27,19 +27,19 @@ import (
 // the browser posts: compact JSON.
 func manyTabs(n int) string {
 	var b strings.Builder
-	b.WriteString(`{"version":3,"rev":1,"nextId":9000,"updatedAt":"2026-08-26T00:00:00.000Z","lastEditedBy":"agent-1","tabs":[`)
+	b.WriteString(`{"version":1,"rev":1,"nextId":9000,"updatedAt":"2026-08-26T00:00:00.000Z","lastEditedBy":"agent-1","tabs":[`)
 	for i := 1; i <= n; i++ {
 		if i > 1 {
 			b.WriteString(",")
 		}
-		fmt.Fprintf(&b, `{"id":"bb%d","name":"Tab %d","type":"notes","state":{"text":"body %d","items":[{"id":"bb%d"}]}}`,
+		fmt.Fprintf(&b, `{"id":"ab%d","name":"Tab %d","type":"notes","state":{"text":"body %d","items":[{"id":"ab%d"}]}}`,
 			i, i, i, 1000+i)
 	}
 	b.WriteString(`]}`)
 	return b.String()
 }
 
-// editOneTab returns the same document with tab bb1's text changed, plus the
+// editOneTab returns the same document with tab ab1's text changed, plus the
 // envelope a real POST carries.
 func editOneTab(doc string, rev int, text string) string {
 	edited := strings.Replace(doc, `"text":"body 1"`, `"text":"`+text+`"`, 1)
@@ -134,7 +134,7 @@ func TestANewIDInAChangedTabStillRaisesTheCounter(t *testing.T) {
 	postOK(t, srv, editOneTab(doc, 1, "warm"))
 
 	grown := strings.Replace(strings.Replace(doc, `"text":"body 1"`, `"text":"warm"`, 1),
-		`{"id":"bb1001"}`, `{"id":"bb1001"},{"id":"bb40000"}`, 1)
+		`{"id":"ab1001"}`, `{"id":"ab1001"},{"id":"ab40000"}`, 1)
 	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"2",`+grown[1:])
 
 	var got struct {
@@ -148,7 +148,7 @@ func TestANewIDInAChangedTabStillRaisesTheCounter(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.NextID != 40001 {
-		t.Errorf("nextId = %d after an id of bb40000 arrived in a changed tab, want 40001", got.NextID)
+		t.Errorf("nextId = %d after an id of ab40000 arrived in a changed tab, want 40001", got.NextID)
 	}
 }
 
@@ -211,11 +211,11 @@ func TestAnIndentedBoardIsNotCanonicalisedTabByTab(t *testing.T) {
 // canonical fallback is what keeps the semantics — this is the test that says it
 // is still there.
 func TestReorderedKeysAreNotAChange(t *testing.T) {
-	current := `{"version":3,"rev":1,"nextId":9,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"a":1,"b":2}}]}`
+	current := `{"version":1,"rev":1,"nextId":9,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"a":1,"b":2}}]}`
 	srv := testServer(t, current)
 
-	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":3,"nextId":9,"tabs":[`+
-		`{"id":"bb1","name":"Plan","type":"notes","state":{"b":2,"a":1}}]}`)
+	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":1,"nextId":9,"tabs":[`+
+		`{"id":"ab1","name":"Plan","type":"notes","state":{"b":2,"a":1}}]}`)
 
 	if got := srv.readTabs(t); got[0].Touched != nil {
 		t.Errorf("reordering the keys of a state blob raised a change marker: %+v", got[0].Touched)
@@ -227,9 +227,9 @@ func TestReorderedKeysAreNotAChange(t *testing.T) {
 // visible consequence is that an author's key order survives a write, where it
 // used to be alphabetised — asserted rather than left to be discovered.
 func TestAStateBlobKeepsItsAuthorsKeyOrder(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
-	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":3,"nextId":9,"tabs":[`+
-		`{"id":"bb1","name":"Plan","type":"ui","state":{"type":"panel","title":"Z","children":[]}}]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
+	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":1,"nextId":9,"tabs":[`+
+		`{"id":"ab1","name":"Plan","type":"ui","state":{"type":"panel","title":"Z","children":[]}}]}`)
 
 	body, err := os.ReadFile(srv.stateFile)
 	if err != nil {
@@ -333,12 +333,12 @@ func TestTheBodyCeilingIsThirtyTwoMiB(t *testing.T) {
 		t.Fatalf("maxBodyBytes = %d, want 32 MiB", maxBodyBytes)
 	}
 
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 	// Comfortably over the old 8 MiB limit, which refused it before any parser
 	// ran, and comfortably under the new one.
 	filler := strings.Repeat("x", 9<<20)
-	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":3,"nextId":9,"tabs":[`+
-		`{"id":"bb1","name":"Widget","type":"html","state":{"html":"`+filler+`"}}]}`)
+	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"1","version":1,"nextId":9,"tabs":[`+
+		`{"id":"ab1","name":"Widget","type":"html","state":{"html":"`+filler+`"}}]}`)
 }
 
 // The document a POST hands back has to be re-readable as the one on disk: the
@@ -404,7 +404,7 @@ func TestAnExternalEditIsSeenByTheNextWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// An agent write that drops bb3. It comes back — from the file, which is the
+	// An agent write that drops ab3. It comes back — from the file, which is the
 	// only copy that has the edit.
 	twoTabs := strings.Replace(manyTabs(2), `"text":"body 1"`, `"text":"warm"`, 1)
 	postOK(t, srv, `{"__origin":"test","__by":"agent-1","__base":"2",`+twoTabs[1:])
@@ -437,7 +437,7 @@ func TestAnExternalEditIsSeenByTheNextWrite(t *testing.T) {
 // run; readStable's stat-read-stat is what makes it green.
 func TestAWriteLandingInsideAReadDoesNotPinTheCacheStale(t *testing.T) {
 	mk := func(n int) string {
-		return `{"version":3,"rev":1,"nextId":9,"tabs":[{"id":"bb1","name":"P","type":"notes","state":{"text":"` +
+		return `{"version":1,"rev":1,"nextId":9,"tabs":[{"id":"ab1","name":"P","type":"notes","state":{"text":"` +
 			strings.Repeat("x", (4<<20)+n*997) + `"}}]}`
 	}
 	srv := testServer(t, mk(0))
@@ -520,7 +520,7 @@ func TestAnUnreadableBoardIsRefusedRatherThanTakenAsEmpty(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	srv.postState(rec, httptest.NewRequest(http.MethodPost, "/aboard.json",
-		strings.NewReader(`{"__by":"agent-1","version":3,"nextId":9,"tabs":[]}`)))
+		strings.NewReader(`{"__by":"agent-1","version":1,"nextId":9,"tabs":[]}`)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("a write against a board that could not be read was answered %d, want 400", rec.Code)
 	}
@@ -536,8 +536,8 @@ func TestAFirstWriteWithNoStateFileYetIsAccepted(t *testing.T) {
 	if err := os.Remove(srv.stateFile); err != nil {
 		t.Fatal(err)
 	}
-	postOK(t, srv, `{"__by":"agent-1","version":3,"nextId":9,"tabs":[`+
-		`{"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
+	postOK(t, srv, `{"__by":"agent-1","version":1,"nextId":9,"tabs":[`+
+		`{"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
 	if got := srv.readTabs(t); len(got) != 1 {
 		t.Fatalf("the first write created %d tabs", len(got))
 	}

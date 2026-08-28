@@ -227,7 +227,7 @@ a test in `test/e2e/`. See the skill's multi-session reference.
 the board you are actually working on, that is still `make shot`:
 
 ```bash
-make shot SHOT_TABS="bb133 bb22#help"
+make shot SHOT_TABS="ab133 ab22#help"
 ```
 
 It needs a running server, takes an optional `PROJECT=`, and only reads the board

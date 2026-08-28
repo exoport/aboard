@@ -179,11 +179,11 @@ func (h *waitHub) snapshot() ([]waiter, *pokeEvent) {
 //
 //	poke                the human pressed Notify (or another session -poked)
 //	change              any accepted write at all
-//	tab bb71            that tab changed
-//	answer bb15         that tab changed AND a human made the change
-//	node bb58=done      that node reached that status
-//	rendered bb133      a browser MOUNTED that tab and posted a receipt
-//	request [bb71]      the human has a note waiting for an agent (on that tab)
+//	tab ab71            that tab changed
+//	answer ab15         that tab changed AND a human made the change
+//	node ab58=done      that node reached that status
+//	rendered ab133      a browser MOUNTED that tab and posted a receipt
+//	request [ab71]      the human has a note waiting for an agent (on that tab)
 //
 // An unknown form is refused at request time rather than accepted and never
 // fired: the caller learns immediately instead of after the timeout. That is the
@@ -222,7 +222,7 @@ func parsePredicate(raw string) (predicate, error) {
 		return predicate{kind: fields[0]}, nil
 	case predTab, predAnswer, predRendered:
 		if len(fields) != 2 {
-			return predicate{}, fmt.Errorf("%s needs one id, e.g. %q", fields[0], fields[0]+" bb71")
+			return predicate{}, fmt.Errorf("%s needs one id, e.g. %q", fields[0], fields[0]+" ab71")
 		}
 		return predicate{kind: fields[0], id: fields[1]}, nil
 	case predRequest:
@@ -231,7 +231,7 @@ func parsePredicate(raw string) (predicate, error) {
 		// for work wants, and "has anything landed on the tab I just changed" is
 		// what a session that has just shown them something wants.
 		if len(fields) > 2 {
-			return predicate{}, fmt.Errorf("%s takes at most one tab id, e.g. %q", predRequest, predRequest+" bb14")
+			return predicate{}, fmt.Errorf("%s takes at most one tab id, e.g. %q", predRequest, predRequest+" ab14")
 		}
 		p := predicate{kind: predRequest}
 		if len(fields) == 2 {
@@ -240,7 +240,7 @@ func parsePredicate(raw string) (predicate, error) {
 		return p, nil
 	case predNode:
 		if len(fields) != 2 || !strings.Contains(fields[1], "=") {
-			return predicate{}, errors.New(`node needs id=status, e.g. "node bb58=done"`)
+			return predicate{}, errors.New(`node needs id=status, e.g. "node ab58=done"`)
 		}
 		parts := strings.SplitN(fields[1], "=", 2)
 		return predicate{kind: predNode, id: parts[0], value: parts[1]}, nil
@@ -357,7 +357,7 @@ func (s *server) pendingRequestNow(tab string) bool {
 
 // requestAlreadyWaiting is the sentence a session gets back when the note was
 // there before it asked. A sentence and not the bare tab id: this is printed as
-// the `note` of the event, beside a name and a timestamp, and "bb14" there reads
+// the `note` of the event, beside a name and a timestamp, and "ab14" there reads
 // as a value nobody finished writing.
 func requestAlreadyWaiting(tab string) string {
 	if tab == "" {

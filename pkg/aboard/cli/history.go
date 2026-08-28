@@ -29,8 +29,8 @@ first, naming who replaced each one — and says plainly where the record ends,
 because rotation keeps one older generation and a listing that just stopped would
 read as "this tab has only ever been written twice".
 
-  aboard history bb133                          what it said, and when
-  aboard history bb133 --at 1 | aboard apply --by agent-1     put version 1 back
+  aboard history ab133                          what it said, and when
+  aboard history ab133 --at 1 | aboard apply --by agent-1     put version 1 back
 
 --at prints a WHOLE document with that one tab put back, not the tab on its own:
 a single-tab document is a document that deletes every other tab, and the server
@@ -50,7 +50,7 @@ Reads from the running board when there is one and from
 board, whose history is its own. The restore line the listing prints carries
 --name on both halves for exactly that reason.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  aboard history bb133\n  aboard history bb133 --at 1 | aboard apply --by agent-1",
+		Example: "  aboard history ab133\n  aboard history ab133 --at 1 | aboard apply --by agent-1",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err

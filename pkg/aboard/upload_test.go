@@ -124,13 +124,13 @@ func tinyPNG() []byte {
 /* ---------- accounting and prune ---------- */
 
 const uploadBoard = `{
-  "version": 3,
+  "version": 1,
   "rev": 1,
   "nextId": 9,
   "tabs": [
-    {"id": "bb1", "name": "Screen", "type": "markup",
+    {"id": "ab1", "name": "Screen", "type": "markup",
      "state": {"images": [{"src": "uploads/kept.png"}]}},
-    {"id": "bb2", "name": "Widget", "type": "html",
+    {"id": "ab2", "name": "Widget", "type": "html",
      "state": {"html": "<img src=\"uploads/in-a-widget.png\">"}}
   ]
 }`
@@ -175,10 +175,10 @@ func TestUploadsFindsAFileNamedOnlyInAWidgetsMarkup(t *testing.T) {
 	for _, f := range rep.Files {
 		byName[f.Name] = f
 	}
-	if got := byName["in-a-widget.png"].Tabs; len(got) != 1 || got[0] != "bb2" {
+	if got := byName["in-a-widget.png"].Tabs; len(got) != 1 || got[0] != "ab2" {
 		t.Errorf("a file named only inside an html widget must be found: %v", got)
 	}
-	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "bb1" {
+	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "ab1" {
 		t.Errorf("kept.png: %v", got)
 	}
 	if byName["orphan.png"].Referenced() {
@@ -256,8 +256,8 @@ func TestTheUploadsListingSaysHowItDecided(t *testing.T) {
 // there is no copy anywhere to go back to.
 func TestUploadsSeesEveryBoardInTheProject(t *testing.T) {
 	root := uploadBoardRoot(t)
-	const reviewBoard = `{"version":3,"rev":1,"nextId":2,"tabs":[
-	  {"id":"bb1","name":"Side note","type":"markup",
+	const reviewBoard = `{"version":1,"rev":1,"nextId":2,"tabs":[
+	  {"id":"ab1","name":"Side note","type":"markup",
 	   "state":{"images":[{"src":"uploads/only-on-review.png"}]}}]}`
 	if err := os.WriteFile(root.StateFile("review"), []byte(reviewBoard), 0o644); err != nil {
 		t.Fatal(err)
@@ -277,12 +277,12 @@ func TestUploadsSeesEveryBoardInTheProject(t *testing.T) {
 		t.Fatalf("an image referenced only by the named board is not an orphan: %+v", row)
 	}
 	// Qualified, because tab ids are allocated per board: both documents have a
-	// bb1 and they are different tabs, so a bare id in a project-wide listing is
+	// ab1 and they are different tabs, so a bare id in a project-wide listing is
 	// not an answer.
-	if len(row.Tabs) != 1 || row.Tabs[0] != "review:bb1" {
+	if len(row.Tabs) != 1 || row.Tabs[0] != "review:ab1" {
 		t.Errorf("the reference must name the board that holds it: %v", row.Tabs)
 	}
-	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "bb1" {
+	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "ab1" {
 		t.Errorf("the default board's ids stay bare: %v", got)
 	}
 	if rep.Orphaned != 1 || !strings.Contains(rep.Human(true), "aboard.review.json") {

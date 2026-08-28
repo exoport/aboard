@@ -21,12 +21,12 @@ import (
 //   - An id is unique across the whole board, so nothing has to be qualified by
 //     its tab. That is the only thing that works for a stack tab holding two
 //     kanbans, where the tab cannot disambiguate at all.
-//   - One constant namespace tag, "bb", and still no TYPE prefix. A per-kind
+//   - One constant namespace tag, "ab", and still no TYPE prefix. A per-kind
 //     vocabulary (node-7, tab-3) is a closed set in a system where an agent can
 //     invent new kinds of object, so it gets guessed ad hoc and stops meaning
 //     anything, and it duplicates what the object's position already says. A
 //     single tag says nothing about kind and cannot be guessed wrong; it exists
-//     so an id survives being written in a sentence — "bb49" is unmistakably
+//     so an id survives being written in a sentence — "ab49" is unmistakably
 //     this board's object where "49" is any number at all.
 //
 // Ids are strings, so DOM attributes and Map keys agree with the document.
@@ -40,9 +40,15 @@ import (
 // what CAS cannot catch — a stale or hand-edited document whose counter has
 // fallen behind the ids already in use.
 
-// "bb147" is the current form; bare "147" and legacy "n147" are still read, which
-// is why this was always prefix-tolerant — the migration to "bb" needed no change
-// here, nor in any renderer, since they all parse ids with the same shape.
+// "ab147" is the current form; bare "147" and the older "n147" and "bb147" are all
+// still read, which is why this has always been prefix-tolerant and why every
+// change of tag — "n" to "bb" on the spike, "bb" to "ab" on 2026-08-28 — needed
+// no change here and none in any renderer: they all parse ids with the one shape.
+//
+// That tolerance is what makes a tag change a rename rather than a migration. A
+// board written before one keeps working: its ids still raise the counter, still
+// address a tab, still resolve in a deep link. Nothing converts them, and nothing
+// needs to — the only thing a new tag decides is what the NEXT id looks like.
 var idSuffix = regexp.MustCompile(`^[a-z]*(\d+)$`)
 
 // idKey is the one field name an id can live under. Named because the walk below

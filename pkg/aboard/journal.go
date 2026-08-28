@@ -277,7 +277,7 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 // `pendingRemoval` was missing too, and it was worse: a write that DROPS a tab
 // changes nothing else about it, so an agent asking to delete something produced
 // a banner on the human's screen and not one line anywhere else. `aboard journal`
-// said nothing, `aboard watch` emitted nothing, and `aboard wait --for "tab bb126"`
+// said nothing, `aboard watch` emitted nothing, and `aboard wait --for "tab ab126"`
 // waited for a change that had already happened. Found by dropping a tab with a
 // bare POST and looking at the journal afterwards.
 func changedAgainst(cur *stateDoc, t *docTab) bool {

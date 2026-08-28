@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-const htmlTabBoard = `{"version":3,"rev":1,"nextId":10,"tabs":[
-	{"id":"bb1","name":"Sketch","type":"html","state":{"html":"<p>hi</p>","data":{}}},
-	{"id":"bb2","name":"Review","type":"stack","state":{"blocks":[
-		{"id":"bb3","type":"html","title":"Widget","state":{"html":"<p>block</p>","data":{}}}
+const htmlTabBoard = `{"version":1,"rev":1,"nextId":10,"tabs":[
+	{"id":"ab1","name":"Sketch","type":"html","state":{"html":"<p>hi</p>","data":{}}},
+	{"id":"ab2","name":"Review","type":"stack","state":{"blocks":[
+		{"id":"ab3","type":"html","title":"Widget","state":{"html":"<p>block</p>","data":{}}}
 	]}}
 ]}`
 
@@ -21,9 +21,9 @@ func TestHTMLTabCSP(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /tab/bb1/html = %d", rec.Code)
+		t.Fatalf("GET /tab/ab1/html = %d", rec.Code)
 	}
 	csp := rec.Header().Get("Content-Security-Policy")
 
@@ -60,13 +60,13 @@ func TestAStackBlockIsContainedByteIdenticallyToATab(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 
 	tabRec := httptest.NewRecorder()
-	srv.serveTabHTML(tabRec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(tabRec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 
 	blockRec := httptest.NewRecorder()
-	srv.serveTabHTML(blockRec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb2/bb3/html", http.NoBody), "bb2/bb3")
+	srv.serveTabHTML(blockRec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab2/ab3/html", http.NoBody), "ab2/ab3")
 
 	if blockRec.Code != http.StatusOK {
-		t.Fatalf("GET /tab/bb2/bb3/html = %d: %s", blockRec.Code, blockRec.Body.String())
+		t.Fatalf("GET /tab/ab2/ab3/html = %d: %s", blockRec.Code, blockRec.Body.String())
 	}
 	for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Cache-Control", "Content-Type"} {
 		if got, want := blockRec.Header().Get(header), tabRec.Header().Get(header); got != want {
@@ -85,9 +85,9 @@ func TestAStackBlockIsContainedByteIdenticallyToATab(t *testing.T) {
 func TestAWrongHTMLPathSaysWhatWasWrong(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 	cases := map[string]string{
-		"bb9":       "no such tab",
-		"bb1/bb3":   "not a stack",
-		"bb2/bb999": "bb999",
+		"ab9":       "no such tab",
+		"ab1/ab3":   "not a stack",
+		"ab2/ab999": "ab999",
 	}
 	for path, want := range cases {
 		rec := httptest.NewRecorder()
@@ -112,7 +112,7 @@ func TestAWrongHTMLPathSaysWhatWasWrong(t *testing.T) {
 func TestTheServedFrameCarriesTheBridgeUnderItsAboardNames(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 	body := rec.Body.String()
 
 	for _, want := range []string{"window.aboard", "__ABOARD_DATA__"} {
@@ -137,7 +137,7 @@ func TestTheServedFrameCarriesTheBridgeUnderItsAboardNames(t *testing.T) {
 func TestTheServedFrameTerminatesItsScript(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 	body := rec.Body.String()
 
 	if !strings.Contains(body, "</script>") {
@@ -156,7 +156,7 @@ func TestABlockPathDoesNotServeTheEmptyTabPlaceholder(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb2/bb3/html", http.NoBody), "bb2/bb3")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab2/ab3/html", http.NoBody), "ab2/ab3")
 	if strings.Contains(rec.Body.String(), "An agent sets") {
 		t.Error("the block path served the empty-tab placeholder instead of the block's own html")
 	}

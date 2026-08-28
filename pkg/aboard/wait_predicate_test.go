@@ -19,15 +19,15 @@ func TestParsePredicateAcceptsTheWholeVocabulary(t *testing.T) {
 		{"   ", predicate{kind: eventPoke}},
 		{"poke", predicate{kind: eventPoke}},
 		{"change", predicate{kind: "change"}},
-		{"tab bb71", predicate{kind: "tab", id: "bb71"}},
-		{"answer bb128", predicate{kind: "answer", id: "bb128"}},
-		{"node bb58=done", predicate{kind: "node", id: "bb58", value: "done"}},
+		{"tab ab71", predicate{kind: "tab", id: "ab71"}},
+		{"answer ab128", predicate{kind: "answer", id: "ab128"}},
+		{"node ab58=done", predicate{kind: "node", id: "ab58", value: "done"}},
 		// Whitespace is the caller's shell, not their meaning.
-		{"  tab   bb71  ", predicate{kind: "tab", id: "bb71"}},
+		{"  tab   ab71  ", predicate{kind: "tab", id: "ab71"}},
 		// A status containing '=' keeps the whole tail: SplitN(…, 2).
-		{"node bb58=a=b", predicate{kind: "node", id: "bb58", value: "a=b"}},
+		{"node ab58=a=b", predicate{kind: "node", id: "ab58", value: "a=b"}},
 		// An empty status is a legal ask ("has no status yet"), not a parse error.
-		{"node bb58=", predicate{kind: "node", id: "bb58", value: ""}},
+		{"node ab58=", predicate{kind: "node", id: "ab58", value: ""}},
 	}
 	for _, tc := range cases {
 		got, err := parsePredicate(tc.raw)
@@ -51,16 +51,16 @@ func TestParsePredicateRefusesEverythingElse(t *testing.T) {
 		mentions string
 	}{
 		{"form 15 answered", "unknown predicate"},
-		{"answered bb15", "unknown predicate"},
-		{"TAB bb71", "unknown predicate"}, // the vocabulary is lower-case
-		{"poke bb1", "takes no argument"},
+		{"answered ab15", "unknown predicate"},
+		{"TAB ab71", "unknown predicate"}, // the vocabulary is lower-case
+		{"poke ab1", "takes no argument"},
 		{"change now", "takes no argument"},
 		{"tab", "needs one id"},
-		{"tab bb1 bb2", "needs one id"},
+		{"tab ab1 ab2", "needs one id"},
 		{"answer", "needs one id"},
 		{"node", "id=status"},
-		{"node bb58", "id=status"},
-		{"node bb58 done", "id=status"},
+		{"node ab58", "id=status"},
+		{"node ab58 done", "id=status"},
 	}
 	for _, tc := range cases {
 		_, err := parsePredicate(tc.raw)
@@ -79,12 +79,12 @@ func TestParsePredicateRefusesEverythingElse(t *testing.T) {
 // that fired on any change would make the notify button meaningless.
 func TestPredicateMatching(t *testing.T) {
 	doc := []byte(`{"tabs":[
-		{"id":"bb1","type":"dag","state":{"nodes":[{"id":"bb58","status":"done"},{"id":"bb59","status":"todo"}]}},
-		{"id":"bb32","type":"stack","state":{"blocks":[{"id":"bb33","type":"kanban","state":{"nodes":[{"id":"bb90","status":"working"}]}}]}}
+		{"id":"ab1","type":"dag","state":{"nodes":[{"id":"ab58","status":"done"},{"id":"ab59","status":"todo"}]}},
+		{"id":"ab32","type":"stack","state":{"blocks":[{"id":"ab33","type":"kanban","state":{"nodes":[{"id":"ab90","status":"working"}]}}]}}
 	]}`)
 
-	agentWrite := JournalEntry{By: "agent-1", Tabs: []string{"bb1"}}
-	humanWrite := JournalEntry{By: actorHuman, Tabs: []string{"bb128"}}
+	agentWrite := JournalEntry{By: "agent-1", Tabs: []string{"ab1"}}
+	humanWrite := JournalEntry{By: actorHuman, Tabs: []string{"ab128"}}
 	noTabs := JournalEntry{By: "agent-1"}
 
 	cases := []struct {
@@ -97,21 +97,21 @@ func TestPredicateMatching(t *testing.T) {
 		{"poke", humanWrite, false, "not even a human write"},
 		{"change", agentWrite, true, "any accepted write with a tab in it"},
 		{"change", noTabs, false, "a write that touched no tab is not a change"},
-		{"tab bb1", agentWrite, true, "that tab changed"},
-		{"tab bb2", agentWrite, false, "a different tab changed"},
-		{"answer bb128", humanWrite, true, "a human answered it"},
+		{"tab ab1", agentWrite, true, "that tab changed"},
+		{"tab ab2", agentWrite, false, "a different tab changed"},
+		{"answer ab128", humanWrite, true, "a human answered it"},
 		{
-			"answer bb128",
-			JournalEntry{By: "agent-1", Tabs: []string{"bb128"}},
+			"answer ab128",
+			JournalEntry{By: "agent-1", Tabs: []string{"ab128"}},
 			false,
 			"an agent rewriting the tab is not an answer to anything",
 		},
-		{"answer bb1", humanWrite, false, "the human answered a different tab"},
-		{"node bb58=done", agentWrite, true, "the node reached that status"},
-		{"node bb59=done", agentWrite, false, "that node is still todo"},
-		{"node bb58=todo", agentWrite, false, "the wrong status"},
-		{"node bb90=working", agentWrite, true, "a node inside a stack block counts — a waiter should not have to say where it lives"},
-		{"node bb999=done", agentWrite, false, "no such node"},
+		{"answer ab1", humanWrite, false, "the human answered a different tab"},
+		{"node ab58=done", agentWrite, true, "the node reached that status"},
+		{"node ab59=done", agentWrite, false, "that node is still todo"},
+		{"node ab58=todo", agentWrite, false, "the wrong status"},
+		{"node ab90=working", agentWrite, true, "a node inside a stack block counts — a waiter should not have to say where it lives"},
+		{"node ab999=done", agentWrite, false, "no such node"},
 	}
 
 	for _, tc := range cases {
@@ -148,7 +148,7 @@ func TestTheDeclaredForFlagListsOnlyFormsThatParse(t *testing.T) {
 			t.Errorf("--for's help does not mention %q: %s", form, doc)
 		}
 		// The placeholder forms, with a real id substituted.
-		concrete := strings.NewReplacer("<id>", "bb71", "<status>", "done").Replace(form)
+		concrete := strings.NewReplacer("<id>", "ab71", "<status>", "done").Replace(form)
 		if _, err := parsePredicate(concrete); err != nil {
 			t.Errorf("--for advertises %q but %q does not parse: %v", form, concrete, err)
 		}

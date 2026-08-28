@@ -364,7 +364,7 @@ Each file opens with YAML frontmatter, then a markdown body:
     description: "One line."   # required
     when_to_use: "When ..."    # required
     tags: [optional, list]
-    requires: { min_schema: 3 }
+    requires: { min_schema: 1 }
     ---
 
     # The body is markdown, and it is what an agent reads.

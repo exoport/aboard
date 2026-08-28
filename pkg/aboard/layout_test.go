@@ -71,13 +71,13 @@ func TestRootPaths(t *testing.T) {
 	// LogFile answers a question as well as building a path, so it does not fit
 	// the table's shape: an id that could escape the logs directory gets no path
 	// at all. TestLogFileRefusesAnIDThatCannotBeAFilename covers the refusal.
-	logFile, okLogFile := root.LogFile("", "bb42")
+	logFile, okLogFile := root.LogFile("", "ab42")
 	if !okLogFile {
-		t.Fatal(`LogFile("bb42") refused a plain tab id`)
+		t.Fatal(`LogFile("ab42") refused a plain tab id`)
 	}
-	namedLogFile, okNamedLog := root.LogFile("review", "bb42")
+	namedLogFile, okNamedLog := root.LogFile("review", "ab42")
 	if !okNamedLog {
-		t.Fatal(`LogFile("review", "bb42") refused a plain tab id`)
+		t.Fatal(`LogFile("review", "ab42") refused a plain tab id`)
 	}
 
 	cases := []struct {
@@ -99,8 +99,8 @@ func TestRootPaths(t *testing.T) {
 		{"RenderedFile named", root.RenderedFile("review"), j(".aboard", "run", "rendered.review.json")},
 		{"LogsDir", root.LogsDir(""), j(".aboard", "run", "logs")},
 		{"LogsDir named", root.LogsDir("review"), j(".aboard", "run", "logs", "review")},
-		{"LogFile", logFile, j(".aboard", "run", "logs", "bb42.log")},
-		{"LogFile named", namedLogFile, j(".aboard", "run", "logs", "review", "bb42.log")},
+		{"LogFile", logFile, j(".aboard", "run", "logs", "ab42.log")},
+		{"LogFile named", namedLogFile, j(".aboard", "run", "logs", "review", "ab42.log")},
 		{"ShotsDir", root.ShotsDir(), j(".aboard", "run", "shots")},
 		{"E2EDir", root.E2EDir(), j(".aboard", "run", "e2e")},
 		{"E2ECase", root.E2ECase("TestBridge"), j(".aboard", "run", "e2e", "TestBridge")},
@@ -267,7 +267,7 @@ func TestLogFileRefusesAnIDThatCannotBeAFilename(t *testing.T) {
 		"../../etc/passwd",
 		"a/b",
 		`a\b`,
-		"bb42.log",
+		"ab42.log",
 		"bb 42",
 		strings.Repeat("b", 65),
 	} {
@@ -275,7 +275,7 @@ func TestLogFileRefusesAnIDThatCannotBeAFilename(t *testing.T) {
 			t.Errorf("LogFile(%q) = %q, true — wanted a refusal", bad, path)
 		}
 	}
-	for _, good := range []string{"bb42", "bb126", "a", "A_b-1", strings.Repeat("b", 64)} {
+	for _, good := range []string{"ab42", "ab126", "a", "A_b-1", strings.Repeat("b", 64)} {
 		path, ok := root.LogFile("", good)
 		if !ok {
 			t.Errorf("LogFile(%q) refused a plain tab id", good)

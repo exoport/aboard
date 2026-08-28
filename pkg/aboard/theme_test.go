@@ -341,14 +341,14 @@ func TestTheHTMLFrameCarriesBothThemesAndPaintsTheOneAskedFor(t *testing.T) {
 		{"?theme=chartreuse", `<html lang="en" data-theme="dark">`},
 	} {
 		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html"+tc.query, http.NoBody)
-		srv.serveTabHTML(rec, req, "bb1")
+		req := httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html"+tc.query, http.NoBody)
+		srv.serveTabHTML(rec, req, "ab1")
 		frame := rec.Body.String()
 		if !strings.Contains(frame, tc.want) {
-			t.Errorf("/tab/bb1/html%s did not stamp %s", tc.query, tc.want)
+			t.Errorf("/tab/ab1/html%s did not stamp %s", tc.query, tc.want)
 		}
 		if !strings.Contains(frame, lightSelector+" {") {
-			t.Errorf("/tab/bb1/html%s carries no light variant, so a switch cannot reach it", tc.query)
+			t.Errorf("/tab/ab1/html%s carries no light variant, so a switch cannot reach it", tc.query)
 		}
 	}
 }
@@ -364,7 +364,7 @@ func TestTheHTMLFrameInheritsTheProjectsOverrides(t *testing.T) {
 	srv.reloadTheme()
 
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 	frame := rec.Body.String()
 	for _, want := range []string{"--bg: #020202;", "--bg: #fdfdfd;"} {
 		if !strings.Contains(frame, want) {

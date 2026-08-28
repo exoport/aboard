@@ -118,11 +118,11 @@ func TestAForeignWriteInsideTheSaveDebounceKeepsTheHumansEdit(t *testing.T) {
 	// classified as a collision. It passed in file order only because the note
 	// was already right by then and restoreNote returned without writing; under
 	// -shuffle it wrote, and the test failed with the defect's own message.
-	restoreNote(t, "bb202")
-	s := open(t, "probe=1&tab=bb202")
+	restoreNote(t, "ab202")
+	s := open(t, "probe=1&tab=ab202")
 
 	var got mergeProbe
-	s.evalJSON(&got, mergeProbeJS, map[string]string{"mine": "bb202", "theirs": "bb126"})
+	s.evalJSON(&got, mergeProbeJS, map[string]string{"mine": "ab202", "theirs": "ab126"})
 	if got.Err != "" {
 		t.Fatalf("the probe failed: %s", got.Err)
 	}
@@ -156,9 +156,9 @@ func TestAForeignWriteInsideTheSaveDebounceKeepsTheHumansEdit(t *testing.T) {
 	// it. This is the half the old probe checked with a sleep; here it is the
 	// server's own copy that decides.
 	eventually(t, "the re-armed save to reach the server", func() bool {
-		return readDoc(t).tab(t, "bb202")["note"] == got.Typed
+		return readDoc(t).tab(t, "ab202")["note"] == got.Typed
 	})
-	if got := dig(readDoc(t).state(t, "bb126"), "probeForeign"); got == nil {
+	if got := dig(readDoc(t).state(t, "ab126"), "probeForeign"); got == nil {
 		t.Error("the foreign writer's state is not on the server")
 	}
 }
@@ -202,11 +202,11 @@ const collisionProbeJS = `async (ids) => {
 
 func TestASecondCollisionStillOffersTheHumansOwnText(t *testing.T) {
 	// Before the page opens — see the note in the test above.
-	restoreNote(t, "bb202")
-	s := open(t, "probe=1&tab=bb202")
+	restoreNote(t, "ab202")
+	s := open(t, "probe=1&tab=ab202")
 
 	var got collisionProbe
-	s.evalJSON(&got, collisionProbeJS, map[string]string{"mine": "bb202"})
+	s.evalJSON(&got, collisionProbeJS, map[string]string{"mine": "ab202"})
 	if got.Err != "" {
 		t.Fatalf("the probe failed: %s", got.Err)
 	}
@@ -225,7 +225,7 @@ func TestASecondCollisionStillOffersTheHumansOwnText(t *testing.T) {
 	// The notice itself, and the button the human actually presses. Everything
 	// above is about the shell's bookkeeping; this is the only assertion that
 	// says the recovery is REACHABLE.
-	notice := s.view("bb202").Locator(".banner--removal").Filter(playwright.LocatorFilterOptions{
+	notice := s.view("ab202").Locator(".banner--removal").Filter(playwright.LocatorFilterOptions{
 		HasText: "Your edit to this tab collided.",
 	})
 	if err := expect.Locator(notice).ToBeVisible(); err != nil {
@@ -235,7 +235,7 @@ func TestASecondCollisionStillOffersTheHumansOwnText(t *testing.T) {
 		t.Fatalf("clicking Restore mine: %v", err)
 	}
 	eventually(t, "Restore mine to put the human's words back on the server", func() bool {
-		return readDoc(t).tab(t, "bb202")["note"] == got.Human
+		return readDoc(t).tab(t, "ab202")["note"] == got.Human
 	})
 	if err := expect.Locator(notice).ToBeHidden(); err != nil {
 		t.Errorf("the notice is still there after restoring: %v", err)

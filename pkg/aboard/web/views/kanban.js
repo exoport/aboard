@@ -516,7 +516,7 @@ export function mountKanban(root, ctx) {
   });
 
   // Deep links: the shell calls this after activating the tab, so
-  // #tab=bb71&node=bb57 lands on the card rather than on the tab.
+  // #tab=ab71&node=ab57 lands on the card rather than on the tab.
   function focus(id) {
     const card = columns.querySelector(`.card[data-id="${CSS.escape(String(id))}"]`);
     if (!card) return false;

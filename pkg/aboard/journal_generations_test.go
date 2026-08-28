@@ -30,7 +30,7 @@ func TestTheWritePathRecordsTheWholeTabAndStampsTheSchema(t *testing.T) {
 	srv := testServer(t, mergeBoard)
 
 	doc := readBoard(t, srv.root)
-	setTabText(t, doc, "bb1", "moved")
+	setTabText(t, doc, "ab1", "moved")
 	doc["__by"] = "agent-1"
 	doc["__base"] = revToken(t, doc["rev"])
 	body, err := json.Marshal(doc)
@@ -53,7 +53,7 @@ func TestTheWritePathRecordsTheWholeTabAndStampsTheSchema(t *testing.T) {
 		t.Errorf("the entry is stamped schema %d, want %d", e.Schema, journalSchema)
 	}
 
-	was, ok := e.recorded("bb1")
+	was, ok := e.recorded("ab1")
 	if !ok {
 		t.Fatal("the record holds nothing for the tab the write changed")
 	}
@@ -79,12 +79,12 @@ func TestTheWritePathRecordsTheWholeTabAndStampsTheSchema(t *testing.T) {
 // back to `apply` as "created while you were writing" and refused a write that
 // should have merged.
 func TestATabWithNoStateIsStillRecordedAsHavingExisted(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Empty","type":"notes"}
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Empty","type":"notes"}
 	]}`)
 
 	doc := readBoard(t, srv.root)
-	setTabText(t, doc, "bb1", "now it has one")
+	setTabText(t, doc, "ab1", "now it has one")
 	doc["__by"] = "agent-1"
 	doc["__base"] = revToken(t, doc["rev"])
 	body, err := json.Marshal(doc)
@@ -99,7 +99,7 @@ func TestATabWithNoStateIsStillRecordedAsHavingExisted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	was, ok := entries[0].recorded("bb1")
+	was, ok := entries[0].recorded("ab1")
 	if !ok {
 		t.Fatal("a tab with no state must still be recorded as having existed")
 	}
@@ -118,7 +118,7 @@ func TestATabWithNoStateIsStillRecordedAsHavingExisted(t *testing.T) {
 // one — which is the whole reason this has to be pinned rather than assumed.
 func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 	const line = `{"at":"2026-08-25T10:00:00.000Z","by":"agent-1","rev":6,` +
-		`"tabs":["bb1"],"names":{"bb1":"Plan renamed"},"before":{"bb1":{"v":1}}}`
+		`"tabs":["ab1"],"names":{"ab1":"Plan renamed"},"before":{"ab1":{"v":1}}}`
 
 	var e JournalEntry
 	if err := json.Unmarshal([]byte(line), &e); err != nil {
@@ -129,9 +129,9 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 	}
 
 	// recorded(): the state comes back as-is and nothing claims to know a name.
-	was, ok := e.recorded("bb1")
+	was, ok := e.recorded("ab1")
 	if !ok {
-		t.Fatal("the record holds a state for bb1 and the reader must find it")
+		t.Fatal("the record holds a state for ab1 and the reader must find it")
 	}
 	if was.Fields {
 		t.Error("a generation-1 record cannot answer for name/type/note — Fields must stay false")
@@ -145,7 +145,7 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 
 	// historyFrom(): one listable version, marked as the older generation so a
 	// consumer knows a restore of it will not carry a name.
-	got := historyFrom([]JournalEntry{e}, "bb1", 0)
+	got := historyFrom([]JournalEntry{e}, "ab1", 0)
 	if len(got.Versions) != 1 {
 		t.Fatalf("want one version off a generation-1 entry, got %d", len(got.Versions))
 	}
@@ -162,7 +162,7 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 	}
 
 	// The printers.
-	if out := JournalHuman([]JournalEntry{e}); !strings.Contains(out, "bb1 (Plan renamed)") {
+	if out := JournalHuman([]JournalEntry{e}); !strings.Contains(out, "ab1 (Plan renamed)") {
 		t.Errorf("the journal listing does not print a generation-1 entry: %q", out)
 	}
 	if out := got.Human(); !strings.Contains(out, "replaced by agent-1") {
@@ -174,13 +174,13 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
 	journalWith(t, root, e)
-	out := restoreDocument(t, root, "bb1", 1)
+	out := restoreDocument(t, root, "ab1", 1)
 	// Compared normalised: the restore prints an INDENTED document, so the bytes
 	// differ from the record while the value does not.
-	if got := string(normalise(out.tabs[out.byID["bb1"]].State)); got != `{"v":1}` {
+	if got := string(normalise(out.tabs[out.byID["ab1"]].State)); got != `{"v":1}` {
 		t.Errorf("the restored state = %s, want the recorded one", got)
 	}
-	if got := out.tabs[out.byID["bb1"]].Name; got != "Plan" {
+	if got := out.tabs[out.byID["ab1"]].Name; got != "Plan" {
 		t.Errorf("the restored name = %q, want the board's own — a narrow record has none to give", got)
 	}
 }
@@ -189,7 +189,7 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 // well as the state, so undoing a rename is an undo rather than half of one.
 //
 // The recorded name must DIFFER from the one the board carries now, or this
-// asserts nothing: the fixture board calls bb1 "Plan", so a record that also said
+// asserts nothing: the fixture board calls ab1 "Plan", so a record that also said
 // "Plan" would pass with the restore leaving the name alone — which is exactly
 // the behaviour this test exists to refuse. So the record holds the older name
 // and the board holds the rename that replaced it, which is the real shape of an
@@ -197,11 +197,11 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 func TestARestoreFromASchema2RecordPutsTheNameBack(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
-	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "bb1",
-		`{"id":"bb1","name":"Draft plan","type":"notes","note":"what this is for","state":{"v":1}}`))
+	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "ab1",
+		`{"id":"ab1","name":"Draft plan","type":"notes","note":"what this is for","state":{"v":1}}`))
 
-	out := restoreDocument(t, root, "bb1", 1)
-	got := out.tabs[out.byID["bb1"]]
+	out := restoreDocument(t, root, "ab1", 1)
+	got := out.tabs[out.byID["ab1"]]
 	if state := string(normalise(got.State)); state != `{"v":1}` {
 		t.Errorf("state = %s, want the recorded one", state)
 	}
@@ -209,7 +209,7 @@ func TestARestoreFromASchema2RecordPutsTheNameBack(t *testing.T) {
 		t.Errorf("the restore did not put the tab back: name %q note %q type %q", got.Name, got.Note, got.Type)
 	}
 	// Still a WHOLE document: the other tab is carried through, not dropped.
-	if _, ok := out.byID["bb2"]; !ok {
+	if _, ok := out.byID["ab2"]; !ok {
 		t.Error("the restore dropped a tab it never touched")
 	}
 }
@@ -224,14 +224,14 @@ func TestARestoreFromASchema2RecordPutsTheNameBack(t *testing.T) {
 func TestARestoreDoesNotResurrectTheMarkers(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
-	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "bb1",
-		`{"id":"bb1","name":"Plan","type":"notes","state":{"v":1},`+
+	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "ab1",
+		`{"id":"ab1","name":"Plan","type":"notes","state":{"v":1},`+
 			`"touched":{"by":"agent-1","at":"2026-08-26T09:00:00.000Z"},`+
 			`"pendingRemoval":{"by":"agent-1","at":"2026-08-26T09:00:00.000Z"},`+
 			`"seen":{"human":"2026-08-26T08:00:00.000Z"}}`))
 
-	out := restoreDocument(t, root, "bb1", 1)
-	got := out.tabs[out.byID["bb1"]]
+	out := restoreDocument(t, root, "ab1", 1)
+	got := out.tabs[out.byID["ab1"]]
 	if got.Touched != nil {
 		t.Error("a restore must not re-raise a dot the human dismissed")
 	}
@@ -254,19 +254,19 @@ func TestARotatedJournalMixesGenerations(t *testing.T) {
 	}
 
 	// The old file: a generation-1 entry, as one written before this landed.
-	j.append(entry(5, "2026-08-25T10:00:00.000Z", "agent-1", "bb1", `{"v":1}`))
+	j.append(entry(5, "2026-08-25T10:00:00.000Z", "agent-1", "ab1", `{"v":1}`))
 	j.mu.Lock()
 	j.rotateLocked()
 	j.mu.Unlock()
 	// The live file: what this build writes.
-	j.append(entryV2(6, "2026-08-26T09:00:00.000Z", "human", "bb1",
-		`{"id":"bb1","name":"Plan then","type":"notes","state":{"v":2}}`))
+	j.append(entryV2(6, "2026-08-26T09:00:00.000Z", "human", "ab1",
+		`{"id":"ab1","name":"Plan then","type":"notes","state":{"v":2}}`))
 
 	if _, err := os.Stat(root.JournalFile("") + ".1"); err != nil {
 		t.Fatalf("the rotated generation is not where this test thinks it is: %v", err)
 	}
 
-	got := mustHistory(t, root, "bb1")
+	got := mustHistory(t, root, "ab1")
 	if len(got.Versions) != 2 {
 		t.Fatalf("want a version from each generation, got %d: %+v", len(got.Versions), got.Versions)
 	}
@@ -287,13 +287,13 @@ func TestARotatedJournalMixesGenerations(t *testing.T) {
 // machine form omitted would be the two halves disagreeing where it matters.
 func TestTheHistoryEndpointCarriesTheGeneration(t *testing.T) {
 	srv := testServer(t, restoreBoard)
-	journalWith(t, srv.root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "bb1",
-		`{"id":"bb1","name":"Plan then","type":"notes","state":{"v":2}}`))
+	journalWith(t, srv.root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "ab1",
+		`{"id":"ab1","name":"Plan then","type":"notes","state":{"v":2}}`))
 
 	rec := httptest.NewRecorder()
-	srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost/history?tab=bb1", http.NoBody))
+	srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost/history?tab=ab1", http.NoBody))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /history?tab=bb1 answered %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("GET /history?tab=ab1 answered %d: %s", rec.Code, rec.Body.String())
 	}
 	var got TabHistory
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
@@ -316,13 +316,13 @@ func TestACorruptSchema2RecordIsNotReadAsAState(t *testing.T) {
 	e := JournalEntry{
 		Schema: journalSchema,
 		At:     "2026-08-26T09:00:00.000Z", By: "agent-1",
-		Tabs:   []string{"bb1"},
-		Before: map[string]json.RawMessage{"bb1": json.RawMessage(`"not a tab"`)},
+		Tabs:   []string{"ab1"},
+		Before: map[string]json.RawMessage{"ab1": json.RawMessage(`"not a tab"`)},
 	}
-	if _, ok := e.recorded("bb1"); ok {
+	if _, ok := e.recorded("ab1"); ok {
 		t.Error("a record that does not decode as a tab must not be read as one")
 	}
-	if got := historyFrom([]JournalEntry{e}, "bb1", 0); len(got.Versions) != 0 {
+	if got := historyFrom([]JournalEntry{e}, "ab1", 0); len(got.Versions) != 0 {
 		t.Errorf("a corrupt record must not be offered as a restorable version: %+v", got.Versions)
 	}
 }

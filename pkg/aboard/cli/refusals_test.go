@@ -67,7 +67,7 @@ func TestApplyWithNoBaseExitsUsage(t *testing.T) {
 	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
 		t.Fatal(err)
 	}
-	doc := `{"version":3,"nextId":2,"tabs":[{"id":"bb1","name":"Plan","type":"notes"}]}`
+	doc := `{"version":1,"nextId":2,"tabs":[{"id":"ab1","name":"Plan","type":"notes"}]}`
 
 	var out, errOut bytes.Buffer
 	root := NewRootCmd(Options{
@@ -162,7 +162,7 @@ func TestJournalFallsBackWhenTheRecordedBoardIsDead(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(root.JournalFile(""),
-		[]byte(`{"at":"T1","by":"agent-1","tabs":["bb1"]}`+"\n"), 0o644); err != nil {
+		[]byte(`{"at":"T1","by":"agent-1","tabs":["ab1"]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -215,8 +215,8 @@ func TestEveryOutputStructAgreesInJSONAndYAML(t *testing.T) {
 			GitignoreLine: ".aboard/", GitignoreState: "added", GitignoreFile: "/p/.gitignore",
 		}},
 		{"journal entry", aboard.JournalEntry{
-			At: "T", By: "agent-1", Origin: "apply", Tabs: []string{"bb1"},
-			Names: map[string]string{"bb1": "Plan"}, NextID: 4,
+			At: "T", By: "agent-1", Origin: "apply", Tabs: []string{"ab1"},
+			Names: map[string]string{"ab1": "Plan"}, NextID: 4,
 		}},
 		{"version", versionReport{
 			App: "aboard", Host: "aboard", Version: "v", BuildDate: "T", GitCommit: "abc", Schema: 3,

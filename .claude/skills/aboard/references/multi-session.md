@@ -151,7 +151,7 @@ with a sidebar tree is the case this was built for. Three things make that work,
 and all three are per-VIEWER, so none of them touches `.aboard/aboard.json`:
 
 ```
-http://localhost:<port>/?chrome=notabs#tab=bb13
+http://localhost:<port>/?chrome=notabs#tab=ab13
 ```
 
 - **`?chrome=`** — `full` (default) · `notabs` (hide the tab button list, keep the
@@ -213,11 +213,11 @@ A named board owns everything it writes for **itself**:
 | `run/logs/<tab>.log` | `run/logs/review/<tab>.log` |
 
 All five are per board for one reason: **tab ids are allocated per BOARD.** Both
-documents start at `bb1`, and each of those records is keyed by tab id — so one
+documents start at `ab1`, and each of those records is keyed by tab id — so one
 shared file held two different tabs under one key. `aboard journal` could not say
 which board an entry belonged to without reading the tab's name, and
-`aboard history bb1 --name review` would hand you the DEFAULT board's version of
-`bb1` as a document to restore. That is fixed; `journal`, `history`, `watch`,
+`aboard history ab1 --name review` would hand you the DEFAULT board's version of
+`ab1` as a document to restore. That is fixed; `journal`, `history`, `watch`,
 `rendered` and `log` on a named board are about that board and nothing else.
 
 Two paths stay per PROJECT, deliberately, and neither is keyed by tab id:
@@ -228,7 +228,7 @@ Two paths stay per PROJECT, deliberately, and neither is keyed by tab id:
 | `recipes/` | a recipe is a document about the project, not about one board |
 
 So **`aboard uploads` reads every board's document**, prints a named board's tab
-as `review:bb1`, and `--name` does not narrow it. It used to scan one board's
+as `review:ab1`, and `--name` does not narrow it. It used to scan one board's
 tabs, which made another board's image look unreferenced and let
 `--prune --yes` delete a picture somebody was looking at.
 

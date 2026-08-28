@@ -4,7 +4,7 @@ description: "One ui tab of internal panels — N decision panels plus a Summary
 when_to_use: "When you have put a pile of findings in front of the human and need a verdict on each, and they want to see what they have chosen so far without hunting through tabs. This shape is for DECIDING; a gate tab is for committing."
 tags: [ui, tabs, bind, decisions, summary, wizard]
 requires:
-  min_schema: 3
+  min_schema: 1
 ---
 
 # A decision wizard with a live summary

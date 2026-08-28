@@ -25,12 +25,12 @@ front rather than accepted and never fired:
 
   poke                 the human pressed Notify (or another session poked)
   change               any accepted write at all
-  tab bb71             that tab changed
-  answer bb15          that tab changed AND a human made the change
-  node bb58=done       that node reached that status
-  rendered bb133       a browser MOUNTED that tab and posted a receipt
+  tab ab71             that tab changed
+  answer ab15          that tab changed AND a human made the change
+  node ab58=done       that node reached that status
+  rendered ab133       a browser MOUNTED that tab and posted a receipt
   request              the human has a note waiting for an agent
-  request bb14         one on that tab
+  request ab14         one on that tab
 
 Two of them are not about a write. The rendered form is released by the browser
 reporting a mount, so waiting on it is waiting for a HUMAN to have the tab open
@@ -44,7 +44,7 @@ stale: if this process dies, the button stops claiming anyone is listening.
 
 Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 		Args:    cobra.NoArgs,
-		Example: `  aboard wait --for "answer bb128" --note "waiting on the gate"`,
+		Example: `  aboard wait --for "answer ab128" --note "waiting on the gate"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {

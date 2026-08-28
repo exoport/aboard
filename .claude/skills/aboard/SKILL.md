@@ -430,7 +430,7 @@ then it is cleared. Watch for:
   that acts on it;
 - a plan the human corrected by dragging nodes → restate the corrected model in
   prose where the code can see it;
-- "as we agreed in bb42" in a commit message or a PR → **never**. That id means
+- "as we agreed in ab42" in a commit message or a PR → **never**. That id means
   nothing to anyone else, or to you next month. Cite the artifact, not the tab.
 
 And in the other direction, just as real: do not turn every exchange into a file.
@@ -570,7 +570,7 @@ it exists, which `aboard status` tells you without being asked.
 Take the board-wide counter:
 
 ```js
-const id = 'bb' + doc.nextId; doc.nextId += 1;
+const id = 'ab' + doc.nextId; doc.nextId += 1;
 ```
 
 Ids are how you and the user refer to things across turns. A reused id silently
@@ -578,10 +578,10 @@ re-points an instruction at a different object — which is why the counter is
 board-wide and the server refuses to let it regress. An id is unique board-wide,
 so it never needs qualifying by tab.
 
-**Write `bb<n>`; read anything.** The `bb` tag ("bulletin board") is there so an
-id survives being written in a sentence: `bb49` is unmistakably a board object
+**Write `bb<n>`; read anything.** The `ab` tag ("bulletin board") is there so an
+id survives being written in a sentence: `ab49` is unmistakably a board object
 where `49` is any number at all, and most of what passes between you and the user
-is sentences. Say `bb49`, not `49`, whenever you mean the object. Bare `49` and
+is sentences. Say `ab49`, not `49`, whenever you mean the object. Bare `49` and
 legacy `n49` still parse everywhere, so old references keep working — the
 migration prefixed ids without renumbering them.
 
@@ -595,26 +595,26 @@ stop meaning anything, and the kind is already implied by where the object sits.
 
 That asymmetry is real and it is not about politeness:
 
-- **They say "bb32" → you are fine.** You can read the state file in a second and
+- **They say "ab32" → you are fine.** You can read the state file in a second and
   find out exactly what it is. Take the id and act.
-- **You say "bb32" → they may have no idea.** They cannot grep the board from
+- **You say "ab32" → they may have no idea.** They cannot grep the board from
   their head. An id they saw ten minutes ago is still live; an id from yesterday,
   or from before a context clear, is a meaningless token — and they will have to
   go and look it up, which is work you just handed them.
 
 So **when you address the human, name the thing and put the id beside it**:
 
-> the Migration review tab (`bb32`) — its html block still needs a click
+> the Migration review tab (`ab32`) — its html block still needs a click
 
-not "press the button in bb32". Same for nodes, marks and cards: *"the 'auth'
-node (`bb58`)"*, *"the mark on the login screen (`bb168`)"*.
+not "press the button in ab32". Same for nodes, marks and cards: *"the 'auth'
+node (`ab58`)"*, *"the mark on the login screen (`ab168`)"*.
 
 The id still earns its place — it is unambiguous, it survives being pasted, and it
 is what you both point at once they know which object it is. It is a HANDLE, not a
 NAME, and a handle needs a name attached the first time it appears in a message,
 and again after any real gap.
 
-This is the same instinct as never writing "as we agreed in bb42" in a commit
+This is the same instinct as never writing "as we agreed in ab42" in a commit
 message, and it fails the same way: a reference that means nothing to the reader
 is not a reference. The difference is only how long the window lasts — minutes in
 conversation, forever in a commit.
@@ -652,10 +652,10 @@ board allocator, so it can be named in a sentence and answered by name.
 
 ```sh
 aboard requests                       # pending, oldest first, naming the tab
-aboard requests --tab bb14 --all      # one tab, done ones included
-aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+aboard requests --tab ab14 --all      # one tab, done ones included
+aboard requests done ab199 --by agent-1 --note "redrew the arrow"
 aboard wait --for request             # block until one exists or arrives
-aboard wait --for "request bb14"      # one tab's
+aboard wait --for "request ab14"      # one tab's
 ```
 
 Three things about this to hold on to:

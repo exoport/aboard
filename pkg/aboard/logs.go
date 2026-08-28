@@ -53,8 +53,8 @@ var logMu sync.Mutex
 // guard checkable in the first place.
 //
 // The alternative rejected: applying filepath.Base to the tab id at the CALL
-// site, which does silence the analyser and is a bug — Base("../../bb42") is
-// "bb42", so a traversal attempt would stop being refused and start quietly
+// site, which does silence the analyser and is a bug — Base("../../ab42") is
+// "ab42", so a traversal attempt would stop being refused and start quietly
 // succeeding against a different tab.
 func (s *server) logPath(tab string) (string, bool) { return s.root.LogFile(s.name, tab) }
 
@@ -142,7 +142,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 // Log streams stdin into a tab's log, a line at a time, so a long-running
 // command shows up on the board as it happens rather than when it finishes:
 //
-//	go test ./... 2>&1 | aboard log bb42
+//	go test ./... 2>&1 | aboard log ab42
 func Log(ctx context.Context, root Root, name, tab string, in io.Reader, out io.Writer) error {
 	inst, err := RunningInstance(root, name)
 	if err != nil {

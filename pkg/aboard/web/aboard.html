@@ -249,7 +249,7 @@ const CLIENT_ID = (crypto.randomUUID && crypto.randomUUID()) || String(Math.rand
 // JavaScript it loaded, so when the schema moves under a page that is already
 // open, the live-reload fetches a document this code cannot read. Saying so
 // beats rendering an empty board and letting the user guess.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 1;
 
 // The renderer registry. Tabs are DATA — this maps a tab's `type` to the module
 // that draws it, and says what a fresh tab of that type starts with. Adding a
@@ -370,7 +370,7 @@ function stateOf(tab) {
 // guessed ad hoc and stops meaning anything, and it duplicates what the object's
 // position already says. A single namespace tag says nothing about kind and
 // cannot be guessed wrong — it exists so that an id survives being written in
-// prose: "bb49" is unmistakably this board's object, where "49" is any number at
+// prose: "ab49" is unmistakably this board's object, where "49" is any number at
 // all. That ambiguity was real, in a channel that is mostly sentences.
 //
 // STRINGS rather than JSON numbers, because DOM attributes and Map keys are
@@ -378,9 +378,11 @@ function stateOf(tab) {
 // the ids were quoted in the first place.
 //
 // Any argument is ignored, so callers written against the older prefixed form
-// keep working. Bare "49" and legacy "n49" are still READ everywhere (every
-// parser uses /^[a-z]*(\d+)$/); only writes carry the tag.
-const ID_PREFIX = 'bb';   // "bulletin board"
+// keep working. Bare "49" and the retired "n49" and "bb49" are still READ
+// everywhere (every parser uses /^[a-z]*(\d+)$/); only writes carry the tag.
+// That is what makes a change of tag cost nothing: a board full of "bb" ids goes
+// on working after this line changes, and only new ids look different.
+const ID_PREFIX = 'ab';   // as in aboard
 
 function nextId() {
   const stored = Number(doc.nextId);
@@ -1273,7 +1275,7 @@ function openHelp() {
     ['1 … 9', 'jump to that tab'],
     ['Escape', 'close a panel or menu'],
     ['right-click', 'copy an id, a link to it, or it as markdown'],
-    ['#tab=bb71&node=bb58', 'a link that opens one node, not just the tab'],
+    ['#tab=ab71&node=ab58', 'a link that opens one node, not just the tab'],
   ], true));
 
   if (type && HELP[type]) {
@@ -2593,7 +2595,7 @@ if (headEl && typeof ResizeObserver === 'function') {
   publish();
 }
 
-// Deep links. `?tab=` has always worked; `#tab=bb71&node=bb57` addresses a node
+// Deep links. `?tab=` has always worked; `#tab=ab71&node=ab57` addresses a node
 // INSIDE a tab, which is what a reference in prose or a chat message actually
 // needs — "the node called auth" becomes a click. The fragment is per-viewer
 // navigation state, so it stays in the URL and never touches aboard.json.

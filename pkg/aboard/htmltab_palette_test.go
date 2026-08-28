@@ -37,9 +37,9 @@ func TestTheHTMLFramePaletteIsAppCSSsOwn(t *testing.T) {
 	srv := testServer(t, htmlTabBoard)
 
 	rec := httptest.NewRecorder()
-	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+	srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /tab/bb1/html = %d", rec.Code)
+		t.Fatalf("GET /tab/ab1/html = %d", rec.Code)
 	}
 	frame := rec.Body.String()
 
@@ -99,9 +99,9 @@ func TestAnUnparseableStylesheetLeavesTheFrameOnTheBuiltInPalette(t *testing.T) 
 			srv.assets = assets
 
 			rec := httptest.NewRecorder()
-			srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/bb1/html", http.NoBody), "bb1")
+			srv.serveTabHTML(rec, httptest.NewRequest(http.MethodGet, "http://localhost/tab/ab1/html", http.NoBody), "ab1")
 			if rec.Code != http.StatusOK {
-				t.Fatalf("GET /tab/bb1/html = %d", rec.Code)
+				t.Fatalf("GET /tab/ab1/html = %d", rec.Code)
 			}
 			inner, ok := frameRootBlock(rec.Body.String())
 			if !ok {

@@ -33,21 +33,21 @@ func TestTheBrowserReportsWhatItRendered(t *testing.T) {
 	s := open(t, "")
 
 	// The gallery first, for the plain case: a tab was mounted and said so.
-	s.tab("bb133")
+	s.tab("ab133")
 	eventually(t, "the ui gallery's receipt to arrive", func() bool {
-		return receiptFor(t, "bb133").Mounts >= 1
+		return receiptFor(t, "ab133").Mounts >= 1
 	})
-	if got := receiptFor(t, "bb133"); got.Type != "ui" {
+	if got := receiptFor(t, "ab133"); got.Type != "ui" {
 		t.Errorf("unexpected receipt for the gallery: %+v", got)
 	}
 
 	// A tab with declared controls: the ids reported are the ones
 	// views/dag.spec.json declares, which is what makes this not a DOM sweep.
-	s.tab("bb1")
+	s.tab("ab1")
 	eventually(t, "the dag's receipt to arrive", func() bool {
-		return len(receiptFor(t, "bb1").Controls) > 0
+		return len(receiptFor(t, "ab1").Controls) > 0
 	})
-	dag := receiptFor(t, "bb1")
+	dag := receiptFor(t, "ab1")
 	if !containsID(dag.Controls, "relayout") {
 		t.Errorf("the dag's declared controls were not reported: %+v", dag.Controls)
 	}
@@ -57,11 +57,11 @@ func TestTheBrowserReportsWhatItRendered(t *testing.T) {
 
 	// And a press. A recorded press proves the control was REACHED and nothing
 	// more, which is one of the two limits the command prints about itself.
-	if err := s.control("bb1", "relayout").Click(); err != nil {
+	if err := s.control("ab1", "relayout").Click(); err != nil {
 		t.Fatalf("pressing the dag's relayout control: %v", err)
 	}
 	eventually(t, "the press to be reported", func() bool {
-		return receiptFor(t, "bb1").Fired["relayout"] >= 1
+		return receiptFor(t, "ab1").Fired["relayout"] >= 1
 	})
 }
 
@@ -77,7 +77,7 @@ func TestTheBrowserReportsWhatItRendered(t *testing.T) {
 // the marker reaches the agent.
 func TestAnUnknownComponentTheHumanRevealedReachesTheAgent(t *testing.T) {
 	s := open(t, "")
-	view := s.tab("bb133")
+	view := s.tab("ab133")
 
 	if err := view.Locator(`.uic-tab:has-text("Unknown")`).Click(); err != nil {
 		t.Fatalf("opening the gallery's Unknown panel: %v", err)
@@ -87,11 +87,11 @@ func TestAnUnknownComponentTheHumanRevealedReachesTheAgent(t *testing.T) {
 	}
 
 	// Away and back: the re-sweep happens when a tab becomes active.
-	s.tab("bb1")
-	s.tab("bb133")
+	s.tab("ab1")
+	s.tab("ab133")
 
 	eventually(t, "the unknown-component marker to be reported", func() bool {
-		return containsID(receiptFor(t, "bb133").Unknown, "sparkline")
+		return containsID(receiptFor(t, "ab133").Unknown, "sparkline")
 	})
 }
 

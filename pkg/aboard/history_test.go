@@ -63,18 +63,18 @@ func entryV2(rev int, at, by, tab, before string) JournalEntry {
 func TestHistoryListsPriorStatesNewestFirst(t *testing.T) {
 	root := Root(t.TempDir())
 	journalWith(t, root,
-		entry(2, "2026-08-26T09:00:00.000Z", "agent-1", "bb1", `{"v":1}`),
-		entry(3, "2026-08-26T09:01:00.000Z", "human", "bb1", `{"v":2}`),
-		entry(4, "2026-08-26T09:02:00.000Z", "agent-2", "bb2", `{"other":true}`),
-		entry(5, "2026-08-26T09:03:00.000Z", "agent-1", "bb1", `{"v":3}`),
+		entry(2, "2026-08-26T09:00:00.000Z", "agent-1", "ab1", `{"v":1}`),
+		entry(3, "2026-08-26T09:01:00.000Z", "human", "ab1", `{"v":2}`),
+		entry(4, "2026-08-26T09:02:00.000Z", "agent-2", "ab2", `{"other":true}`),
+		entry(5, "2026-08-26T09:03:00.000Z", "agent-1", "ab1", `{"v":3}`),
 	)
 
-	got, err := History(t.Context(), root, "", "bb1", 0)
+	got, err := History(t.Context(), root, "", "ab1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got.Versions) != 3 {
-		t.Fatalf("got %d versions, want the 3 entries that touched bb1: %+v", len(got.Versions), got.Versions)
+		t.Fatalf("got %d versions, want the 3 entries that touched ab1: %+v", len(got.Versions), got.Versions)
 	}
 	if got.Versions[0].N != 1 || string(got.Versions[0].State) != `{"v":3}` {
 		t.Errorf("version 1 must be the most recent state replaced, got %+v", got.Versions[0])
@@ -92,10 +92,10 @@ func TestHistoryListsPriorStatesNewestFirst(t *testing.T) {
 func TestHistorySkipsTheWriteThatCreatedTheTab(t *testing.T) {
 	root := Root(t.TempDir())
 	journalWith(t, root,
-		JournalEntry{At: "2026-08-26T09:00:00.000Z", By: "agent-1", Rev: 2, Tabs: []string{"bb1"}},
-		entry(3, "2026-08-26T09:01:00.000Z", "human", "bb1", `{"v":1}`),
+		JournalEntry{At: "2026-08-26T09:00:00.000Z", By: "agent-1", Rev: 2, Tabs: []string{"ab1"}},
+		entry(3, "2026-08-26T09:01:00.000Z", "human", "ab1", `{"v":1}`),
 	)
-	got, err := History(t.Context(), root, "", "bb1", 0)
+	got, err := History(t.Context(), root, "", "ab1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,11 +109,11 @@ func TestHistorySkipsTheWriteThatCreatedTheTab(t *testing.T) {
 // those call for opposite next moves.
 func TestHistorySaysWhereTheRecordEnds(t *testing.T) {
 	root := Root(t.TempDir())
-	if got := mustHistory(t, root, "bb1"); !strings.Contains(got.Ends, "journal is empty") {
+	if got := mustHistory(t, root, "ab1"); !strings.Contains(got.Ends, "journal is empty") {
 		t.Errorf("an empty journal must say so, got %q", got.Ends)
 	}
-	journalWith(t, root, entry(2, "2026-08-26T09:00:00.000Z", "agent-1", "bb1", `{"v":1}`))
-	got := mustHistory(t, root, "bb1")
+	journalWith(t, root, entry(2, "2026-08-26T09:00:00.000Z", "agent-1", "ab1", `{"v":1}`))
+	got := mustHistory(t, root, "ab1")
 	if !strings.Contains(got.Ends, "2026-08-26T09:00:00.000Z") || !strings.Contains(got.Ends, "rotated generation") {
 		t.Errorf("the end of the record must name where it stops and why, got %q", got.Ends)
 	}
@@ -132,12 +132,12 @@ func mustHistory(t *testing.T, root Root, tab string) TabHistory {
 }
 
 const restoreBoard = `{
-  "version": 3,
+  "version": 1,
   "rev": 7,
   "nextId": 9,
   "tabs": [
-    {"id": "bb1", "name": "Plan", "type": "notes", "state": {"v": 3}},
-    {"id": "bb2", "name": "Other", "type": "notes", "state": {"keep": true}}
+    {"id": "ab1", "name": "Plan", "type": "notes", "state": {"v": 3}},
+    {"id": "ab2", "name": "Other", "type": "notes", "state": {"keep": true}}
   ]
 }`
 
@@ -148,10 +148,10 @@ const restoreBoard = `{
 func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
-	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "bb1", `{"v":2}`))
+	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "ab1", `{"v":2}`))
 
 	var out bytes.Buffer
-	if err := Restore(t.Context(), root, "", "bb1", 1, &out); err != nil {
+	if err := Restore(t.Context(), root, "", "ab1", 1, &out); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := decodeDocument(out.Bytes())
@@ -161,11 +161,11 @@ func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 	if len(doc.tabs) != 2 {
 		t.Fatalf("the restore dropped tabs: %d left, want 2", len(doc.tabs))
 	}
-	if got := string(doc.tabs[doc.byID["bb1"]].State); !strings.Contains(got, `"v": 2`) && !strings.Contains(got, `"v":2`) {
-		t.Errorf("bb1 was not restored: %s", got)
+	if got := string(doc.tabs[doc.byID["ab1"]].State); !strings.Contains(got, `"v": 2`) && !strings.Contains(got, `"v":2`) {
+		t.Errorf("ab1 was not restored: %s", got)
 	}
-	if got := string(doc.tabs[doc.byID["bb2"]].State); !strings.Contains(got, "keep") {
-		t.Errorf("bb2 must be carried through untouched: %s", got)
+	if got := string(doc.tabs[doc.byID["ab2"]].State); !strings.Contains(got, "keep") {
+		t.Errorf("ab2 must be carried through untouched: %s", got)
 	}
 	// Carrying `rev` is what makes a restore refusable rather than a clobber.
 	if rev, ok := rawInt(doc.fields["rev"]); !ok || rev != 7 {
@@ -183,10 +183,10 @@ func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 func TestRestoreRefusesATabThatIsNoLongerOnTheBoard(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
-	journalWith(t, root, entryV2(7, "2026-08-26T09:03:00.000Z", "human", "bb9",
-		`{"id":"bb9","name":"Gone","type":"notes","state":{"v":1}}`))
+	journalWith(t, root, entryV2(7, "2026-08-26T09:03:00.000Z", "human", "ab9",
+		`{"id":"ab9","name":"Gone","type":"notes","state":{"v":1}}`))
 
-	err := Restore(t.Context(), root, "", "bb9", 1, &bytes.Buffer{})
+	err := Restore(t.Context(), root, "", "ab9", 1, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "removed by the human") {
 		t.Errorf("want a refusal saying who removed it, got %v", err)
 	}
@@ -195,9 +195,9 @@ func TestRestoreRefusesATabThatIsNoLongerOnTheBoard(t *testing.T) {
 func TestRestoreRefusesAVersionThatIsNotThere(t *testing.T) {
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
-	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "human", "bb1", `{"v":1}`))
+	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "human", "ab1", `{"v":1}`))
 
-	err := Restore(t.Context(), root, "", "bb1", 4, &bytes.Buffer{})
+	err := Restore(t.Context(), root, "", "ab1", 4, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "1 recorded version") {
 		t.Errorf("want a refusal that says how many versions there are, got %v", err)
 	}
@@ -207,7 +207,7 @@ func TestRestoreRefusesAVersionThatIsNotThere(t *testing.T) {
 // /journal already is, so a request without a tab is a mistake worth naming.
 func TestHistoryEndpointNeedsATabAndAnswersWithVersions(t *testing.T) {
 	srv := testServer(t, restoreBoard)
-	journalWith(t, srv.root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "bb1", `{"v":2}`))
+	journalWith(t, srv.root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "ab1", `{"v":2}`))
 
 	rec := httptest.NewRecorder()
 	srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost/history", http.NoBody))
@@ -216,9 +216,9 @@ func TestHistoryEndpointNeedsATabAndAnswersWithVersions(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost/history?tab=bb1", http.NoBody))
+	srv.route(rec, httptest.NewRequest(http.MethodGet, "http://localhost/history?tab=ab1", http.NoBody))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /history?tab=bb1 answered %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("GET /history?tab=ab1 answered %d: %s", rec.Code, rec.Body.String())
 	}
 	var got TabHistory
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {

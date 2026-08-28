@@ -870,7 +870,7 @@ export function mountDag(root, ctx) {
       return false;
     },
 
-    // Deep links: #tab=bb1&node=bb7 selects the node and centres the canvas on
+    // Deep links: #tab=ab1&node=ab7 selects the node and centres the canvas on
     // it, rather than dropping you on a tab and leaving you to find it.
     focus(id) {
       const node = byId(String(id));

@@ -140,7 +140,7 @@ the first half turned out to cost more than it was worth: with the list gone the
 alone on a row of its own, a whole line of a small panel, in the one mode where the host
 has a toolbar to put it in. Changed 2026-08-27.
 
-It composes with the deep link (`?chrome=notabs#tab=bb71`) and survives the board's
+It composes with the deep link (`?chrome=notabs#tab=ab71`) and survives the board's
 own [self-reload](../how-to/run-in-vscode.md#when-the-page-reloads-itself), which
 preserves query and fragment.
 
@@ -149,7 +149,7 @@ preserves query and fragment.
 When the page is framed, `activate()` tells the parent which tab is now on screen:
 
 ```js
-{ __aboard: 'active', tab: 'bb13' }
+{ __aboard: 'active', tab: 'ab13' }
 ```
 
 Posted with `'*'` as the target origin, because an embedder's
@@ -354,9 +354,9 @@ write changed anything and `warnings` when it set something no renderer reads:
   "ok": true,
   "rev": 44,
   "updatedAt": "2026-08-26T09:12:44.310Z",
-  "checked": ["bb133"],
+  "checked": ["ab133"],
   "warnings": {
-    "bb133": ["bb133 (ui): root is a stat, which does not read \"caption\" …"]
+    "ab133": ["ab133 (ui): root is a stat, which does not read \"caption\" …"]
   }
 }
 ```
@@ -589,7 +589,7 @@ change without keeping history in the board document.
 
 The entries are **this board's**: each board in a project writes its own file
 (`journal.jsonl`, `journal.<name>.jsonl`), because tab ids are allocated per board and a
-shared record held two boards' `bb1` under one id.
+shared record held two boards' `ab1` under one id.
 
 ```json
 {
@@ -599,11 +599,11 @@ shared record held two boards' `bb1` under one id.
   "origin": "apply",
   "rev": 41,
   "label": "rebuilding the gallery",
-  "tabs": ["bb133"],
-  "names": { "bb133": "UI gallery" },
-  "warnings": { "bb133": ["bb133 (ui): root is a stat, which does not read …"] },
+  "tabs": ["ab133"],
+  "names": { "ab133": "UI gallery" },
+  "warnings": { "ab133": ["ab133 (ui): root is a stat, which does not read …"] },
   "before": {
-    "bb133": { "id": "bb133", "name": "UI gallery", "type": "ui",
+    "ab133": { "id": "ab133", "name": "UI gallery", "type": "ui",
                "note": "every component, rendered", "state": { "root": "…" } }
   }
 }
@@ -692,7 +692,7 @@ A **mount receipt**: what the browser drew for one tab, posted after every mount
 debounced, after a control is pressed.
 
 ```json
-{ "tab": "bb133", "type": "ui", "mount": true,
+{ "tab": "ab133", "type": "ui", "mount": true,
   "controls": ["fit"], "undeclared": [], "unknown": ["sparkline"], "fired": {"fit": 1} }
 ```
 
@@ -706,7 +706,7 @@ distinguishes a mount from a press report, so "mounted 9×" does not come to mea
 `tab` must be a plain id; anything else is `400`, because it becomes a key in a file a
 terminal prints. Everything lands in `.aboard/run/rendered.json` — `rendered.<name>.json`
 on a named board, since tab ids are allocated per board and one file would have held two
-boards' `bb1` under one key. A **sidecar**, never the state document, for the same reason
+boards' `ab1` under one key. A **sidecar**, never the state document, for the same reason
 selection and zoom are not in it — and
 `aboard rendered` prints it. A receipt also releases a session waiting on
 `aboard wait --for "rendered <id>"`.

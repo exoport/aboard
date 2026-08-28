@@ -179,8 +179,8 @@ lines and the ones with no user-visible surface — the suite, the extension —
   `--name` qualified the state file and the instance record and nothing else, so two
   boards in one project wrote into `run/journal.jsonl`, `run/rendered.json` and
   `run/logs/<tab>.log` together — and every one of those is keyed by TAB ID while tab ids
-  are allocated per BOARD, so both documents have a `bb1`. The journal held two entries
-  naming `bb1` and meaning different tabs, and `aboard history bb1 --name review` would
+  are allocated per BOARD, so both documents have a `ab1`. The journal held two entries
+  naming `ab1` and meaning different tabs, and `aboard history ab1 --name review` would
   offer the DEFAULT board's version as a document to restore. Each board now writes
   `journal.<name>.jsonl` (`.1` rotation included), `rendered.<name>.json` and
   `logs/<name>/<tab>.log`; `journal`, `watch`, `history`, `rendered` and `log` each read
@@ -201,7 +201,7 @@ lines and the ones with no user-visible surface — the suite, the extension —
   it — but the reference scan read ONE board's tabs, so an image used only by the review
   board came back "no tab mentions it" from the default board and `--prune --yes` deleted
   a picture somebody was looking at. The scan now reads every `aboard.json` and
-  `aboard.<name>.json` in the project, prints a named board's tab id as `review:bb1`, and
+  `aboard.<name>.json` in the project, prints a named board's tab id as `review:ab1`, and
   says which documents it read. `--name` deliberately does not narrow it. A board
   document that will not parse is now a hard error rather than a skipped file: a board
   whose references cannot be read might be referencing anything, and the next thing the
@@ -262,7 +262,7 @@ lines and the ones with no user-visible surface — the suite, the extension —
   **`--name` qualifies the state file and the instance record and nothing else.** The
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
-  too, and tab ids are per board — a `bb12` in the journal may belong to either.
+  too, and tab ids are per board — a `ab12` in the journal may belong to either.
 - **fix: zooming no longer shuffles an image's buttons, and there is no pan hint on
   screen.** The hint was a span in the image's head row, so it pushed every button beside
   it sideways when it appeared and back when it went — measured at ~370px, on every zoom.
@@ -278,7 +278,7 @@ lines and the ones with no user-visible surface — the suite, the extension —
   is about the crop, this one is about what is on screen.
 - **fix: hovering an image's name shows its id.** It said "Rename this image", which is
   the affordance and not the identity. The id is what you say to an agent — *"the image
-  bb214"* — and the caption is a label the human is free to change, so the two are not
+  ab214"* — and the caption is a label the human is free to change, so the two are not
   interchangeable. It says both now.
 - **feat: the board asks its HOST to copy an image when it cannot do it itself.** A VS
   Code webview blocks the Clipboard API and VS Code offers no way to lift it — but the
@@ -405,7 +405,7 @@ lines and the ones with no user-visible surface — the suite, the extension —
   emptied with `hidden` — which is `display: none`, and a display:none grid item is not
   placed in the grid at all — so every remaining cell slid one column left into a track
   sized for something else: the id landed in the 22px mark-number track and rendered as
-  `bb`, and the delete button landed in the note track and drew a full-width box with an
+  `ab`, and the delete button landed in the note track and drew a full-width box with an
   ✕ adrift in it. An empty cell now keeps its slot and gives up its box
   (`.markup-row-image:empty`). Separately, each row declared the shared column template
   itself, and grid aligns tracks *within a container* — so `max-content` on the colour

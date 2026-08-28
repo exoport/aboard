@@ -5,9 +5,9 @@
 // rewritten whole on every append. The lines come from a sidecar file the server
 // owns (logs.go); this tab's state holds a pointer and nothing else:
 //
-//   state = { source: 'bb90', tail: 400, follow?: true, height?: '60vh' }
+//   state = { source: 'ab90', tail: 400, follow?: true, height?: '60vh' }
 //
-// An agent feeds it by piping:  go test ./... 2>&1 | aboard log bb90
+// An agent feeds it by piping:  go test ./... 2>&1 | aboard log ab90
 //
 // Polled rather than streamed, deliberately: the SSE channel fires on aboard.json
 // changes, and a log write is not a board change — wiring it in would mean every

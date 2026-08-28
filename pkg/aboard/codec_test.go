@@ -121,7 +121,7 @@ func TestTheStricterParserDefaults(t *testing.T) {
 	})
 
 	t.Run("field matching is case sensitive", func(t *testing.T) {
-		doc, err := decodeDocument([]byte(`{"tabs":[{"ID":"bb1","name":"Plan","type":"notes"}]}`))
+		doc, err := decodeDocument([]byte(`{"tabs":[{"ID":"ab1","name":"Plan","type":"notes"}]}`))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -156,7 +156,7 @@ func TestTheStricterParserDefaults(t *testing.T) {
 	})
 
 	t.Run("the escaping htmltab relies on is still applied", func(t *testing.T) {
-		doc, err := decodeDocument([]byte(`{"tabs":[{"id":"bb1","name":"W","type":"html",` +
+		doc, err := decodeDocument([]byte(`{"tabs":[{"id":"ab1","name":"W","type":"html",` +
 			`"state":{"data":{"note":"</script><img>"}}}]}`))
 		if err != nil {
 			t.Fatal(err)
@@ -175,11 +175,11 @@ func TestTheStricterParserDefaults(t *testing.T) {
 // "invalid json" about a multi-megabyte document is a message that sends
 // somebody to a diff tool.
 func TestAPostWithADuplicateKeyIsRefusedWithAReason(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 
 	rec := httptest.NewRecorder()
 	srv.postState(rec, httptest.NewRequest(http.MethodPost, "/aboard.json",
-		strings.NewReader(`{"__by":"agent-1","__base":"1","version":3,"nextId":9,"nextId":10,"tabs":[]}`)))
+		strings.NewReader(`{"__by":"agent-1","__base":"1","version":1,"nextId":9,"nextId":10,"tabs":[]}`)))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("a duplicate key was answered %d, want 400", rec.Code)
@@ -242,7 +242,7 @@ func TestApplyRefusesADuplicateKeyDocument(t *testing.T) {
 	root, _ := applyTarget(t)
 
 	_, _, err := runApply(t, root, false,
-		`{"rev":1,"version":3,"nextId":9,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"a","text":"b"}}]}`)
+		`{"rev":1,"version":1,"nextId":9,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"a","text":"b"}}]}`)
 	if err == nil {
 		t.Fatal("a document setting one key twice was applied")
 	}
@@ -265,12 +265,12 @@ func TestApplyRefusesADuplicateKeyDocument(t *testing.T) {
 // stdin before the server, but nothing else does: the browser, a script, another
 // tool posting directly all arrive here.
 func TestADuplicateKeyInsideATabIsNamedRatherThanCalledAShapeError(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 
 	rec := httptest.NewRecorder()
 	srv.postState(rec, httptest.NewRequest(http.MethodPost, "/aboard.json",
-		strings.NewReader(`{"__by":"agent-1","__base":"1","version":3,"nextId":9,"tabs":[`+
-			`{"id":"bb1","name":"P","type":"notes","state":{"text":"a","text":"b"}}]}`)))
+		strings.NewReader(`{"__by":"agent-1","__base":"1","version":1,"nextId":9,"tabs":[`+
+			`{"id":"ab1","name":"P","type":"notes","state":{"text":"a","text":"b"}}]}`)))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("a duplicate key inside a tab was answered %d, want 400", rec.Code)
@@ -289,8 +289,8 @@ func TestADuplicateKeyInsideATabIsNamedRatherThanCalledAShapeError(t *testing.T)
 
 // And the shape error it was hiding behind still exists, with its own sentence.
 func TestATabsKeyThatIsNotAnArrayIsAShapeError(t *testing.T) {
-	for _, doc := range []string{`{"version":3,"tabs":{}}`, `{"version":3,"tabs":5}`, `{"version":3,"tabs":null}`} {
-		srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
+	for _, doc := range []string{`{"version":1,"tabs":{}}`, `{"version":1,"tabs":5}`, `{"version":1,"tabs":null}`} {
+		srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 		rec := httptest.NewRecorder()
 		srv.postState(rec, httptest.NewRequest(http.MethodPost, "/aboard.json", strings.NewReader(doc)))
 		if rec.Code != http.StatusBadRequest {

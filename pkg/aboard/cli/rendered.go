@@ -28,7 +28,7 @@ here was REACHED — never that it behaved correctly.
 Reads .aboard/run/rendered.json — or rendered.<name>.json on a named board — so
 it needs no server. With no argument it prints every tab that has a receipt.`,
 		Args:    cobra.MaximumNArgs(1),
-		Example: "  aboard rendered bb133\n  aboard rendered",
+		Example: "  aboard rendered ab133\n  aboard rendered",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err

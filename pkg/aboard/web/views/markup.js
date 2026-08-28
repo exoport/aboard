@@ -1510,7 +1510,7 @@ export function mountMarkup(root, ctx) {
   function updateFigure(rec, im) {
     rec.capEl.textContent = im.caption || '(unnamed)';
     rec.capEl.hidden = false;
-    // The id first, because that is what you say to an agent — "the image bb214"
+    // The id first, because that is what you say to an agent — "the image ab214"
     // — and the caption is a label the human is free to change. Same discipline
     // as a mark's badge: the thing on screen and the thing in a sentence are one
     // identifier. Reported 2026-08-28 as wanting the id on hover.
@@ -2592,7 +2592,7 @@ function ensureStyles() {
   pointer-events: none;
 }
 [data-view="markup"] .markup-label {
-  /* A chip, not a bubble: it holds an id like "bb168" now, not one digit. */
+  /* A chip, not a bubble: it holds an id like "ab168" now, not one digit. */
   position: absolute;
   transform: translate(-50%, -50%);
   height: 15px;

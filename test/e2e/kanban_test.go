@@ -14,18 +14,18 @@ import (
 // the wrong one produces a card that does not move and a test that reads like
 // the feature is broken.
 //
-// The tab under test is `bb13`, which has no state of its own: it borrows the
+// The tab under test is `ab13`, which has no state of its own: it borrows the
 // dag's nodes through `stateFrom`. That makes it the better subject, not a
-// worse one — a drop writes through the borrow into `bb1`, which is the path
+// worse one — a drop writes through the borrow into `ab1`, which is the path
 // that would break silently if stateFrom were ever mishandled.
 func TestAKanbanCardDragsBetweenColumns(t *testing.T) {
 	covers(t, "kanban", "drag a card between columns")
 
-	s := open(t, "tab=bb13")
-	view := s.view("bb13")
+	s := open(t, "tab=ab13")
+	view := s.view("ab13")
 
 	// A card that is NOT already in the target column, so the drop has work to do.
-	const nodeID = "bb7"
+	const nodeID = "ab7"
 	before := nodeStatus(t, nodeID)
 	target := "todo"
 	if before == target {
@@ -47,8 +47,8 @@ func TestAKanbanCardDragsBetweenColumns(t *testing.T) {
 
 	// And the borrow really is a borrow: the dag holds the state, so its own view
 	// must agree without anything reloading the page.
-	s.tab("bb1")
-	if err := expect.Locator(s.view("bb1").Locator(`.node-box[data-id="` + nodeID + `"] .node-id`)).
+	s.tab("ab1")
+	if err := expect.Locator(s.view("ab1").Locator(`.node-box[data-id="` + nodeID + `"] .node-id`)).
 		ToContainText(target); err != nil {
 		t.Errorf("the dag does not show the status the kanban wrote through stateFrom: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestAKanbanCardDragsBetweenColumns(t *testing.T) {
 
 func nodeStatus(t *testing.T, nodeID string) string {
 	t.Helper()
-	list, _ := readDoc(t).state(t, "bb1")["nodes"].([]any)
+	list, _ := readDoc(t).state(t, "ab1")["nodes"].([]any)
 	for _, raw := range list {
 		if n, ok := raw.(map[string]any); ok && n["id"] == nodeID {
 			status, _ := n["status"].(string)
@@ -71,9 +71,9 @@ func nodeStatus(t *testing.T, nodeID string) string {
 func TestAKanbanCardTitleIsRenamedInPlace(t *testing.T) {
 	covers(t, "kanban", "click a title to rename")
 
-	s := open(t, "tab=bb13")
-	const nodeID = "bb3"
-	title := s.view("bb13").Locator(`.card[data-id="` + nodeID + `"] .card-title`)
+	s := open(t, "tab=ab13")
+	const nodeID = "ab3"
+	title := s.view("ab13").Locator(`.card[data-id="` + nodeID + `"] .card-title`)
 
 	if err := expect.Locator(title).ToHaveAttribute("contenteditable", "true"); err != nil {
 		t.Fatalf("the title is not editable: %v", err)
@@ -100,7 +100,7 @@ func TestAKanbanCardTitleIsRenamedInPlace(t *testing.T) {
 
 func nodeTitle(t *testing.T, nodeID string) string {
 	t.Helper()
-	list, _ := readDoc(t).state(t, "bb1")["nodes"].([]any)
+	list, _ := readDoc(t).state(t, "ab1")["nodes"].([]any)
 	for _, raw := range list {
 		if n, ok := raw.(map[string]any); ok && n["id"] == nodeID {
 			title, _ := n["title"].(string)
@@ -116,8 +116,8 @@ func nodeTitle(t *testing.T, nodeID string) string {
 func TestRightClickingAKanbanCardOffersItsIdAndLink(t *testing.T) {
 	covers(t, "kanban", "right-click for id, link, markdown, subtree")
 
-	s := open(t, "tab=bb13")
-	if err := s.view("bb13").Locator(".card").First().Click(playwright.LocatorClickOptions{
+	s := open(t, "tab=ab13")
+	if err := s.view("ab13").Locator(".card").First().Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("right-clicking a card: %v", err)
@@ -147,12 +147,12 @@ func TestRightClickingAKanbanCardOffersItsIdAndLink(t *testing.T) {
 // badge says why.
 //
 // `cards > 0` is the load-bearing line, and it is why the example board gained
-// three cards under plan-2 item 3: the fixture used to ship bb71 with an empty
+// three cards under plan-2 item 3: the fixture used to ship ab71 with an empty
 // node list, so every negative below was trivially true and a renderer patched
 // to emit drag handles passed this check.
 func TestAReadOnlyKanbanOffersNothingToEdit(t *testing.T) {
-	s := open(t, "tab=bb71")
-	view := s.view("bb71")
+	s := open(t, "tab=ab71")
+	view := s.view("ab71")
 
 	cards := view.Locator(".card")
 	n, err := cards.Count()

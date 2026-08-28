@@ -22,7 +22,7 @@ import (
 // test asks the question at the door: the request is refused with the sentence
 // the API documents, and nothing lands anywhere but LogsDir.
 func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 
 	bad := []string{
 		"",
@@ -30,7 +30,7 @@ func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
 		"../../etc/passwd",
 		"../evil",
 		"a/b",
-		"bb126.log",
+		"ab126.log",
 		"bb 126",
 		strings.Repeat("b", 65),
 	}
@@ -62,13 +62,13 @@ func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
 	// A plain id still works, or the refusal above would be satisfied by an
 	// endpoint that refuses everything.
 	rec := httptest.NewRecorder()
-	srv.route(rec, httptest.NewRequest(http.MethodPost, "http://localhost/log?tab=bb126", strings.NewReader("a line\n")))
+	srv.route(rec, httptest.NewRequest(http.MethodPost, "http://localhost/log?tab=ab126", strings.NewReader("a line\n")))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /log?tab=bb126 = %d, want 200: %s", rec.Code, rec.Body.String())
+		t.Fatalf("POST /log?tab=ab126 = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	logFile, ok := srv.root.LogFile("", "bb126")
+	logFile, ok := srv.root.LogFile("", "ab126")
 	if !ok {
-		t.Fatal(`LogFile("bb126") refused a plain tab id`)
+		t.Fatal(`LogFile("ab126") refused a plain tab id`)
 	}
 	if _, err := os.Stat(logFile); err != nil {
 		t.Fatalf("the accepted write did not land in %s: %v", logFile, err)

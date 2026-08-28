@@ -82,7 +82,7 @@ func serverPort(t *testing.T, raw string) int {
 // 200. Harmless in itself — nothing in the browser executes anything — but a
 // documented rule with one silent exception is one nobody trusts the rest of.
 func TestTheShellIsGETOnly(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	srv.assets = web.FS
 
 	for _, path := range []string{"/", "/aboard.html"} {
@@ -110,7 +110,7 @@ func TestTheShellIsGETOnly(t *testing.T) {
 // part the reference used to leave out, which made a reader who tried it think
 // the table was wrong about everything else too.
 func TestTheRefusalsRunBeforeThePathIsMatched(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	srv.assets = web.FS
 
 	badHost := httptest.NewRecorder()
@@ -144,7 +144,7 @@ func TestTheRefusalsRunBeforeThePathIsMatched(t *testing.T) {
 // and `/views/nope.js` is 404 — a distinction the reference now states, pinned
 // here so the next edit to either has to move both.
 func TestAnUnmatchedGETIsRefusedOrNotFoundAccordingToTheAllowList(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	srv.assets = web.FS
 
 	for path, want := range map[string]int{
@@ -171,7 +171,7 @@ func TestAnUnmatchedGETIsRefusedOrNotFoundAccordingToTheAllowList(t *testing.T) 
 // header that quietly stopped being set would take the argument with it and nothing
 // else would look different.
 func TestEveryStaticAssetIsServedNosniffAsItsDeclaredType(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	srv.assets = web.FS
 
 	for path, wantType := range map[string]string{
@@ -256,7 +256,7 @@ func TestTheFirstSSEFrameCarriesTheUISignature(t *testing.T) {
 func TestAnUnknownWaitPredicateIsRefusedRatherThanAwaited(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	for _, bad := range []string{"form 15 answered", "node bb58"} {
+	for _, bad := range []string{"form 15 answered", "node ab58"} {
 		req := httptest.NewRequest(http.MethodGet,
 			"http://localhost/wait?for="+url.QueryEscape(bad)+"&timeout=2", http.NoBody)
 		rec := httptest.NewRecorder()

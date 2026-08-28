@@ -139,7 +139,7 @@ extension](use-the-vscode-extension.md), for instance — asks for the board wit
 own tab strip:
 
 ```
-http://localhost:<port>/?chrome=notabs#tab=bb13
+http://localhost:<port>/?chrome=notabs#tab=ab13
 ```
 
 `?chrome=notabs` hides the whole tab strip — the button list and the `+` — and keeps

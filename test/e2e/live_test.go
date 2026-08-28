@@ -26,21 +26,21 @@ import (
 // gesture — that is what makes the board a channel rather than a file two
 // programs happen to share.
 func TestASecondActorsWriteAppearsWithoutAReload(t *testing.T) {
-	s := open(t, "tab=bb202")
+	s := open(t, "tab=ab202")
 
 	s.markPage()
 
 	written := "written by another session at " + time.Now().Format(time.RFC3339Nano)
 	d := readDoc(t)
-	d.state(t, "bb202")["text"] = written
+	d.state(t, "ab202")["text"] = written
 	apply(t, d)
 
-	if err := expect.Locator(s.view("bb202").Locator(".notes-area")).ToHaveValue(written); err != nil {
+	if err := expect.Locator(s.view("ab202").Locator(".notes-area")).ToHaveValue(written); err != nil {
 		t.Fatalf("the other session's write never reached the open page: %v", err)
 	}
 	// The change is announced, not silent: an agent editing the tab you are
 	// reading is something you are told about.
-	if err := expect.Locator(s.view("bb202").Locator(".banner")).ToContainText("agent-e2e changed this tab"); err != nil {
+	if err := expect.Locator(s.view("ab202").Locator(".banner")).ToContainText("agent-e2e changed this tab"); err != nil {
 		t.Errorf("nothing said who changed the tab: %v", err)
 	}
 	if s.pageReloaded() {
@@ -52,15 +52,15 @@ func TestASecondActorsWriteAppearsWithoutAReload(t *testing.T) {
 // carries the origin that caused it, and a page that reloaded on its own edits
 // would fight the human's typing.
 func TestThePageIgnoresItsOwnWriteComingBack(t *testing.T) {
-	s := open(t, "tab=bb202")
+	s := open(t, "tab=ab202")
 	s.markPage()
 
-	area := s.view("bb202").Locator(".notes-area")
+	area := s.view("ab202").Locator(".notes-area")
 	if err := area.Fill("typed here, echoed back"); err != nil {
 		t.Fatalf("typing: %v", err)
 	}
 	eventually(t, "the edit to reach the server", func() bool {
-		text, _ := readDoc(t).state(t, "bb202")["text"].(string)
+		text, _ := readDoc(t).state(t, "ab202")["text"].(string)
 		return text == "typed here, echoed back"
 	})
 	time.Sleep(settle)
@@ -89,7 +89,7 @@ func TestThePageIgnoresItsOwnWriteComingBack(t *testing.T) {
 func TestADevStylesheetChangeRelinksWithoutReloading(t *testing.T) {
 	dev := startDevBoard(t)
 
-	s := openAt(t, dev.url, "tab=bb202")
+	s := openAt(t, dev.url, "tab=ab202")
 	s.markPage()
 	link := s.page.Locator(`link[rel="stylesheet"]`).Last()
 	before, err := link.GetAttribute("href")
@@ -116,7 +116,7 @@ func TestADevStylesheetChangeRelinksWithoutReloading(t *testing.T) {
 func TestADevCodeChangeReloadsThePage(t *testing.T) {
 	dev := startDevBoard(t)
 
-	s := openAt(t, dev.url, "tab=bb202")
+	s := openAt(t, dev.url, "tab=ab202")
 	s.markPage()
 
 	appendToFile(t, aboard.DevWebFile(dev.webDir, "aboard.html"), "\n<!-- touched by the browser suite -->\n")

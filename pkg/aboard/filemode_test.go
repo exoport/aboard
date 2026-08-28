@@ -27,11 +27,11 @@ func TestWriteAtomicKeepsTheDocumentedMode(t *testing.T) {
 	old := syscall.Umask(0o022)
 	t.Cleanup(func() { syscall.Umask(old) })
 
-	s := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	s := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	if err := os.Remove(s.stateFile); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.writeAtomic([]byte(`{"version":3,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
+	if err := s.writeAtomic([]byte(`{"version":1,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(s.stateFile)
@@ -61,11 +61,11 @@ func TestWriteAtomicRespectsTheUmask(t *testing.T) {
 	old := syscall.Umask(0o077)
 	t.Cleanup(func() { syscall.Umask(old) })
 
-	s := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	s := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	if err := os.Remove(s.stateFile); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.writeAtomic([]byte(`{"version":3,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
+	if err := s.writeAtomic([]byte(`{"version":1,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(s.stateFile)
@@ -83,11 +83,11 @@ func TestWriteAtomicPreservesAnExistingMode(t *testing.T) {
 	old := syscall.Umask(0o022)
 	t.Cleanup(func() { syscall.Umask(old) })
 
-	s := testServer(t, `{"version":3,"rev":1,"nextId":1,"tabs":[]}`)
+	s := testServer(t, `{"version":1,"rev":1,"nextId":1,"tabs":[]}`)
 	if err := os.Chmod(s.stateFile, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.writeAtomic([]byte(`{"version":3,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
+	if err := s.writeAtomic([]byte(`{"version":1,"rev":2,"nextId":1,"tabs":[]}`)); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(s.stateFile)

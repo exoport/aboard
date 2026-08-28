@@ -11,9 +11,9 @@ tags: [dag, kanban, plan, stateFrom]
 upsertTab(b, 'plan', () => ({
   name: 'Migration plan', type: 'dag',
   state: { columns: ['todo', 'doing', 'done'], nodes: [
-    { id: 'bb51', title: 'Ingest',    parent: null,   status: 'done',  order: 0, note: 'S3 -> queue' },
-    { id: 'bb52', title: 'Normalise', parent: 'bb51', status: 'doing', order: 0, note: 'schema drift is the risk' },
-    { id: 'bb53', title: 'Enrich',    parent: 'bb52', status: 'todo',  order: 0, note: '' },
+    { id: 'ab51', title: 'Ingest',    parent: null,   status: 'done',  order: 0, note: 'S3 -> queue' },
+    { id: 'ab52', title: 'Normalise', parent: 'ab51', status: 'doing', order: 0, note: 'schema drift is the risk' },
+    { id: 'ab53', title: 'Enrich',    parent: 'ab52', status: 'todo',  order: 0, note: '' },
   ] },
 }));
 ```

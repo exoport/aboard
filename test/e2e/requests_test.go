@@ -46,7 +46,7 @@ func TestTheHumanAsksAnAgentForSomethingOnATab(t *testing.T) {
 	if ask["by"] != "human" {
 		t.Errorf("the browser wrote the note as %v, want \"human\"", ask["by"])
 	}
-	if idOf(ask) == "" || !strings.HasPrefix(idOf(ask), "bb") {
+	if idOf(ask) == "" || !strings.HasPrefix(idOf(ask), "ab") {
 		t.Errorf("the note took the id %q — requests come from the board allocator", idOf(ask))
 	}
 
@@ -156,7 +156,7 @@ func TestALongReplyReflowsInsteadOfShreddingTheRequest(t *testing.T) {
 	d := readDoc(t)
 	tab := d.tab(t, id)
 	tab["requests"] = []any{map[string]any{
-		"id":   "bb9001",
+		"id":   "ab9001",
 		"at":   "2026-08-27T10:00:00Z",
 		"by":   "human",
 		"text": "add the first note to the agent, include an example in the ui panel",
@@ -164,7 +164,7 @@ func TestALongReplyReflowsInsteadOfShreddingTheRequest(t *testing.T) {
 	applyAsHuman(t, d)
 
 	d = readDoc(t)
-	stamp(t, d.tab(t, id), "Filled bb199 with a three-panel ui example. Try it has four bound fields, "+
+	stamp(t, d.tab(t, id), "Filled ab199 with a three-panel ui example. Try it has four bound fields, "+
 		"a six-item checklist and three intent buttons; How it works shows the JSON behind them "+
 		"and four rules; Tones shows all seven tones, which are now the part of the palette a VS "+
 		"Code theme may never repaint.")
@@ -272,7 +272,7 @@ func TestTheNotesStripFollowsTheActiveTab(t *testing.T) {
 	}
 	d["nextId"] = int(next) + 1
 	d.tab(t, mine)["requests"] = []any{map[string]any{
-		"id": fmt.Sprintf("bb%d", int(next)), "at": "2026-08-26T09:00:00Z",
+		"id": fmt.Sprintf("ab%d", int(next)), "at": "2026-08-26T09:00:00Z",
 		"by": "human", "text": "only on this tab",
 	}}
 	// As the human, because an agent may not create one — which is the guarantee

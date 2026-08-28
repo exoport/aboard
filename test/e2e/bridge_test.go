@@ -19,9 +19,9 @@ func TestAWidgetWritesThroughTheBridge(t *testing.T) {
 	covers(t, "html", "whatever the widget offers")
 
 	s := open(t, "")
-	s.tab("bb72")
+	s.tab("ab72")
 
-	frame := s.widget("bb72")
+	frame := s.widget("ab72")
 	// The sketch pad ships with strokes, so Undo has something to remove. It
 	// returns early on an empty canvas — a widget that has nothing to undo is
 	// the one case where clicking the button proves nothing.
@@ -44,17 +44,17 @@ func TestAWidgetWritesThroughTheBridge(t *testing.T) {
 	// And the parent's own view of it: html.js mirrors state.data into the
 	// "stored data" panel behind Show source, which is the only place a human
 	// ever sees what the bridge stored.
-	if err := s.control("bb72", "source").Click(); err != nil {
+	if err := s.control("ab72", "source").Click(); err != nil {
 		t.Fatalf("opening the source panel: %v", err)
 	}
-	if err := expect.Locator(s.view("bb72").Locator(".html-data")).ToContainText("strokes"); err != nil {
+	if err := expect.Locator(s.view("ab72").Locator(".html-data")).ToContainText("strokes"); err != nil {
 		t.Errorf("the stored-data panel does not show state.data: %v", err)
 	}
 }
 
 func strokeCount(t *testing.T) int {
 	t.Helper()
-	list, _ := dig(readDoc(t).state(t, "bb72"), "data", "strokes").([]any)
+	list, _ := dig(readDoc(t).state(t, "ab72"), "data", "strokes").([]any)
 	return len(list)
 }
 
@@ -72,9 +72,9 @@ func TestAWidgetInsideAStackBlockWritesThroughTheBridge(t *testing.T) {
 	covers(t, "stack", "collapse a block by its header")
 
 	s := open(t, "")
-	s.tab("bb32")
+	s.tab("ab32")
 
-	block := s.view("bb32").Locator(`[data-block-id="bb197"]`)
+	block := s.view("ab32").Locator(`[data-block-id="ab197"]`)
 	if err := expect.Locator(block).ToHaveAttribute("data-open", "yes"); err != nil {
 		t.Fatalf("the html block is not expanded: %v", err)
 	}
@@ -100,16 +100,16 @@ func TestAWidgetInsideAStackBlockWritesThroughTheBridge(t *testing.T) {
 
 func blockTicks(t *testing.T) int {
 	t.Helper()
-	blocks, _ := readDoc(t).state(t, "bb32")["blocks"].([]any)
+	blocks, _ := readDoc(t).state(t, "ab32")["blocks"].([]any)
 	for _, raw := range blocks {
 		b, ok := raw.(map[string]any)
-		if !ok || b["id"] != "bb197" {
+		if !ok || b["id"] != "ab197" {
 			continue
 		}
 		n, _ := dig(b, "state", "data", "ticks").(float64)
 		return int(n)
 	}
-	t.Fatal("the Migration review tab has no html block bb197")
+	t.Fatal("the Migration review tab has no html block ab197")
 	return 0
 }
 
@@ -122,9 +122,9 @@ func blockTicks(t *testing.T) int {
 // renderer builds, which is the other half of the same guarantee.
 func TestTheWidgetFrameIsSandboxedOnThePage(t *testing.T) {
 	s := open(t, "")
-	s.tab("bb72")
+	s.tab("ab72")
 
-	frameEl := s.view("bb72").Locator("iframe")
+	frameEl := s.view("ab72").Locator("iframe")
 	if err := expect.Locator(frameEl).ToHaveAttribute("sandbox", "allow-scripts"); err != nil {
 		t.Errorf("the widget frame's sandbox is not exactly allow-scripts: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestTheWidgetFrameIsSandboxedOnThePage(t *testing.T) {
 	// And it really is cross-origin: same-origin would mean document access, and
 	// `contentDocument` is the cheapest proof either way.
 	reachable := s.evalBool(`() => {
-      const f = document.querySelector('[data-tab="bb72"][data-active="yes"] iframe');
+      const f = document.querySelector('[data-tab="ab72"][data-active="yes"] iframe');
       try { return !!(f && f.contentDocument); } catch { return false; }
     }`)
 	if reachable {

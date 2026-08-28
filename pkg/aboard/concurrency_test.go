@@ -47,9 +47,9 @@ func TestConcurrentPostsProduceExactlyOneWinner(t *testing.T) {
 		go func() {
 			defer done.Done()
 			text := "writer-" + string(rune('a'+i))
-			body := `{"version":3,"nextId":3,"__base":"T0","__by":"agent-1","tabs":[
-			  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"` + text + `"}},
-			  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+			body := `{"version":1,"nextId":3,"__base":"T0","__by":"agent-1","tabs":[
+			  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"` + text + `"}},
+			  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 			]}`
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/aboard.json", strings.NewReader(body))
@@ -81,7 +81,7 @@ func TestConcurrentPostsProduceExactlyOneWinner(t *testing.T) {
 	// The document on disk is the winner's, whole. A second writer landing after
 	// it would leave the file holding text nobody was told had won.
 	tabs := srv.readTabs(t)
-	if got := string(tabByID(t, tabs, "bb1").State); !strings.Contains(got, winners[0].text) {
+	if got := string(tabByID(t, tabs, "ab1").State); !strings.Contains(got, winners[0].text) {
 		t.Errorf("state file holds %s, but the only 200 was %q", got, winners[0].text)
 	}
 
@@ -103,17 +103,17 @@ func TestConcurrentPostsProduceExactlyOneWinner(t *testing.T) {
 func TestASecondWriterOffTheSameBaseIsRefused(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	first := srv.postDocument(t, `{"version":3,"nextId":3,"__base":"T0","__by":"agent-1","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"first"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	first := srv.postDocument(t, `{"version":1,"nextId":3,"__base":"T0","__by":"agent-1","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"first"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if first.Code != http.StatusOK {
 		t.Fatalf("the first write: status %d: %s", first.Code, first.Body)
 	}
 
-	second := srv.postDocument(t, `{"version":3,"nextId":3,"__base":"T0","__by":"agent-2","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"second"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	second := srv.postDocument(t, `{"version":1,"nextId":3,"__base":"T0","__by":"agent-2","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"second"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if second.Code != http.StatusConflict {
 		t.Fatalf("the second write off the same base: status %d, want 409", second.Code)
@@ -209,7 +209,7 @@ func TestFanoutSurvivesAClientDisconnecting(t *testing.T) {
 // its channel on the way out while `notifyWatchers` sends to a copy of the map.
 func TestNotifyWatchersSurvivesAWatcherDisconnecting(t *testing.T) {
 	srv := testServer(t, twoTabs)
-	entry := JournalEntry{At: "T", By: "agent-1", Tabs: []string{"bb1"}}
+	entry := JournalEntry{At: "T", By: "agent-1", Tabs: []string{"ab1"}}
 	streamRace(t, srv.handleWatch, func() { srv.notifyWatchers(entry) })
 }
 

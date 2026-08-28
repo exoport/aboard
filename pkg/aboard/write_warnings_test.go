@@ -23,57 +23,57 @@ func TestWriteWarningsPerDetector(t *testing.T) {
 	}{
 		{
 			name: "unknown component",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"col","children":[{"type":"sparkline","values":[1,2]}]}}}]}`,
-			want: `bb1 (ui): root.children[0].type = "sparkline" is not in the catalog`,
+			want: `ab1 (ui): root.children[0].type = "sparkline" is not in the catalog`,
 		},
 		{
 			name: "unknown prop on a known component",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"stat","value":"3","caption":"widgets"}}}]}`,
-			want: `bb1 (ui): root is a stat, which does not read "caption"`,
+			want: `ab1 (ui): root is a stat, which does not read "caption"`,
 		},
 		{
 			name: "undeclared state key",
-			doc:  `{"tabs":[{"id":"bb1","type":"kanban","state":{"nodes":[],"colums":[]}}]}`,
-			want: `bb1 (kanban): state.colums is not declared by the kanban renderer`,
+			doc:  `{"tabs":[{"id":"ab1","type":"kanban","state":{"nodes":[],"colums":[]}}]}`,
+			want: `ab1 (kanban): state.colums is not declared by the kanban renderer`,
 		},
 		{
 			name: "bad block field",
-			doc: `{"tabs":[{"id":"bb1","type":"stack","state":{"blocks":[
-				{"id":"bb2","type":"notes","tittle":"Notes","state":{}}]}}]}`,
-			want: `bb1/bb2 (stack block): tittle is not a block field`,
+			doc: `{"tabs":[{"id":"ab1","type":"stack","state":{"blocks":[
+				{"id":"ab2","type":"notes","tittle":"Notes","state":{}}]}}]}`,
+			want: `ab1/ab2 (stack block): tittle is not a block field`,
 		},
 		{
 			name: "dead bind",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"data":{"demo":{"n":null}},
 				"root":{"type":"text","value":{"bind":"demo.missing"}}}}]}`,
-			want: `bb1 (ui): root.value binds to data.demo.missing, which is not in state.data`,
+			want: `ab1 (ui): root.value binds to data.demo.missing, which is not in state.data`,
 		},
 		{
 			name: "unknown ui tone",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"text","value":"hi","tone":"claude"}}}]}`,
-			want: `bb1: root.tone = "claude" is not a tone this board has`,
+			want: `ab1: root.tone = "claude" is not a tone this board has`,
 		},
 		{
 			name: "unknown markup colour",
-			doc: `{"tabs":[{"id":"bb1","type":"markup","state":{"images":[
-				{"id":"bb2","marks":[{"id":"bb3","color":"claude"}]}]}}]}`,
-			want: `bb1: bb3.color = "claude" is not a colour this board has`,
+			doc: `{"tabs":[{"id":"ab1","type":"markup","state":{"images":[
+				{"id":"ab2","marks":[{"id":"ab3","color":"claude"}]}]}}]}`,
+			want: `ab1: ab3.color = "claude" is not a colour this board has`,
 		},
 		{
 			name: "wrong item shape inside a fixed-shape array prop",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"kv","pairs":[{"k":"rev","v":"41"}]}}}]}`,
-			want: `bb1 (ui): root.pairs[0].k is not read — a kv pairs item is { key, value }`,
+			want: `ab1 (ui): root.pairs[0].k is not read — a kv pairs item is { key, value }`,
 		},
 		{
 			name: "a ui tree nested inside a stack block is checked too",
-			doc: `{"tabs":[{"id":"bb1","type":"stack","state":{"blocks":[
-				{"id":"bb2","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"x"}}}]}}]}`,
-			want: `bb1/bb2 (ui): root is a stat, which does not read "caption"`,
+			doc: `{"tabs":[{"id":"ab1","type":"stack","state":{"blocks":[
+				{"id":"ab2","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"x"}}}]}}]}`,
+			want: `ab1/ab2 (ui): root is a stat, which does not read "caption"`,
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestWriteWarningsStaysQuietOnCorrectDocuments(t *testing.T) {
 			// `field.bind` is a plain string naming where to WRITE. It is not
 			// required to exist yet — that is the whole point of an empty form.
 			name: "a field's write path is not a dead read",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"data":{},
 				"root":{"type":"field","label":"Name","bind":"demo.name","field":"text"}}}]}`,
 		},
@@ -108,28 +108,28 @@ func TestWriteWarningsStaysQuietOnCorrectDocuments(t *testing.T) {
 			// "was the key found" and "is the value non-nil" are different
 			// questions; an empty number field is initialised to JSON null.
 			name: "a JSON null at a key that exists is found, not missing",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"data":{"demo":{"n":null}},
 				"root":{"type":"text","value":{"bind":"demo.n"}}}}]}`,
 		},
 		{
 			name: "a bare string child is a paragraph, not an unknown component",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"col","children":["just some prose"]}}}]}`,
 		},
 		{
 			name: "no tone at all means the default",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"text","value":"hi"}}}]}`,
 		},
 		{
 			name: "actions and intents are shell-level and every renderer may carry them",
-			doc: `{"tabs":[{"id":"bb1","type":"kanban","state":{
-				"nodes":[],"columns":[],"actions":[{"id":"bb2","label":"go"}],"intents":[]}}]}`,
+			doc: `{"tabs":[{"id":"ab1","type":"kanban","state":{
+				"nodes":[],"columns":[],"actions":[{"id":"ab2","label":"go"}],"intents":[]}}]}`,
 		},
 		{
 			name: "a well-formed kv with both literal and bound values",
-			doc: `{"tabs":[{"id":"bb1","type":"ui","state":{
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"data":{"rev":41},
 				"root":{"type":"kv","pairs":[{"key":"rev","value":{"bind":"rev"}},{"key":"host","value":"local"}]}}}]}`,
 		},
@@ -179,7 +179,7 @@ func TestAStaleSchemaVersionIsReportedToTheWriter(t *testing.T) {
 	if got := wrongVersion([]byte(`{"tabs":[]}`)); got != "" {
 		t.Errorf("omitting version was reported as a mistake: %q", got)
 	}
-	if got := wrongVersion([]byte(`{"version":3,"tabs":[]}`)); got != "" {
+	if got := wrongVersion([]byte(`{"version":1,"tabs":[]}`)); got != "" {
 		t.Errorf("the current version was reported as stale: %q", got)
 	}
 }

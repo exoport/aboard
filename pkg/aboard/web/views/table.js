@@ -151,7 +151,7 @@ export function mountTable(root, ctx) {
       const hit = /^[a-z]*(\d+)$/.exec(r && r.id);
       if (hit) max = Math.max(max, Number(hit[1]));
     }
-    return 'bb' + (max + 1);
+    return 'ab' + (max + 1);
   }
 
   const save = () => ctx.save();

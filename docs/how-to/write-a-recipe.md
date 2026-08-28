@@ -73,7 +73,7 @@ description: Ask several questions at once as a form with typed fields, then rea
 when_to_use: When you would otherwise write a paragraph containing three questions. Use it for typed input — a choice, a number, a bit of free text — not for an approval you need on the record.
 tags: [form, decision]
 requires:
-  min_schema: 3
+  min_schema: 1
 ---
 
 # Ask for a decision

@@ -66,9 +66,9 @@ func (s *server) readTabs(t *testing.T) []tab {
 	return doc.Tabs
 }
 
-const twoTabs = `{"version":3,"nextId":3,"updatedAt":"T0","tabs":[
-  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+const twoTabs = `{"version":1,"nextId":3,"updatedAt":"T0","tabs":[
+  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 ]}`
 
 // The defect: __by defaulted to "human", and "human" is not a label — it is the
@@ -78,8 +78,8 @@ const twoTabs = `{"version":3,"nextId":3,"updatedAt":"T0","tabs":[
 func TestPostWithNoByCannotDeleteATab(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	rec := srv.postDocument(t, `{"version":3,"nextId":3,"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}
+	rec := srv.postDocument(t, `{"version":1,"nextId":3,"tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -89,7 +89,7 @@ func TestPostWithNoByCannotDeleteATab(t *testing.T) {
 	if len(tabs) != 2 {
 		t.Fatalf("a POST with no __by deleted a tab: %d remain", len(tabs))
 	}
-	gone := tabByID(t, tabs, "bb2")
+	gone := tabByID(t, tabs, "ab2")
 	if gone.PendingRemoval == nil {
 		t.Fatal("the dropped tab came back with no removal request for the human to answer")
 	}
@@ -104,8 +104,8 @@ func TestPostWithNoByCannotDeleteATab(t *testing.T) {
 func TestPostAsHumanMayDeleteATab(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	rec := srv.postDocument(t, `{"version":3,"nextId":3,"__by":"human","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}
+	rec := srv.postDocument(t, `{"version":1,"nextId":3,"__by":"human","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -121,9 +121,9 @@ func TestPostAsHumanMayDeleteATab(t *testing.T) {
 func TestUnattributedWriteIsJournaledAsUnknown(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	rec := srv.postDocument(t, `{"version":3,"nextId":3,"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"CHANGED"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	rec := srv.postDocument(t, `{"version":1,"nextId":3,"tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"CHANGED"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -151,8 +151,8 @@ func TestPostStampsTheSchemaVersion(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
 	rec := srv.postDocument(t, `{"version":2,"nextId":3,"__by":"agent-1","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -176,9 +176,9 @@ func TestPostStampsTheSchemaVersion(t *testing.T) {
 func TestPostRefusesAStaleBase(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	rec := srv.postDocument(t, `{"version":3,"__base":"SOMETHING-ELSE","__by":"agent-1","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	rec := srv.postDocument(t, `{"version":1,"__base":"SOMETHING-ELSE","__by":"agent-1","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status %d, want 409", rec.Code)
@@ -195,8 +195,8 @@ func TestPostRefusesAStaleBase(t *testing.T) {
 func TestARemovalRequestIsJournaled(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
-	rec := srv.postDocument(t, `{"version":3,"nextId":3,"__by":"agent-1","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}
+	rec := srv.postDocument(t, `{"version":1,"nextId":3,"__by":"agent-1","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -211,7 +211,7 @@ func TestARemovalRequestIsJournaled(t *testing.T) {
 	}
 	var found bool
 	for _, id := range entries[0].Tabs {
-		if id == "bb2" {
+		if id == "ab2" {
 			found = true
 		}
 	}
@@ -224,15 +224,15 @@ func TestARemovalRequestIsJournaled(t *testing.T) {
 // closes the loop, and a record with only half of it is a record that shows
 // every ask and no answer.
 func TestAnsweringARemovalRequestIsJournaled(t *testing.T) {
-	srv := testServer(t, `{"version":3,"nextId":3,"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"},
+	srv := testServer(t, `{"version":1,"nextId":3,"tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"},
 	   "pendingRemoval":{"by":"agent-1","at":"T","reason":"spent"}}
 	]}`)
 
-	rec := srv.postDocument(t, `{"version":3,"nextId":3,"__by":"human","tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	rec := srv.postDocument(t, `{"version":1,"nextId":3,"__by":"human","tabs":[
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
@@ -242,7 +242,7 @@ func TestAnsweringARemovalRequestIsJournaled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || len(entries[0].Tabs) != 1 || entries[0].Tabs[0] != "bb2" {
+	if len(entries) != 1 || len(entries[0].Tabs) != 1 || entries[0].Tabs[0] != "ab2" {
 		t.Fatalf("the human keeping the tab was not journaled: %+v", entries)
 	}
 	if entries[0].By != "human" {

@@ -192,7 +192,7 @@ func TestAProcessThatIsNotServingABoardIsNotABoard(t *testing.T) {
 	root := project(t)
 	p := newFakeProc(t)
 	p.add(t, 401, root, "aboard", "status")
-	p.add(t, 402, root, "aboard", "export", "bb1")
+	p.add(t, 402, root, "aboard", "export", "ab1")
 	p.add(t, 403, root, "aboard", "wait", "--note", "serve")
 	p.add(t, 404, root, "/usr/bin/notaboard", "serve")
 	p.add(t, 405, root, "ape", "pipeline", "serve")

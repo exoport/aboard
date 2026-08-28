@@ -22,11 +22,11 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 	// listed rather than skipped: "it is a POST" is not a reason to leave it
 	// undriven, and each of these has been the route somebody renamed.
 	bodies := map[string]string{
-		"POST /aboard.json": `{"version":3,"tabs":[],"__by":"agent-test","__base":"1"}`,
+		"POST /aboard.json": `{"version":1,"tabs":[],"__by":"agent-test","__base":"1"}`,
 		"POST /poke":        `{"by":"agent-test"}`,
 		"POST /upload":      "",
 		"POST /log":         "a line\n",
-		"POST /rendered":    `{"tab":"bb1","type":"html","controls":["tick"]}`,
+		"POST /rendered":    `{"tab":"ab1","type":"html","controls":["tick"]}`,
 	}
 	// What a route may answer with when it is reached and the request is
 	// deliberately minimal. The assertion is "this path is routed", not "this
@@ -46,7 +46,7 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 		path := route.Path
 		switch {
 		case strings.Contains(path, "<id>"):
-			path = "/tab/bb1/html"
+			path = "/tab/ab1/html"
 		case strings.Contains(path, "<file>"):
 			path = "/uploads/nothing.png"
 		}
@@ -60,8 +60,8 @@ func TestEveryAdvertisedRouteAnswers(t *testing.T) {
 		// third occurrence here is what goconst counts.
 		url := "http://localhost" + path + map[string]string{
 			"GET /wait":    "?for=change&timeout=1",
-			"GET /log":     "?tab=bb1",
-			"GET /history": "?tab=bb1",
+			"GET /log":     "?tab=ab1",
+			"GET /history": "?tab=ab1",
 		}[key]
 
 		// /events and /watch are streams that never close, which is the whole

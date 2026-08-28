@@ -44,7 +44,7 @@ func (s *session) rootToken(name string) string {
 // suite is Playwright rather than a hand-rolled CDP client.
 func (s *session) widgetFrame(tabID string) playwright.Frame {
 	s.t.Helper()
-	// Two spellings, because a BLOCK's id is compound (`bb32/bb197`) and
+	// Two spellings, because a BLOCK's id is compound (`ab32/ab197`) and
 	// views/html.js encodeURIComponent()s it into the path — so the frame's URL
 	// carries `%2F` where the id has a slash, and whether the browser hands that
 	// back encoded or decoded is not ours to depend on.
@@ -90,7 +90,7 @@ func (s *session) themeAttr() string {
 // board is a shared document and a theme is not part of it — two people can look
 // at one board in the same second and must disagree about this.
 func TestTheThemeSwitchIsPerViewerAndSurvivesAReload(t *testing.T) {
-	s := open(t, "tab=bb133")
+	s := open(t, "tab=ab133")
 
 	if got := s.themeAttr(); got != "dark" {
 		t.Fatalf("a fresh viewer booted %q, not dark", got)
@@ -134,7 +134,7 @@ func TestTheThemeSwitchIsPerViewerAndSurvivesAReload(t *testing.T) {
 
 	// A second viewer is untouched. Its own context means its own storage, which
 	// is exactly the isolation a per-viewer preference has to have.
-	other := open(t, "tab=bb133")
+	other := open(t, "tab=ab133")
 	if got := other.themeAttr(); got != "dark" {
 		t.Errorf("a second viewer inherited the first one's theme: %q", got)
 	}
@@ -144,17 +144,17 @@ func TestTheThemeSwitchIsPerViewerAndSurvivesAReload(t *testing.T) {
 // cannot reach it through the cascade. It is told, and it must be told fast
 // enough that the two halves of the screen are never visibly disagreeing.
 func TestAnHTMLFrameFollowsTheThemeSwitch(t *testing.T) {
-	s := open(t, "tab=bb72")
+	s := open(t, "tab=ab72")
 
-	frameBg := func() string { return s.frameToken("bb72", "--bg") }
+	frameBg := func() string { return s.frameToken("ab72", "--bg") }
 	// An html BLOCK inside a stack is the same document under a compound id,
 	// mounted by a renderer the shell never speaks to directly — so it is mounted
 	// HERE, before the switch, or the test would only prove that a frame loading
 	// after a switch gets the right `?theme=`, which is the other half.
-	blockBg := func() string { return s.frameToken("bb32/bb197", "--bg") }
-	s.tab("bb32")
+	blockBg := func() string { return s.frameToken("ab32/ab197", "--bg") }
+	s.tab("ab32")
 	eventually(t, "the stacked widget frame to come up", func() bool { return blockBg() != "" })
-	s.tab("bb72")
+	s.tab("ab72")
 
 	eventually(t, "the widget frame to come up", func() bool { return frameBg() != "" })
 	before, blockBefore := frameBg(), blockBg()
@@ -168,7 +168,7 @@ func TestAnHTMLFrameFollowsTheThemeSwitch(t *testing.T) {
 	// And it followed by being TOLD, not by being thrown away and rebuilt: a
 	// reload would lose whatever the widget was holding — a half-drawn stroke, a
 	// scroll position, a simulation mid-run.
-	if err := expect.Locator(s.widget("bb72").Locator("canvas")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.widget("ab72").Locator("canvas")).ToBeVisible(); err != nil {
 		t.Errorf("the widget's canvas is gone after the switch — the frame was reloaded, not told: %v", err)
 	}
 
@@ -181,13 +181,13 @@ func TestAnHTMLFrameFollowsTheThemeSwitch(t *testing.T) {
 // reads them once and writes literal colours. So it is the one thing a custom
 // property cannot fix, and the only proof is that the markup itself changed.
 func TestAMermaidDiagramIsReRenderedOnAThemeSwitch(t *testing.T) {
-	s := open(t, "tab=bb14")
+	s := open(t, "tab=ab14")
 
 	fill := func() string {
 		var got string
 		s.evalJSON(&got, `() => {
-			const node = document.querySelector('[data-tab="bb14"][data-active="yes"] .diagram-render svg .node rect, '
-				+ '[data-tab="bb14"][data-active="yes"] .diagram-render svg rect');
+			const node = document.querySelector('[data-tab="ab14"][data-active="yes"] .diagram-render svg .node rect, '
+				+ '[data-tab="ab14"][data-active="yes"] .diagram-render svg rect');
 			return node ? getComputedStyle(node).fill : '';
 		}`)
 		return got
@@ -262,7 +262,7 @@ func startThemedBoardIn(t *testing.T, dir, themeJSON string) string {
 func TestAProjectDefaultDecidesUntilTheViewerDoes(t *testing.T) {
 	url := startThemedBoard(t, `{"version":1,"default":"light","light":{"--accent":"#123456"}}`)
 
-	fresh := openAt(t, url, "tab=bb133")
+	fresh := openAt(t, url, "tab=ab133")
 	if got := fresh.themeAttr(); got != "light" {
 		t.Fatalf("a fresh viewer of a light-default board booted %q", got)
 	}
@@ -273,13 +273,13 @@ func TestAProjectDefaultDecidesUntilTheViewerDoes(t *testing.T) {
 	}
 	// It reaches an html tab's frame too — a house style that stopped at the
 	// widget boundary would be a house style with a hole in it.
-	fresh.tab("bb72")
+	fresh.tab("ab72")
 	eventually(t, "the widget frame to inherit the project's accent", func() bool {
-		return strings.Contains(fresh.frameToken("bb72", "--accent"), "#123456")
+		return strings.Contains(fresh.frameToken("ab72", "--accent"), "#123456")
 	})
 
 	// A stored choice beats the project's default.
-	chose := openAt(t, url, "tab=bb133")
+	chose := openAt(t, url, "tab=ab133")
 	if err := chose.page.Locator("#theme").Click(); err != nil {
 		t.Fatalf("pressing the theme switch: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestEditingTheProjectThemeReachesAnOpenPage(t *testing.T) {
 	// so an edit to theme.json changes values the frame is not looking at. A
 	// house style that stopped at the widget boundary the moment somebody
 	// iterated on it would stop exactly when they were watching.
-	s := openAt(t, url, "tab=bb72")
+	s := openAt(t, url, "tab=ab72")
 	s.markPage()
 	is := func(got, hex, rgb string) bool {
 		return strings.Contains(got, hex) || strings.Contains(got, rgb)
@@ -319,7 +319,7 @@ func TestEditingTheProjectThemeReachesAnOpenPage(t *testing.T) {
 		return is(s.rootToken("--accent"), "#112233", "17, 34, 51")
 	})
 	eventually(t, "the widget frame to take the first accent", func() bool {
-		return is(s.frameToken("bb72", "--accent"), "#112233", "17, 34, 51")
+		return is(s.frameToken("ab72", "--accent"), "#112233", "17, 34, 51")
 	})
 
 	if err := os.WriteFile(aboard.Root(dir).ThemeFile(),
@@ -331,14 +331,14 @@ func TestEditingTheProjectThemeReachesAnOpenPage(t *testing.T) {
 		return is(s.rootToken("--accent"), "#445566", "68, 85, 102")
 	})
 	eventually(t, "the edited theme to reach the widget frame", func() bool {
-		return is(s.frameToken("bb72", "--accent"), "#445566", "68, 85, 102")
+		return is(s.frameToken("ab72", "--accent"), "#445566", "68, 85, 102")
 	})
 	if s.pageReloaded() {
 		t.Error("the page reloaded to pick up a colour — scroll, selection and anything half-typed are gone")
 	}
 	// And the frame was TOLD, not rebuilt: the canvas the human drew on is still
 	// the one that was there.
-	if err := expect.Locator(s.widget("bb72").Locator("canvas")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.widget("ab72").Locator("canvas")).ToBeVisible(); err != nil {
 		t.Errorf("the widget's canvas is gone after a theme edit — the frame was reloaded: %v", err)
 	}
 }
@@ -463,7 +463,7 @@ func TestAThemeFromSomewhereOtherThanTheParentIsIgnored(t *testing.T) {
 // shared board is read by everything else in this file.
 func TestTheDiagramPaletteButtonInksForTheThemeItIsPressedIn(t *testing.T) {
 	url := startThemedBoard(t, `{"version":1,"default":"light"}`)
-	s := openAt(t, url, "tab=bb14")
+	s := openAt(t, url, "tab=ab14")
 
 	if got := s.themeAttr(); got != "light" {
 		t.Fatalf("the themed board booted %q", got)
@@ -473,13 +473,13 @@ func TestTheDiagramPaletteButtonInksForTheThemeItIsPressedIn(t *testing.T) {
 		t.Fatal("--accent-ink does not resolve, so this test cannot measure anything")
 	}
 
-	if err := s.control("bb14", "palette").Click(); err != nil {
+	if err := s.control("ab14", "palette").Click(); err != nil {
 		t.Fatalf("pressing Add colours: %v", err)
 	}
 
 	var source string
 	s.evalJSON(&source, `() => document.querySelector(
-		'[data-tab="bb14"] [data-role="source"]').value`)
+		'[data-tab="ab14"] [data-role="source"]').value`)
 	if !strings.Contains(source, "classDef accentFill") {
 		t.Fatalf("the palette block is not in the source:\n%s", source)
 	}

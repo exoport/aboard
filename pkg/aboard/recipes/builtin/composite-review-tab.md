@@ -13,10 +13,10 @@ This is usually the right shape, and it beats three tabs the user must correlate
 upsertTab(b, 'review', () => ({
   name: 'Migration review', type: 'stack',
   state: { blocks: [
-    { id: 'bb61', type: 'dag',    title: 'Dependencies', state: { nodes: [ /* … */ ], columns: ['todo','doing','done'] } },
-    { id: 'bb62', type: 'form',   title: 'Decide',       state: { title: 'Cutover', fields: [ /* … */ ] } },
-    { id: 'bb63', type: 'markup', title: 'On screen',    state: { images: [ /* … */ ] } },
-    { id: 'bb64', type: 'notes',  title: 'Open questions', state: { text: '- who owns rollback?' } },
+    { id: 'ab61', type: 'dag',    title: 'Dependencies', state: { nodes: [ /* … */ ], columns: ['todo','doing','done'] } },
+    { id: 'ab62', type: 'form',   title: 'Decide',       state: { title: 'Cutover', fields: [ /* … */ ] } },
+    { id: 'ab63', type: 'markup', title: 'On screen',    state: { images: [ /* … */ ] } },
+    { id: 'ab64', type: 'notes',  title: 'Open questions', state: { text: '- who owns rollback?' } },
   ] },
 }));
 ```

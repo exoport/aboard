@@ -1,7 +1,7 @@
 // export.go — a tab, as text you can paste into the project's own documents.
 //
-//	aboard export bb128                 markdown
-//	aboard export bb128 --format csv    rows, where the tab has rows
+//	aboard export ab128                 markdown
+//	aboard export ab128 --format csv    rows, where the tab has rows
 //
 // Why this exists on the CLI when the browser already has an export menu: that
 // menu is useless to an agent, so promoting a tab's conclusions into a spec meant

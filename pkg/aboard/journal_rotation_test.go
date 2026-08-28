@@ -23,13 +23,13 @@ func TestTailReadsTheRotatedGenerationOldestFirst(t *testing.T) {
 	// Three writes, then a rotation, then two more — the shape a real board
 	// reaches at the size cap.
 	for i := 1; i <= 3; i++ {
-		j.append(JournalEntry{At: fmt.Sprintf("t%d", i), By: "agent-1", Tabs: []string{"bb1"}})
+		j.append(JournalEntry{At: fmt.Sprintf("t%d", i), By: "agent-1", Tabs: []string{"ab1"}})
 	}
 	j.mu.Lock()
 	j.rotateLocked()
 	j.mu.Unlock()
 	for i := 4; i <= 5; i++ {
-		j.append(JournalEntry{At: fmt.Sprintf("t%d", i), By: "human", Tabs: []string{"bb1"}})
+		j.append(JournalEntry{At: fmt.Sprintf("t%d", i), By: "human", Tabs: []string{"ab1"}})
 	}
 
 	if _, err := os.Stat(root.JournalFile("") + ".1"); err != nil {
@@ -70,11 +70,11 @@ func TestJournalFromDiskSpansGenerations(t *testing.T) {
 	if err := os.MkdirAll(root.RunDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	j.append(JournalEntry{At: "t1", By: "agent-1", Tabs: []string{"bb1"}})
+	j.append(JournalEntry{At: "t1", By: "agent-1", Tabs: []string{"ab1"}})
 	j.mu.Lock()
 	j.rotateLocked()
 	j.mu.Unlock()
-	j.append(JournalEntry{At: "t2", By: "human", Tabs: []string{"bb1"}})
+	j.append(JournalEntry{At: "t2", By: "human", Tabs: []string{"ab1"}})
 
 	entries, err := journalFromDisk(root, "", 40)
 	if err != nil {

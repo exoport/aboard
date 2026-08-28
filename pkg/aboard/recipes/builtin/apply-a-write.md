@@ -41,7 +41,7 @@ and do not reach for `--force`.
 // The board-wide counter — the ONLY correct allocator. Never "highest in this
 // container + 1": that hands out an id twice as soon as anything is deleted,
 // silently re-pointing every instruction that referenced the old object.
-const newId = (b) => 'bb' + (b.nextId++);
+const newId = (b) => 'ab' + (b.nextId++);
 
 // Reuse a tab that already exists for this purpose instead of opening another.
 function upsertTab(b, key, make) {

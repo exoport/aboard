@@ -633,7 +633,7 @@ func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
 
 			// Wrapped in a document exactly as `apply` receives one, and checked by
 			// the function the write path itself calls.
-			tab["id"] = "bb1"
+			tab["id"] = "ab1"
 			doc, err := json.Marshal(map[string]any{"tabs": []any{tab}})
 			if err != nil {
 				t.Fatal(err)

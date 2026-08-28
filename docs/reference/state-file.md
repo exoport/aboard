@@ -14,7 +14,7 @@ invariant, and the shape of a tab.
 
 ```jsonc
 {
-  "version": 3,                          // server-managed; the schema the renderers read
+  "version": 1,                          // server-managed; the schema the renderers read
   "rev": 41,                             // server-managed; the compare-and-set base
   "updatedAt": "2026-08-25T11:03:09Z",   // server-managed; when, for a human reading this
   "lastEditedBy": "agent-1",             // "human", or whatever --by was passed
@@ -47,18 +47,18 @@ hand-written `version` is never right for longer than one schema change.
 The minimum valid document is:
 
 ```json
-{ "version": 3, "nextId": 1, "tabs": [] }
+{ "version": 1, "nextId": 1, "tabs": [] }
 ```
 
 which is what `aboard init` writes.
 
 ## Ids
 
-**Ids are board-wide monotonic, tagged `bb`, and never reused.** Allocate one by taking
+**Ids are board-wide monotonic, tagged `ab`, and never reused.** Allocate one by taking
 `nextId`, using it, and incrementing:
 
 ```js
-const id = 'bb' + doc.nextId; doc.nextId += 1;
+const id = 'ab' + doc.nextId; doc.nextId += 1;
 ```
 
 Renderers used to allocate "highest suffix in this container + 1". Delete every mark on
@@ -70,11 +70,14 @@ is a correctness bug, not a cosmetic one.
 Two consequences of a single counter:
 
 - **An id is unique board-wide, so it never needs qualifying by tab.** That is the only thing that works inside a `stack` tab holding two kanbans or two images, where the tab cannot disambiguate at all.
-- **One namespace tag, no type prefix.** `bb` ("bulletin board") exists so an id survives being written in a sentence: `bb147` is unmistakably a board object where `147` is any number at all. It says nothing about kind, so it cannot be guessed wrong. A per-kind vocabulary (`node-7`, `tab-3`) is a closed set in a system where agents invent new kinds of object, so it gets guessed ad hoc and stops meaning anything — and the kind is already implied by where the object sits.
+- **One namespace tag, no type prefix.** `ab` (as in aboard) exists so an id survives being written in a sentence: `ab147` is unmistakably a board object where `147` is any number at all. It says nothing about kind, so it cannot be guessed wrong. A per-kind vocabulary (`node-7`, `tab-3`) is a closed set in a system where agents invent new kinds of object, so it gets guessed ad hoc and stops meaning anything — and the kind is already implied by where the object sits.
 
 Ids are strings, so DOM attributes and map keys agree with the document. Bare (`147`) and
-legacy (`n7`) ids are still *read* everywhere — every parser matches `^[a-z]*(\d+)$` —
-only writes carry the tag. The server enforces the invariant: `nextId` never decreases
+retired (`n7`, `bb7`) ids are still *read* everywhere — every parser matches
+`^[a-z]*(\d+)$` — only writes carry the tag. **The tag changed from `bb` to `ab` on
+2026-08-28**, and that tolerance is why it cost nothing: a board written before it goes on
+working untouched, every id in it still addresses what it addressed, and only new ids look
+different. There is no migration step and no converter, here or anywhere. The server enforces the invariant: `nextId` never decreases
 and is always above every numeric id present, so a hand-edited document still allocates
 safely.
 
@@ -86,7 +89,7 @@ still carries a generated `id`.
 
 ```jsonc
 {
-  "id": "bb3",                // "bb<number>", continuing from doc.nextId
+  "id": "ab3",                // "bb<number>", continuing from doc.nextId
   "key": "architecture",      // OPTIONAL stable handle — find by this to update the same
                               // tab next turn instead of opening another
   "name": "Architecture",     // what the human sees
@@ -99,14 +102,14 @@ still carries a generated `id`.
                               // intent the contents cannot.
 
   "requests": [               // OPTIONAL: the human's notes TO an agent about this tab.
-    { "id": "bb199",          // from the board allocator, like everything else
+    { "id": "ab199",          // from the board allocator, like everything else
       "at": "2026-08-26T09:12:00Z",
       "by": "human",
       "text": "the arrow points the wrong way",
       "done": { "by": "agent-1", "at": "…", "note": "flipped it" } }
   ],
 
-  "stateFrom": "bb1",         // OPTIONAL: render another tab's state with this type —
+  "stateFrom": "ab1",         // OPTIONAL: render another tab's state with this type —
                               // a kanban and a dag over one dataset
 
   "touched": { "by": "agent-1", "at": "…", "note": "…" },      // server-set

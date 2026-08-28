@@ -13,7 +13,7 @@ it was written while nobody was watching:
 
 ```sh
 aboard requests                       # pending, oldest first, naming the tab
-aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+aboard requests done ab199 --by agent-1 --note "redrew the arrow"
 ```
 
 Stamp one only when you have actually done it: the strike-through and your note

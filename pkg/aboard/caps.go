@@ -205,7 +205,17 @@ type themeSpec struct {
 // SchemaVersion is the board-document layout the renderers are written against.
 // Kept here rather than only in aboard.html so the manifest can state it without
 // parsing JavaScript, and exported because the server stamps it into every write.
-const SchemaVersion = 3
+//
+// It read 3 until 2026-08-28, counting two layout changes made on the spike this
+// project was ported from. Nothing was ever released at 1 or 2, so those numbers
+// named documents no user could have — a board arriving at "version": 3 invited
+// the reader to look for the two earlier shapes, and there is nothing to find.
+// The first release is version 1, and the count starts from something shipped.
+//
+// Reset ONLY because nothing is published. Once a tag exists this number goes up
+// and never back: a reader has to be able to tell an old document from a new one,
+// and a version that has been two different layouts cannot say which.
+const SchemaVersion = 1
 
 // Routes are declared once, here, and reported. The switch in route() is still
 // the implementation — this is the description of it, and the smoke test asserts
@@ -754,7 +764,7 @@ var warningScans atomic.Int64
 // about.
 //
 // The key is the TAB, but the message keeps its own `where` prefix — which for a
-// stack block is "bb32/bb37". One wording, in the journal, on stderr and in the
+// stack block is "ab32/ab37". One wording, in the journal, on stderr and in the
 // banner: a warning a reader has seen in a terminal must be recognisable on a
 // screen.
 func changedTabWarnings(byType map[string]typeSpec, tabs []docTab) map[string][]string {
@@ -785,7 +795,7 @@ func changedTabWarnings(byType map[string]typeSpec, tabs []docTab) map[string][]
 
 // checkTabState checks one tab — or one stack block, which is a tab in every way
 // that matters here. `where` is the id to report, so a block reports as
-// "bb32/bb37" exactly as the UI and the html route address it.
+// "ab32/ab37" exactly as the UI and the html route address it.
 func checkTabState(byType map[string]typeSpec, where, typeName string, state map[string]any, depth int) []string {
 	spec, ok := byType[typeName]
 	if !ok {

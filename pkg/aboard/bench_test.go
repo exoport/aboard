@@ -66,7 +66,7 @@ func benchDoc(n int) []byte {
 	filler := "the quick brown fox jumps over the lazy dog."
 	bigFiller := strings.Repeat("x", benchBigState)
 
-	b.WriteString(`{"version":3,"rev":1,"nextId":`)
+	b.WriteString(`{"version":1,"rev":1,"nextId":`)
 	fmt.Fprintf(&b, "%d", n+1000)
 	b.WriteString(`,"updatedAt":"2026-08-26T00:00:00.000Z","lastEditedBy":"agent-bench","tabs":[`)
 	for i := 1; i <= n; i++ {
@@ -76,11 +76,11 @@ func benchDoc(n int) []byte {
 		switch {
 		case i == n:
 			// The edited tab. "iteration " appears nowhere else in the document.
-			fmt.Fprintf(&b, `{"id":"bb%d","name":"Scratch","type":"notes","state":{"text":"iteration 0000000000"}}`, i)
+			fmt.Fprintf(&b, `{"id":"ab%d","name":"Scratch","type":"notes","state":{"text":"iteration 0000000000"}}`, i)
 		case i <= benchBigTabs:
-			fmt.Fprintf(&b, `{"id":"bb%d","name":"Widget %d","type":"html","state":{"html":"%s"}}`, i, i, bigFiller)
+			fmt.Fprintf(&b, `{"id":"ab%d","name":"Widget %d","type":"html","state":{"html":"%s"}}`, i, i, bigFiller)
 		default:
-			fmt.Fprintf(&b, `{"id":"bb%d","name":"Tab %d","type":"notes","state":{"text":"%s"}}`, i, i, filler)
+			fmt.Fprintf(&b, `{"id":"ab%d","name":"Tab %d","type":"notes","state":{"text":"%s"}}`, i, i, filler)
 		}
 	}
 	b.WriteString(`]}`)
@@ -130,7 +130,7 @@ func benchTenMiB() []byte {
 		return doc
 	}
 	// One more oversized tab, appended before the closing `]}`.
-	tail := fmt.Sprintf(`,{"id":"bb90001","name":"Ballast","type":"html","state":{"html":%q}}]}`, strings.Repeat("x", pad))
+	tail := fmt.Sprintf(`,{"id":"ab90001","name":"Ballast","type":"html","state":{"html":%q}}]}`, strings.Repeat("x", pad))
 	return append(doc[:len(doc)-2], tail...)
 }
 

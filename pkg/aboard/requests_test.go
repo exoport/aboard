@@ -25,7 +25,7 @@ import (
 // generality nobody has.
 func asksOn(t *testing.T, tabs []tab) []requestAsk {
 	t.Helper()
-	return tabByID(t, tabs, "bb1").Requests
+	return tabByID(t, tabs, "ab1").Requests
 }
 
 // one pending note, as the human's browser writes it.
@@ -35,14 +35,14 @@ func pending(id, text string) requestAsk {
 
 func TestAnAgentCannotDeleteTheHumansRequest(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State:    json.RawMessage(`{"text":"one"}`),
-		Requests: []requestAsk{pending("bb9", "fix the arrow")},
+		Requests: []requestAsk{pending("ab9", "fix the arrow")},
 	})
 	// The commonest shape by far: the agent edits the state and simply does not
 	// carry the field it never read.
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"two"}`),
 	})
 
@@ -52,7 +52,7 @@ func TestAnAgentCannotDeleteTheHumansRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := asksOn(t, out)
-	if len(got) != 1 || got[0].ID != "bb9" || got[0].Text != "fix the arrow" {
+	if len(got) != 1 || got[0].ID != "ab9" || got[0].Text != "fix the arrow" {
 		t.Fatalf("a write that never mentioned requests dropped one: %+v", got)
 	}
 	if !strings.Contains(logged.String(), "restored") {
@@ -62,14 +62,14 @@ func TestAnAgentCannotDeleteTheHumansRequest(t *testing.T) {
 
 func TestAnAgentCannotEditOrReorderTheHumansRequests(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{pending("bb9", "fix the arrow"), pending("bb10", "drop the third column")},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{pending("ab9", "fix the arrow"), pending("ab10", "drop the third column")},
 	})
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		Requests: []requestAsk{
-			{ID: "bb10", At: "REWRITTEN", By: "agent-1", Text: "already fine"},
-			{ID: "bb9", At: "REWRITTEN", By: "agent-1", Text: "something I would rather do"},
+			{ID: "ab10", At: "REWRITTEN", By: "agent-1", Text: "already fine"},
+			{ID: "ab9", At: "REWRITTEN", By: "agent-1", Text: "something I would rather do"},
 		},
 	})
 
@@ -78,7 +78,7 @@ func TestAnAgentCannotEditOrReorderTheHumansRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := asksOn(t, out)
-	if len(got) != 2 || got[0].ID != "bb9" || got[1].ID != "bb10" {
+	if len(got) != 2 || got[0].ID != "ab9" || got[1].ID != "ab10" {
 		t.Fatalf("the order is the human's and it moved: %+v", got)
 	}
 	for _, ask := range got {
@@ -92,10 +92,10 @@ func TestAnAgentCannotEditOrReorderTheHumansRequests(t *testing.T) {
 }
 
 func TestAnAgentCannotInventARequest(t *testing.T) {
-	current := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
+	current := boardJSON(t, tab{ID: "ab1", Name: "Plan", Type: "notes"})
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{{ID: "bb9", By: actorHuman, Text: "the human definitely asked for this"}},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{{ID: "ab9", By: actorHuman, Text: "the human definitely asked for this"}},
 	})
 
 	var logged bytes.Buffer
@@ -117,8 +117,8 @@ func TestAnAgentCannotInventARequest(t *testing.T) {
 func TestANewTabCannotArriveCarryingRequests(t *testing.T) {
 	current := []byte(`{"nextId":1,"tabs":[]}`)
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{{ID: "bb9", By: actorHuman, Text: "invented"}},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{{ID: "ab9", By: actorHuman, Text: "invented"}},
 	})
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
@@ -134,13 +134,13 @@ func TestANewTabCannotArriveCarryingRequests(t *testing.T) {
 // with no way to answer.
 func TestAnAgentMayStampARequestDone(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{pending("bb9", "fix the arrow")},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{pending("ab9", "fix the arrow")},
 	})
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		Requests: []requestAsk{{
-			ID: "bb9", At: "2026-08-26T09:00:00Z", By: actorHuman, Text: "fix the arrow",
+			ID: "ab9", At: "2026-08-26T09:00:00Z", By: actorHuman, Text: "fix the arrow",
 			// `by` deliberately wrong: an agent claiming another session did it.
 			Done: &doneStamp{By: "agent-9", Note: "flipped it"},
 		}},
@@ -168,22 +168,22 @@ func TestAnAgentMayStampARequestDone(t *testing.T) {
 func TestAnAgentCannotUnstampOrRestampARequest(t *testing.T) {
 	done := &doneStamp{By: "agent-1", At: "2026-08-26T09:20:00Z", Note: "flipped it"}
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{{ID: "bb9", At: "T", By: actorHuman, Text: "fix the arrow", Done: done}},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{{ID: "ab9", At: "T", By: actorHuman, Text: "fix the arrow", Done: done}},
 	})
 
 	for _, probe := range []struct {
 		name string
 		sent []requestAsk
 	}{
-		{"dropping the stamp", []requestAsk{{ID: "bb9", At: "T", By: actorHuman, Text: "fix the arrow"}}},
+		{"dropping the stamp", []requestAsk{{ID: "ab9", At: "T", By: actorHuman, Text: "fix the arrow"}}},
 		{"replacing the stamp", []requestAsk{{
-			ID: "bb9", At: "T", By: actorHuman, Text: "fix the arrow",
+			ID: "ab9", At: "T", By: actorHuman, Text: "fix the arrow",
 			Done: &doneStamp{By: "agent-2", At: "LATER", Note: "actually I did this"},
 		}}},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
-			incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes", Requests: probe.sent})
+			incoming := boardJSON(t, tab{ID: "ab1", Name: "Plan", Type: "notes", Requests: probe.sent})
 			out, err := reconcileTabs(current, incoming, "agent-2", testLogger())
 			if err != nil {
 				t.Fatal(err)
@@ -203,16 +203,16 @@ func TestAnAgentCannotUnstampOrRestampARequest(t *testing.T) {
 // human creates, edits, reorders and deletes, and nothing here interferes.
 func TestTheHumanOwnsTheirRequests(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		Requests: []requestAsk{
-			pending("bb9", "fix the arrow"),
-			{ID: "bb10", At: "T", By: actorHuman, Text: "done one", Done: &doneStamp{By: "agent-1", At: "T"}},
+			pending("ab9", "fix the arrow"),
+			{ID: "ab10", At: "T", By: actorHuman, Text: "done one", Done: &doneStamp{By: "agent-1", At: "T"}},
 		},
 	})
 	// They delete both and add a third — a write the guarantees must not touch.
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
-		Requests: []requestAsk{pending("bb11", "a new one")},
+		ID: "ab1", Name: "Plan", Type: "notes",
+		Requests: []requestAsk{pending("ab11", "a new one")},
 	})
 
 	out, err := reconcileTabs(current, incoming, actorHuman, testLogger())
@@ -220,7 +220,7 @@ func TestTheHumanOwnsTheirRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := asksOn(t, out)
-	if len(got) != 1 || got[0].ID != "bb11" {
+	if len(got) != 1 || got[0].ID != "ab11" {
 		t.Fatalf("the human's own write was reconciled against them: %+v", got)
 	}
 }
@@ -231,18 +231,18 @@ func TestTheHumanOwnsTheirRequests(t *testing.T) {
 // trace.
 func TestStampingARequestMarksTheTabAndIsJournaled(t *testing.T) {
 	cur, err := decodeDocument(boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State:    json.RawMessage(`{"text":"one"}`),
-		Requests: []requestAsk{pending("bb9", "fix the arrow")},
+		Requests: []requestAsk{pending("ab9", "fix the arrow")},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	inc, err := decodeDocument(boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Requests: []requestAsk{{
-			ID: "bb9", At: "2026-08-26T09:00:00Z", By: actorHuman, Text: "fix the arrow",
+			ID: "ab9", At: "2026-08-26T09:00:00Z", By: actorHuman, Text: "fix the arrow",
 			Done: &doneStamp{By: "agent-1", At: "2026-08-26T09:20:00Z"},
 		}},
 	}))
@@ -259,7 +259,7 @@ func TestStampingARequestMarksTheTabAndIsJournaled(t *testing.T) {
 		t.Error("a done stamp raised no dot; the human has no other signal that their note was read")
 	}
 	entry := summarise(cur, plan.tabs, "agent-1", "test")
-	if len(entry.Tabs) != 1 || entry.Tabs[0] != "bb1" {
+	if len(entry.Tabs) != 1 || entry.Tabs[0] != "ab1" {
 		t.Errorf("the journal entry names %v", entry.Tabs)
 	}
 }
@@ -268,8 +268,8 @@ func TestStampingARequestMarksTheTabAndIsJournaled(t *testing.T) {
 // `state` that carries one, and the walk deliberately skipped every other field
 // because none of them could.
 func TestTheAllocatorCountsARequestsID(t *testing.T) {
-	current := []byte(`{"nextId":1,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{},` +
-		`"requests":[{"id":"bb42","at":"T","by":"human","text":"fix it"}]}]}`)
+	current := []byte(`{"nextId":1,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{},` +
+		`"requests":[{"id":"ab42","at":"T","by":"human","text":"fix it"}]}]}`)
 	incoming := current
 
 	if got := reconcileNextID(incoming, current); got != 43 {
@@ -292,9 +292,9 @@ func TestTheAllocatorCountsARequestsID(t *testing.T) {
 // case ids.go says this whole file is the safety net for: a hand-written
 // document, or one built by a caller that never allocated through the browser.
 func TestAddingARequestStillAdvancesTheCounter(t *testing.T) {
-	current := []byte(`{"nextId":42,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
-	incoming := []byte(`{"nextId":42,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"},` +
-		`"requests":[{"id":"bb42","at":"T","by":"human","text":"fix it"}]}]}`)
+	current := []byte(`{"nextId":42,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
+	incoming := []byte(`{"nextId":42,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"},` +
+		`"requests":[{"id":"ab42","at":"T","by":"human","text":"fix it"}]}]}`)
 
 	cur, err := decodeDocument(current)
 	if err != nil {
@@ -314,11 +314,11 @@ func TestAddingARequestStillAdvancesTheCounter(t *testing.T) {
 		t.Error("adding a request left the tab reported as unchanged; nothing would wake a waiting session")
 	}
 
-	next := &stateDoc{fields: inc.fields, tabs: plan.tabs, byID: map[string]int{"bb1": 0}, hasTabs: true}
+	next := &stateDoc{fields: inc.fields, tabs: plan.tabs, byID: map[string]int{"ab1": 0}, hasTabs: true}
 	next.nextID, _ = rawInt(next.fields[keyNextID])
 
 	if got := nextIDFrom(next, cur); got != 43 {
-		t.Fatalf("nextId = %d, want 43 — the next object allocated anywhere takes bb42, which already names the human's note", got)
+		t.Fatalf("nextId = %d, want 43 — the next object allocated anywhere takes ab42, which already names the human's note", got)
 	}
 }
 
@@ -326,25 +326,25 @@ func TestAddingARequestStillAdvancesTheCounter(t *testing.T) {
 
 func TestStampRequestFindsAndMarksOne(t *testing.T) {
 	var doc map[string]any
-	body := []byte(`{"tabs":[{"id":"bb1","name":"Plan","requests":[` +
-		`{"id":"bb9","at":"T","by":"human","text":"fix it"}]}]}`)
+	body := []byte(`{"tabs":[{"id":"ab1","name":"Plan","requests":[` +
+		`{"id":"ab9","at":"T","by":"human","text":"fix it"}]}]}`)
 	if err := json.Unmarshal(body, &doc); err != nil {
 		t.Fatal(err)
 	}
 
-	tabID, already, err := stampRequest(doc, "bb9", "agent-1", "flipped it")
+	tabID, already, err := stampRequest(doc, "ab9", "agent-1", "flipped it")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if already != nil {
 		t.Fatalf("a pending request reported as already stamped: %+v", already)
 	}
-	if tabID != "bb1" {
+	if tabID != "ab1" {
 		t.Errorf("the stamp reports tab %q", tabID)
 	}
 
 	// Idempotent: a second run says so and writes nothing new.
-	_, already, err = stampRequest(doc, "bb9", "agent-2", "me too")
+	_, already, err = stampRequest(doc, "ab9", "agent-2", "me too")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,22 +352,22 @@ func TestStampRequestFindsAndMarksOne(t *testing.T) {
 		t.Errorf("re-stamping did not report the first stamp: %+v", already)
 	}
 
-	if _, _, err := stampRequest(doc, "bb404", "agent-1", ""); err == nil {
+	if _, _, err := stampRequest(doc, "ab404", "agent-1", ""); err == nil {
 		t.Error("an unknown request id was accepted")
 	}
 }
 
 func TestPendingRequestPredicateReadsTheDocument(t *testing.T) {
 	doc := []byte(`{"tabs":[
-		{"id":"bb1","requests":[{"id":"bb9","text":"a","done":{"by":"agent-1","at":"T"}}]},
-		{"id":"bb2","requests":[{"id":"bb10","text":"b"}]}
+		{"id":"ab1","requests":[{"id":"ab9","text":"a","done":{"by":"agent-1","at":"T"}}]},
+		{"id":"ab2","requests":[{"id":"ab10","text":"b"}]}
 	]}`)
 
-	if hasPendingRequest(doc, "bb1") {
+	if hasPendingRequest(doc, "ab1") {
 		t.Error("a stamped request still counts as pending")
 	}
-	if !hasPendingRequest(doc, "bb2") {
-		t.Error("a pending request on bb2 was not seen")
+	if !hasPendingRequest(doc, "ab2") {
+		t.Error("a pending request on ab2 was not seen")
 	}
 	if !hasPendingRequest(doc, "") {
 		t.Error("the board-wide form found nothing")
@@ -383,7 +383,7 @@ func TestRequestPredicateParses(t *testing.T) {
 		want predicate
 	}{
 		{"request", predicate{kind: predRequest}},
-		{"request bb14", predicate{kind: predRequest, id: "bb14"}},
+		{"request ab14", predicate{kind: predRequest, id: "ab14"}},
 	} {
 		got, err := parsePredicate(probe.raw)
 		if err != nil {
@@ -393,7 +393,7 @@ func TestRequestPredicateParses(t *testing.T) {
 			t.Errorf("%q parsed to %+v, want %+v", probe.raw, got, probe.want)
 		}
 	}
-	if _, err := parsePredicate("request bb14 bb15"); err == nil {
+	if _, err := parsePredicate("request ab14 ab15"); err == nil {
 		t.Error("two tab ids were accepted; an unparseable predicate must be refused up front")
 	}
 }
@@ -405,9 +405,9 @@ func TestRequestPredicateParses(t *testing.T) {
 // is a fact about the document, and blocking on it would be waiting for them to
 // write the same note twice.
 func TestWaitingOnARequestThatIsAlreadyThereReturnsAtOnce(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{},
-		 "requests":[{"id":"bb8","at":"T","by":"human","text":"fix the arrow"}]}
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{},
+		 "requests":[{"id":"ab8","at":"T","by":"human","text":"fix the arrow"}]}
 	]}`)
 
 	rec := httptest.NewRecorder()
@@ -435,9 +435,9 @@ func TestWaitingOnARequestThatIsAlreadyThereReturnsAtOnce(t *testing.T) {
 // The other half: with nothing pending it must actually block, or the predicate
 // is a no-op that returns immediately for every caller.
 func TestWaitingOnARequestWithNonePendingBlocks(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{},
-		 "requests":[{"id":"bb8","at":"T","by":"human","text":"done one",
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{},
+		 "requests":[{"id":"ab8","at":"T","by":"human","text":"done one",
 		              "done":{"by":"agent-1","at":"T"}}]}
 	]}`)
 
@@ -458,11 +458,11 @@ func TestWaitingOnARequestWithNonePendingBlocks(t *testing.T) {
 // reason the count is on it: a request nobody discovers is a request that was
 // not made.
 func TestStatusCountsPendingRequests(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{},
-		 "requests":[{"id":"bb8","at":"T","by":"human","text":"one"},
-		             {"id":"bb9","at":"T","by":"human","text":"two"},
-		             {"id":"bb10","at":"T","by":"human","text":"three","done":{"by":"agent-1","at":"T"}}]}
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{},
+		 "requests":[{"id":"ab8","at":"T","by":"human","text":"one"},
+		             {"id":"ab9","at":"T","by":"human","text":"two"},
+		             {"id":"ab10","at":"T","by":"human","text":"three","done":{"by":"agent-1","at":"T"}}]}
 	]}`)
 
 	rep := Status(t.Context(), srv.root, "", web.FS)
@@ -480,12 +480,12 @@ func TestStatusCountsPendingRequests(t *testing.T) {
 /* ---------- the listing ---------- */
 
 func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{},
-		 "requests":[{"id":"bb9","at":"2026-08-26T10:00:00Z","by":"human","text":"second"},
-		             {"id":"bb8","at":"2026-08-26T09:00:00Z","by":"human","text":"first"}]},
-		{"id":"bb2","name":"Screen","type":"notes","state":{},
-		 "requests":[{"id":"bb10","at":"2026-08-26T11:00:00Z","by":"human","text":"stamped",
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{},
+		 "requests":[{"id":"ab9","at":"2026-08-26T10:00:00Z","by":"human","text":"second"},
+		             {"id":"ab8","at":"2026-08-26T09:00:00Z","by":"human","text":"first"}]},
+		{"id":"ab2","name":"Screen","type":"notes","state":{},
+		 "requests":[{"id":"ab10","at":"2026-08-26T11:00:00Z","by":"human","text":"stamped",
 		              "done":{"by":"agent-1","at":"T","note":"did it"}}]}
 	]}`)
 
@@ -496,10 +496,10 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("the default listing has %d entries, want the 2 pending ones: %+v", len(got), got)
 	}
-	if got[0].ID != "bb8" || got[1].ID != "bb9" {
-		t.Errorf("oldest first means bb8 then bb9, got %s then %s", got[0].ID, got[1].ID)
+	if got[0].ID != "ab8" || got[1].ID != "ab9" {
+		t.Errorf("oldest first means ab8 then ab9, got %s then %s", got[0].ID, got[1].ID)
 	}
-	if got[0].TabName != "Plan" || got[0].Tab != "bb1" {
+	if got[0].TabName != "Plan" || got[0].Tab != "ab1" {
 		t.Errorf("a request must name its tab as well as its id: %+v", got[0])
 	}
 
@@ -511,12 +511,12 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 		t.Errorf("--all has %d entries, want 3", len(all))
 	}
 
-	one, err := ListRequests(t.Context(), srv.root, "", "bb2", true)
+	one, err := ListRequests(t.Context(), srv.root, "", "ab2", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(one) != 1 || one[0].ID != "bb10" || one[0].Done == nil {
-		t.Errorf("--tab bb2 --all: %+v", one)
+	if len(one) != 1 || one[0].ID != "ab10" || one[0].Done == nil {
+		t.Errorf("--tab ab2 --all: %+v", one)
 	}
 
 	// By name too, because that is what a human says out loud.
@@ -542,7 +542,7 @@ func TestRequestsHumanSaysNothingPendingOutLoud(t *testing.T) {
 // that has been got wrong here before is the missing --name, which reads the
 // right board and writes the wrong one.
 func TestRequestsHumanSplicesTheBoardName(t *testing.T) {
-	list := []Request{{ID: "bb8", Tab: "bb1", TabName: "Plan", At: "T", Text: "fix it"}}
+	list := []Request{{ID: "ab8", Tab: "ab1", TabName: "Plan", At: "T", Text: "fix it"}}
 	if got := RequestsHuman(list, "", false, "review"); !strings.Contains(got, "--name review") {
 		t.Errorf("a named board's listing prints an unqualified command:\n%s", got)
 	}
@@ -552,9 +552,9 @@ func TestRequestsHumanSplicesTheBoardName(t *testing.T) {
 }
 
 func TestCompleteRequestRefusesToActAsTheHuman(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[]}`)
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 	var out bytes.Buffer
-	err := CompleteRequest(t.Context(), srv.root, "", "bb8", actorHuman, "", &out)
+	err := CompleteRequest(t.Context(), srv.root, "", "ab8", actorHuman, "", &out)
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("--by human was accepted: %v", err)
 	}
@@ -569,17 +569,17 @@ func TestCompleteRequestRefusesToActAsTheHuman(t *testing.T) {
 // The cache is pinned by hand below because that is the only way to produce the
 // state deterministically; the shape is a rewrite the stat cannot tell apart.
 func TestTheRequestPredicateReadsTheBoardNotTheReadCache(t *testing.T) {
-	srv := testServer(t, `{"version":3,"rev":1,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{}}
+	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{}}
 	]}`)
 	stale, err := srv.cachedState()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	asked := []byte(`{"version":3,"rev":2,"nextId":9,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{},
-		 "requests":[{"id":"bb8","at":"T","by":"human","text":"fix the arrow"}]}
+	asked := []byte(`{"version":1,"rev":2,"nextId":9,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{},
+		 "requests":[{"id":"ab8","at":"T","by":"human","text":"fix the arrow"}]}
 	]}`)
 	if err := os.WriteFile(srv.stateFile, asked, 0o644); err != nil {
 		t.Fatal(err)
@@ -611,7 +611,7 @@ func TestAnAlreadyWaitingRequestNamesItsTab(t *testing.T) {
 	if got := requestAlreadyWaiting(""); got != "a request was already waiting" {
 		t.Errorf("board-wide: %q", got)
 	}
-	if got := requestAlreadyWaiting("bb14"); !strings.Contains(got, "bb14") || !strings.Contains(got, "already waiting") {
+	if got := requestAlreadyWaiting("ab14"); !strings.Contains(got, "ab14") || !strings.Contains(got, "already waiting") {
 		t.Errorf("per-tab: %q", got)
 	}
 }
@@ -626,33 +626,33 @@ func TestARestoreDoesNotResurrectTheHumansRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The board as it stands: one live note, and the one they deleted is gone.
-	if err := os.WriteFile(root.StateFile(""), []byte(`{"version":3,"rev":9,"nextId":20,"tabs":[
-		{"id":"bb2","name":"Plan","type":"notes","state":{"v":2},
-		 "requests":[{"id":"bb11","at":"T","by":"human","text":"the live one"}]}
+	if err := os.WriteFile(root.StateFile(""), []byte(`{"version":1,"rev":9,"nextId":20,"tabs":[
+		{"id":"ab2","name":"Plan","type":"notes","state":{"v":2},
+		 "requests":[{"id":"ab11","at":"T","by":"human","text":"the live one"}]}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// The record: an older list, with a note they have since thrown away and a
 	// stamp on the one that is still there.
-	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "bb2",
-		`{"id":"bb2","name":"Plan","type":"notes","state":{"v":1},`+
-			`"requests":[{"id":"bb10","at":"T","by":"human","text":"deleted since"},`+
-			`{"id":"bb11","at":"T","by":"human","text":"the live one",`+
+	journalWith(t, root, entryV2(8, "2026-08-26T09:03:00.000Z", "agent-1", "ab2",
+		`{"id":"ab2","name":"Plan","type":"notes","state":{"v":1},`+
+			`"requests":[{"id":"ab10","at":"T","by":"human","text":"deleted since"},`+
+			`{"id":"ab11","at":"T","by":"human","text":"the live one",`+
 			`"done":{"by":"agent-1","at":"T"}}]}`))
 
 	// Restore called directly rather than through journal_generations_test.go's
 	// helper: that one has a single caller by design, and a second one with the
 	// same arguments turns it into a function with a constant parameter.
 	var printed strings.Builder
-	if err := Restore(t.Context(), root, "", "bb2", 1, &printed); err != nil {
+	if err := Restore(t.Context(), root, "", "ab2", 1, &printed); err != nil {
 		t.Fatalf("the restore failed: %v", err)
 	}
 	out, err := decodeDocument([]byte(printed.String()))
 	if err != nil {
 		t.Fatalf("the restore document does not parse: %v", err)
 	}
-	got := out.tabs[out.byID["bb2"]].Requests
-	if len(got) != 1 || got[0].ID != "bb11" {
+	got := out.tabs[out.byID["ab2"]].Requests
+	if len(got) != 1 || got[0].ID != "ab11" {
 		t.Fatalf("the restore rewrote the human's list: %+v", got)
 	}
 	if got[0].Done != nil {
@@ -669,8 +669,8 @@ func TestAWaiterReleasedByANewRequestSaysSoAndNotJustChange(t *testing.T) {
 	asking := hub.add("agent-1", predRequest, "", predicate{kind: predRequest}, time.Minute)
 	watching := hub.add("agent-2", predChange, "", predicate{kind: predChange}, time.Minute)
 
-	doc := []byte(`{"tabs":[{"id":"bb1","requests":[{"id":"bb9","by":"human","text":"fix it"}]}]}`)
-	entry := JournalEntry{At: "2026-08-26T09:00:00.000Z", By: actorHuman, Tabs: []string{"bb1"}}
+	doc := []byte(`{"tabs":[{"id":"ab1","requests":[{"id":"ab9","by":"human","text":"fix it"}]}]}`)
+	entry := JournalEntry{At: "2026-08-26T09:00:00.000Z", By: actorHuman, Tabs: []string{"ab1"}}
 	if got := hub.releaseMatching(doc, entry); got != 2 {
 		t.Fatalf("released %d waiters, want both", got)
 	}

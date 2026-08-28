@@ -310,7 +310,7 @@ board owns everything it writes for itself** — its document, its instance reco
 journal, its receipts and its logs are all qualified by the name. `uploads/` and
 `recipes/` are the two the project keeps, and neither is keyed by tab id, which is what
 makes sharing them safe: tab ids are allocated per board, so every record that *is* keyed
-by one had to be split or it would hold two boards' `bb1` under one key.
+by one had to be split or it would hold two boards' `ab1` under one key.
 
 `run/` is nested inside `.aboard/` rather than sitting beside it so that a project ignores
 **one** path and loses nothing it wanted to keep. And the whole directory *is* ignored: a

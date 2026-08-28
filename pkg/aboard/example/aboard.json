@@ -1,11 +1,11 @@
 {
-  "version": 3,
+  "version": 1,
   "nextId": 201,
   "updatedAt": "2026-08-25T00:00:00.000Z",
   "lastEditedBy": "fixture",
   "tabs": [
     {
-      "id": "bb1",
+      "id": "ab1",
       "key": "plan",
       "name": "Plan",
       "type": "dag",
@@ -18,7 +18,7 @@
         "height": "72vh",
         "nodes": [
           {
-            "id": "bb2",
+            "id": "ab2",
             "note": "Root of the experiment. Everything under this is a piece of the loop.",
             "order": 0,
             "parent": null,
@@ -26,74 +26,74 @@
             "title": "Shared board round-trip"
           },
           {
-            "id": "bb3",
+            "id": "ab3",
             "note": "Node's built-in http and fs only. Nothing to install.",
             "order": 0,
-            "parent": "bb2",
+            "parent": "ab2",
             "status": "done",
             "title": "Local HTTP server, zero dependencies"
           },
           {
-            "id": "bb4",
+            "id": "ab4",
             "note": "Proven: your column move and two new nodes were read straight off disk.",
             "order": 2,
-            "parent": "bb2",
+            "parent": "ab2",
             "status": "done",
             "title": "Human edits land in .aboard/aboard.json"
           },
           {
-            "id": "bb5",
+            "id": "ab5",
             "note": "Plain file read. No WebFetch, no hosted state.",
             "order": 1,
-            "parent": "bb2",
+            "parent": "ab2",
             "status": "done",
             "title": "The agent reads and reacts"
           },
           {
-            "id": "bb6",
+            "id": "ab6",
             "note": "Kanban, DAG, diagram, form, markup. Same .aboard/aboard.json underneath. Skill documented in .claude/skills/aboard/.",
             "order": 2,
-            "parent": "bb2",
+            "parent": "ab2",
             "status": "doing",
             "title": "Five views on one state file"
           },
           {
-            "id": "bb7",
+            "id": "ab7",
             "note": "Loop proven both ways. Recommend keeping this. Your call.",
             "order": 3,
-            "parent": "bb5",
+            "parent": "ab5",
             "status": "doing",
             "title": "Decide: keep this or switch to .drawio"
           },
           {
-            "id": "bb8",
+            "id": "ab8",
             "note": "Layered layout, drag to reposition, drag onto a node to reparent.",
             "order": 4,
-            "parent": "bb6",
+            "parent": "ab6",
             "status": "done",
             "title": "SVG DAG from the same parent links"
           },
           {
-            "id": "bb9",
+            "id": "ab9",
             "note": "Restyled: mermaid now themed from the board CSS tokens, so it matches Kanban and DAG in both palettes.",
             "order": 3,
-            "parent": "bb10",
+            "parent": "ab10",
             "status": "done",
             "title": "Mermaid rendering"
           },
           {
-            "id": "bb10",
+            "id": "ab10",
             "note": "Structured answers back to the agent, and regions drawn on an image.",
             "order": 0,
-            "parent": "bb6",
+            "parent": "ab6",
             "status": "todo",
             "title": "Form and image markup channels"
           },
           {
-            "id": "bb11",
-            "note": "Agent: you added this under bb3 — what is it? Name it and I'll act on it.",
+            "id": "ab11",
+            "note": "Agent: you added this under ab3 — what is it? Name it and I'll act on it.",
             "order": 1,
-            "parent": "bb3",
+            "parent": "ab3",
             "status": "doing",
             "title": "New node N1"
           }
@@ -102,16 +102,16 @@
       "note": "What a dag is for: a shape you want argued with. Drag a node onto another to reparent it — an agent reads that as a correction to its model."
     },
     {
-      "id": "bb13",
+      "id": "ab13",
       "key": "progress",
       "name": "Progress",
       "type": "kanban",
-      "stateFrom": "bb1",
-      "note": "The same nodes as the Plan tab, read as a kanban. It has no state of its own — stateFrom points at bb1, so both tabs are two readings of one dataset.",
+      "stateFrom": "ab1",
+      "note": "The same nodes as the Plan tab, read as a kanban. It has no state of its own — stateFrom points at ab1, so both tabs are two readings of one dataset.",
       "state": {}
     },
     {
-      "id": "bb14",
+      "id": "ab14",
       "key": "architecture",
       "name": "Architecture",
       "type": "diagram",
@@ -121,7 +121,7 @@
       "note": "What a diagram is for: a shape that is the agent’s to assert. 23 mermaid types, coloured from the board tokens.",
       "requests": [
         {
-          "id": "bb199",
+          "id": "ab199",
           "at": "2026-08-26T09:12:00Z",
           "by": "human",
           "text": "Label the two boxes so it is obvious which one the dot is about.",
@@ -132,7 +132,7 @@
           }
         },
         {
-          "id": "bb200",
+          "id": "ab200",
           "at": "2026-08-26T09:24:00Z",
           "by": "human",
           "text": "Try this one top-down (graph TD) and see whether it reads better."
@@ -140,7 +140,7 @@
       ]
     },
     {
-      "id": "bb15",
+      "id": "ab15",
       "key": "questions",
       "name": "Questions",
       "type": "form",
@@ -201,14 +201,14 @@
             "value": ""
           }
         ],
-        "id": "bb46",
+        "id": "ab46",
         "intro": "The agent asks, you answer here. Answers land in .aboard/aboard.json under \"form\".",
         "title": "Board direction"
       },
       "note": "What a form is for: typed answers instead of a paragraph of questions. Field ids stay semantic, so an agent reads answers back by name."
     },
     {
-      "id": "bb22",
+      "id": "ab22",
       "key": "markup",
       "name": "Screen",
       "type": "markup",
@@ -219,7 +219,7 @@
       "note": "What markup is for: point at part of an image. Paste a screenshot (Ctrl+V) to add one, draw on it, and each mark is badged with its own id."
     },
     {
-      "id": "bb26",
+      "id": "ab26",
       "key": "coord",
       "name": "Coordination",
       "type": "chat",
@@ -233,7 +233,7 @@
           },
           {
             "id": "a-next",
-            "intent": "pull the top backlog card on bb71",
+            "intent": "pull the top backlog card on ab71",
             "label": "Start the next card"
           },
           {
@@ -248,14 +248,14 @@
       "note": "The channel between sessions, where the human can watch and interject. @mention to address one; your own messages stay editable until a session reads them."
     },
     {
-      "id": "bb32",
+      "id": "ab32",
       "key": "review",
       "name": "Migration review",
       "type": "stack",
       "state": {
         "blocks": [
           {
-            "id": "bb33",
+            "id": "ab33",
             "state": {
               "columns": [
                 "todo",
@@ -264,7 +264,7 @@
               ],
               "nodes": [
                 {
-                  "id": "bb146",
+                  "id": "ab146",
                   "note": "Root of the experiment. Everything under this is a piece of the loop.",
                   "order": 0,
                   "parent": null,
@@ -272,42 +272,42 @@
                   "title": "Shared board round-trip"
                 },
                 {
-                  "id": "bb147",
+                  "id": "ab147",
                   "note": "Node's built-in http and fs only. Nothing to install.",
                   "order": 0,
-                  "parent": "bb146",
+                  "parent": "ab146",
                   "status": "done",
                   "title": "Local HTTP server, zero dependencies"
                 },
                 {
-                  "id": "bb148",
+                  "id": "ab148",
                   "note": "Proven: your column move and two new nodes were read straight off disk.",
                   "order": 2,
-                  "parent": "bb146",
+                  "parent": "ab146",
                   "status": "done",
                   "title": "Human edits land in .aboard/aboard.json"
                 },
                 {
-                  "id": "bb149",
+                  "id": "ab149",
                   "note": "Plain file read. No WebFetch, no hosted state.",
                   "order": 1,
-                  "parent": "bb146",
+                  "parent": "ab146",
                   "status": "done",
                   "title": "The agent reads and reacts"
                 },
                 {
-                  "id": "bb150",
+                  "id": "ab150",
                   "note": "Kanban, DAG, diagram, form, markup. Same .aboard/aboard.json underneath. Skill documented in .claude/skills/aboard/.",
                   "order": 1,
-                  "parent": "bb146",
+                  "parent": "ab146",
                   "status": "doing",
                   "title": "Five views on one state file"
                 },
                 {
-                  "id": "bb151",
+                  "id": "ab151",
                   "note": "Loop proven both ways. Recommend keeping this. Your call.",
                   "order": 2,
-                  "parent": "bb149",
+                  "parent": "ab149",
                   "status": "doing",
                   "title": "Decide: keep this or switch to .drawio"
                 }
@@ -317,7 +317,7 @@
             "type": "dag"
           },
           {
-            "id": "bb34",
+            "id": "ab34",
             "state": {
               "fields": [
                 {
@@ -341,7 +341,7 @@
                   "value": 10
                 }
               ],
-              "id": "bb47",
+              "id": "ab47",
               "intro": "Answer and I will act.",
               "title": "Cutover"
             },
@@ -349,17 +349,17 @@
             "type": "form"
           },
           {
-            "id": "bb37",
+            "id": "ab37",
             "state": {
               "images": [
                 {
                   "annotatable": true,
                   "caption": "Draw on this to point at something. Coordinates are normalized 0-1, so the agent can read where you marked.",
-                  "id": "bb152",
+                  "id": "ab152",
                   "regions": [
                     {
                       "h": 0.07,
-                      "id": "bb153",
+                      "id": "ab153",
                       "note": "Example region, written by the agent. Delete it and draw your own.",
                       "w": 0.2,
                       "x": 0.06,
@@ -367,7 +367,7 @@
                     },
                     {
                       "h": 0.1861,
-                      "id": "bb154",
+                      "id": "ab154",
                       "note": "",
                       "w": 0.235,
                       "x": 0.4722,
@@ -375,7 +375,7 @@
                     },
                     {
                       "h": 0.1468,
-                      "id": "bb38",
+                      "id": "ab38",
                       "note": "",
                       "w": 0.2016,
                       "x": 0.7283,
@@ -385,7 +385,7 @@
                   "src": "assets/mock-screen.svg",
                   "strokes": [
                     {
-                      "id": "bb39",
+                      "id": "ab39",
                       "note": "",
                       "points": "0.101,0.427 0.095,0.423 0.089,0.42 0.084,0.42 0.078,0.42 0.072,0.42 0.067,0.42 0.061,0.42 0.055,0.42 0.048,0.422 0.042,0.423 0.036,0.425 0.031,0.429 0.026,0.431 0.021,0.434 0.019,0.441 0.017,0.447 0.016,0.452 0.016,0.457 0.013,0.463 0.013,0.468 0.015,0.475 0.017,0.481 0.019,0.486 0.02,0.491 0.021,0.497 0.025,0.502 0.029,0.507 0.035,0.513 0.039,0.516 0.042,0.522 0.047,0.525 0.051,0.529 0.057,0.531 0.065,0.533 0.072,0.534 0.081,0.534 0.087,0.534 0.093,0.534 0.102,0.533 0.108,0.529 0.115,0.522 0.121,0.515 0.126,0.511 0.129,0.504 0.133,0.497 0.134,0.488 0.135,0.482 0.135,0.477 0.135,0.472 0.135,0.466 0.134,0.459 0.131,0.454 0.129,0.449 0.125,0.443 0.124,0.438 0.12,0.432 0.115,0.429 0.109,0.425 0.105,0.422 0.097,0.422 0.089,0.422 0.081,0.422 0.076,0.422 0.07,0.423 0.062,0.427 0.056,0.429 0.048,0.432 0.04,0.434 0.036,0.438 0.028,0.441 0.021,0.445 0.017,0.449 0.016,0.454 0.017,0.461 0.019,0.466 0.02,0.475 0.022,0.482 0.025,0.488 0.026,0.493 0.027,0.5 0.029,0.507 0.032,0.515 0.036,0.52 0.04,0.525 0.048,0.527 0.055,0.531 0.065,0.533 0.071,0.533 0.077,0.533 0.082,0.534 0.093,0.533 0.099,0.533 0.108,0.529 0.116,0.527 0.122,0.524 0.127,0.518 0.133,0.509 0.138,0.502 0.14,0.497 0.14,0.491 0.14,0.486 0.14,0.481 0.139,0.475 0.138,0.47 0.137,0.465 0.135,0.459 0.134,0.452 0.133,0.445 0.13,0.438 0.127,0.432 0.121,0.429 0.116,0.423 0.11,0.422 0.105,0.42 0.099,0.42 0.092,0.416 0.086,0.414 0.078,0.414 0.069,0.414 0.064,0.414 0.058,0.414 0.052,0.414 0.044,0.416 0.039,0.418 0.033,0.42 0.029,0.423 0.023,0.429 0.016,0.434 0.012,0.44 0.015,0.447 0.018,0.452 0.019,0.457 0.022,0.463 0.026,0.468 0.028,0.473 0.031,0.479"
                     }
@@ -398,16 +398,16 @@
             "type": "markup"
           },
           {
-            "id": "bb40",
+            "id": "ab40",
             "state": {
               "markdown": true,
-              "text": "## Shipped 2026-08-23\n\nFive cards from the build queue, all of them view-level:\n\n- **bb85** — `Shift`, `Alt` or `Ctrl+Enter` all insert a newline in chat; bare\n  `Enter` still sends.\n- **bb64** — this note. `state.markdown: true` renders it, with a Read/Edit\n  toggle. Opt-in per tab, because plain is right for a paste and wrong for a\n  report.\n- **bb86** — right-click a card, a node or a tab: copy the id, copy a link to it,\n  copy it as markdown, copy a subtree.\n- **bb57** — those links: `#tab=bb71&node=bb57` selects the node and scrolls to\n  it. Try [this link to bb58](#tab=bb71&node=bb58).\n- **bb62** — export: copy or download a tab as `.md`, nodes as `.csv`, a diagram\n  as `.svg`.\n\n> Copy leads and download follows, deliberately: a VS Code webview may refuse a\n> script-initiated download, and an affordance that silently does nothing is\n> worse than one that was never offered.\n\nThe renderer is a subset — headings, lists, code, quotes, rules, links,\nemphasis — built as DOM nodes rather than assembled as HTML, since every input\nhere is agent- or human-authored state. One fence type renders rather than\nquotes: `mermaid`, through the same loader the diagram tab uses.\n\n```mermaid\nflowchart LR\n  tab[a board tab] --> ex[aboard export]\n  ex --> doc[the project's own document]\n```\n\n---\n\nStill open: 12 in backlog, `bb58` half done.\n"
+              "text": "## Shipped 2026-08-23\n\nFive cards from the build queue, all of them view-level:\n\n- **ab85** — `Shift`, `Alt` or `Ctrl+Enter` all insert a newline in chat; bare\n  `Enter` still sends.\n- **ab64** — this note. `state.markdown: true` renders it, with a Read/Edit\n  toggle. Opt-in per tab, because plain is right for a paste and wrong for a\n  report.\n- **ab86** — right-click a card, a node or a tab: copy the id, copy a link to it,\n  copy it as markdown, copy a subtree.\n- **ab57** — those links: `#tab=ab71&node=ab57` selects the node and scrolls to\n  it. Try [this link to ab58](#tab=ab71&node=ab58).\n- **ab62** — export: copy or download a tab as `.md`, nodes as `.csv`, a diagram\n  as `.svg`.\n\n> Copy leads and download follows, deliberately: a VS Code webview may refuse a\n> script-initiated download, and an affordance that silently does nothing is\n> worse than one that was never offered.\n\nThe renderer is a subset — headings, lists, code, quotes, rules, links,\nemphasis — built as DOM nodes rather than assembled as HTML, since every input\nhere is agent- or human-authored state. One fence type renders rather than\nquotes: `mermaid`, through the same loader the diagram tab uses.\n\n```mermaid\nflowchart LR\n  tab[a board tab] --> ex[aboard export]\n  ex --> doc[the project's own document]\n```\n\n---\n\nStill open: 12 in backlog, `ab58` half done.\n"
             },
             "title": "Changelog (markdown)",
             "type": "notes"
           },
           {
-            "id": "bb197",
+            "id": "ab197",
             "state": {
               "data": {
                 "ticks": 1
@@ -422,7 +422,7 @@
       "note": "What a stack is for: look at this, then decide that — several renderers in one tab. Its notes block is also the markdown example, and its html block is the proof that an html widget renders inside a stack."
     },
     {
-      "id": "bb71",
+      "id": "ab71",
       "key": "work",
       "name": "Build queue",
       "type": "kanban",
@@ -434,21 +434,21 @@
         ],
         "nodes": [
           {
-            "id": "bb194",
+            "id": "ab194",
             "order": 0,
             "status": "backlog",
             "title": "Screenshot the gate tab after a verdict",
             "note": "Waiting on the human to record one. Nothing to do until then."
           },
           {
-            "id": "bb195",
+            "id": "ab195",
             "order": 0,
             "status": "working",
             "title": "Fold the export CSV columns into the reference",
             "note": "agent-1 has this. The rows are right; the column headings are not."
           },
           {
-            "id": "bb196",
+            "id": "ab196",
             "order": 0,
             "status": "done",
             "title": "Rename the periwinkle token to --agent",
@@ -460,7 +460,7 @@
       "note": "Where work lands: agent-owned, read-only, so the human reads it and never has to tidy it. One card per column here to show the three states; an empty queue means nothing is outstanding."
     },
     {
-      "id": "bb72",
+      "id": "ab72",
       "key": "html-example",
       "name": "HTML example",
       "type": "html",
@@ -1044,7 +1044,7 @@
       "note": "The case for an html tab: a canvas, pointer capture, and a stroke that follows your hand — things no component catalog can express. Draw on it; the strokes persist through aboard.set(), and the frame still has no network access at all."
     },
     {
-      "id": "bb111",
+      "id": "ab111",
       "key": "table-example",
       "name": "Table example",
       "type": "table",
@@ -1088,7 +1088,7 @@
           {
             "count": 1,
             "done": true,
-            "id": "bb188",
+            "id": "ab188",
             "level": "low",
             "thing": "text",
             "why": "A single line. Saves as you type; the cell flashes \"saved\" on blur."
@@ -1096,7 +1096,7 @@
           {
             "count": 42,
             "done": false,
-            "id": "bb189",
+            "id": "ab189",
             "level": "medium",
             "thing": "number",
             "why": "Right-aligned, tabular figures, sorts numerically."
@@ -1104,7 +1104,7 @@
           {
             "count": 3,
             "done": false,
-            "id": "bb190",
+            "id": "ab190",
             "level": "high",
             "thing": "select",
             "why": "An agent-written value outside the options still shows, rather than vanishing."
@@ -1112,7 +1112,7 @@
           {
             "count": 0,
             "done": false,
-            "id": "bb191",
+            "id": "ab191",
             "level": "low",
             "thing": "longtext",
             "why": "Two rows of textarea, for the column that carries the reasoning — like this one."
@@ -1122,20 +1122,20 @@
       "note": "What a table tab is: typed cells, edited in place, sortable by header."
     },
     {
-      "id": "bb126",
+      "id": "ab126",
       "key": "output",
       "name": "Output",
       "type": "log",
       "state": {
         "follow": true,
         "height": "46vh",
-        "source": "bb126",
+        "source": "ab126",
         "tail": 400
       },
-      "note": "What a log is for: output as it happens. The lines are in a sidecar file, never in .aboard/aboard.json — feed it with `<cmd> 2>&1 | aboard log bb126`."
+      "note": "What a log is for: output as it happens. The lines are in a sidecar file, never in .aboard/aboard.json — feed it with `<cmd> 2>&1 | aboard log ab126`."
     },
     {
-      "id": "bb127",
+      "id": "ab127",
       "key": "trace",
       "name": "Trace",
       "type": "trace",
@@ -1146,7 +1146,7 @@
       "note": "Who wrote what, when. Reads the journal rather than .aboard/aboard.json, so this history is not something an agent can quietly rewrite."
     },
     {
-      "id": "bb128",
+      "id": "ab128",
       "key": "decisions",
       "name": "Decisions",
       "type": "gate",
@@ -1157,13 +1157,13 @@
               "by": "agent-1",
               "command": "aboard init --example",
               "detail": "Fifteen tabs, one per renderer, each noted with what it demonstrates. None of it is your work, so a tab you do not want costs nothing to delete — and the one thing it cannot show you from a screenshot is what a decided row looks like, which is why this request is on the record.",
-              "id": "bb198",
+              "id": "ab198",
               "risk": "low",
               "title": "Seed this project's board with the example content"
             },
             "at": "2026-08-25T00:00:00.000Z",
             "by": "human",
-            "id": "bb198",
+            "id": "ab198",
             "reason": "A worked example per renderer is cheaper to delete than to reconstruct.",
             "title": "Seed this project's board with the example content",
             "verdict": "allow"
@@ -1171,10 +1171,10 @@
         ],
         "pending": []
       },
-      "note": "Where an agent asks for a decision. Empty pending means nothing is blocked. Nothing here executes — allowing is permission for an agent to act, and undo puts a request back. The one decided row is part of the example: it shows what a verdict with a reason looks like, and it is what `aboard export bb128` carries into a document."
+      "note": "Where an agent asks for a decision. Empty pending means nothing is blocked. Nothing here executes — allowing is permission for an agent to act, and undo puts a request back. The one decided row is part of the example: it shows what a verdict with a reason looks like, and it is what `aboard export ab128` carries into a document."
     },
     {
-      "id": "bb132",
+      "id": "ab132",
       "key": "next",
       "name": "What next",
       "type": "vote",
@@ -1187,7 +1187,7 @@
       "note": "Where the next session should go. Score what you care about, leave the rest blank, and put the reasoning in the notes."
     },
     {
-      "id": "bb133",
+      "id": "ab133",
       "key": "ui-gallery",
       "name": "UI gallery",
       "type": "ui",
@@ -1379,7 +1379,7 @@
                       "value": "{ \"type\": \"badge\", \"value\": \"accent\", \"tone\": \"accent\" }"
                     },
                     {
-                      "href": "#tab=bb14",
+                      "href": "#tab=ab14",
                       "label": "link — board-local (#tab=…) or http(s) only →",
                       "type": "link"
                     }

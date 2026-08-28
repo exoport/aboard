@@ -224,7 +224,7 @@ retyping was the cost that made it expensive.
 Examples:
 
 ```
-  aboard export bb128
+  aboard export ab128
   aboard export table-example --format csv
 ```
 
@@ -257,8 +257,8 @@ first, naming who replaced each one — and says plainly where the record ends,
 because rotation keeps one older generation and a listing that just stopped would
 read as "this tab has only ever been written twice".
 
-  aboard history bb133                          what it said, and when
-  aboard history bb133 --at 1 | aboard apply --by agent-1     put version 1 back
+  aboard history ab133                          what it said, and when
+  aboard history ab133 --at 1 | aboard apply --by agent-1     put version 1 back
 
 --at prints a WHOLE document with that one tab put back, not the tab on its own:
 a single-tab document is a document that deletes every other tab, and the server
@@ -281,8 +281,8 @@ board, whose history is its own. The restore line the listing prints carries
 Examples:
 
 ```
-  aboard history bb133
-  aboard history bb133 --at 1 | aboard apply --by agent-1
+  aboard history ab133
+  aboard history ab133 --at 1 | aboard apply --by agent-1
 ```
 
 Flags:
@@ -407,7 +407,7 @@ inside a tab's state would mean rewriting the entire board once per line. The
 tab's state holds only a pointer.
 
 A named board writes into .aboard/run/logs/<name>/ instead — tab ids are
-allocated per board, so both boards have a bb1 and one directory would have
+allocated per board, so both boards have a ab1 and one directory would have
 interleaved two commands' output in one file.
 
 Lines are echoed to stdout as well — piping output to the board should not mean
@@ -416,7 +416,7 @@ losing it from the terminal you are watching.
 Examples:
 
 ```
-  go test ./... 2>&1 | aboard log bb126
+  go test ./... 2>&1 | aboard log ab126
 ```
 
 Global flags:
@@ -591,7 +591,7 @@ it needs no server. With no argument it prints every tab that has a receipt.
 Examples:
 
 ```
-  aboard rendered bb133
+  aboard rendered ab133
   aboard rendered
 ```
 
@@ -627,7 +627,7 @@ watching.
 Run this at the start of a turn, next to `aboard status` (which prints the
 count). Then say you did one:
 
-  aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+  aboard requests done ab199 --by agent-1 --note "redrew the arrow"
 
 Only the human writes these. An agent write that creates, edits, reorders or
 deletes one has it restored by the server; adding a done stamp is the one change
@@ -645,7 +645,7 @@ Examples:
 
 ```
   aboard requests
-  aboard requests --tab bb14 --all
+  aboard requests --tab ab14 --all
 ```
 
 Flags:
@@ -689,7 +689,7 @@ their own requests by deleting them.
 Examples:
 
 ```
-  aboard requests done bb199 --by agent-1 --note "redrew the arrow"
+  aboard requests done ab199 --by agent-1 --note "redrew the arrow"
 ```
 
 Flags:
@@ -878,12 +878,12 @@ front rather than accepted and never fired:
 
   poke                 the human pressed Notify (or another session poked)
   change               any accepted write at all
-  tab bb71             that tab changed
-  answer bb15          that tab changed AND a human made the change
-  node bb58=done       that node reached that status
-  rendered bb133       a browser MOUNTED that tab and posted a receipt
+  tab ab71             that tab changed
+  answer ab15          that tab changed AND a human made the change
+  node ab58=done       that node reached that status
+  rendered ab133       a browser MOUNTED that tab and posted a receipt
   request              the human has a note waiting for an agent
-  request bb14         one on that tab
+  request ab14         one on that tab
 
 Two of them are not about a write. The rendered form is released by the browser
 reporting a mount, so waiting on it is waiting for a HUMAN to have the tab open
@@ -900,7 +900,7 @@ Exit 0 means released. Exit 3 means the timeout ran out and nobody came.
 Examples:
 
 ```
-  aboard wait --for "answer bb128" --note "waiting on the gate"
+  aboard wait --for "answer ab128" --note "waiting on the gate"
 ```
 
 Flags:

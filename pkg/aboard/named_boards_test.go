@@ -17,8 +17,8 @@ import (
 // itself — the journal, the mount receipts, the sidecar logs — used to land in
 // the DEFAULT board's files, because only StateFile and InstanceFile were
 // name-aware. The consequences were not cosmetic: tab ids are allocated per
-// board, so both documents have a `bb1`, and one shared journal held two records
-// of "bb1" that meant different tabs.
+// board, so both documents have a `ab1`, and one shared journal held two records
+// of "ab1" that meant different tabs.
 //
 // These tests are all one shape: write through a named board, then look at both
 // sets of files.
@@ -26,7 +26,7 @@ import (
 // boardServer is a server for one board of `root`, which may hold several.
 // testServer makes its own TempDir and serves the default board, which is
 // exactly what these tests cannot use: the point is two boards in ONE project.
-// The document is the same for both on purpose — a `bb1` in each, which is what
+// The document is the same for both on purpose — a `ab1` in each, which is what
 // a shared journal or a shared sidecar could not tell apart.
 func boardServer(t *testing.T, root Root, name string) *server {
 	t.Helper()
@@ -52,18 +52,18 @@ func boardServer(t *testing.T, root Root, name string) *server {
 	}
 }
 
-const oneTabBoard = `{"version":3,"rev":1,"nextId":2,"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"first"}}]}`
+const oneTabBoard = `{"version":1,"rev":1,"nextId":2,"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"first"}}]}`
 
 // The journal is the record of who changed what, and with both boards appending
-// to one file the answer was ambiguous by construction: two entries naming bb1,
+// to one file the answer was ambiguous by construction: two entries naming ab1,
 // with only the tab's NAME to say which document each belonged to.
 func TestANamedBoardsWritesLandInItsOwnJournal(t *testing.T) {
 	root := Root(t.TempDir())
 	def := boardServer(t, root, "")
 	review := boardServer(t, root, "review")
 
-	if rec := review.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`); rec.Code != http.StatusOK {
+	if rec := review.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`); rec.Code != http.StatusOK {
 		t.Fatalf("writing to the review board: %d %s", rec.Code, rec.Body.String())
 	}
 
@@ -71,7 +71,7 @@ func TestANamedBoardsWritesLandInItsOwnJournal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(mine) != 1 || mine[0].By != "agent-2" || mine[0].Names["bb1"] != "Side note" {
+	if len(mine) != 1 || mine[0].By != "agent-2" || mine[0].Names["ab1"] != "Side note" {
 		t.Fatalf("the named board's own journal does not hold its write: %+v", mine)
 	}
 	if _, err := os.Stat(root.JournalFile("")); !os.IsNotExist(err) {
@@ -81,8 +81,8 @@ func TestANamedBoardsWritesLandInItsOwnJournal(t *testing.T) {
 
 	// And the other way round, or the split above would be satisfied by a
 	// journal that simply never records anything for the default board.
-	if rec := def.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`); rec.Code != http.StatusOK {
+	if rec := def.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`); rec.Code != http.StatusOK {
 		t.Fatalf("writing to the default board: %d %s", rec.Code, rec.Body.String())
 	}
 	theirs, err := journalFromDisk(root, "", 10)
@@ -105,17 +105,17 @@ func TestHistoryOnANamedBoardSeesOnlyItsOwnWrites(t *testing.T) {
 	def := boardServer(t, root, "")
 	review := boardServer(t, root, "review")
 
-	def.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`)
-	review.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
+	def.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`)
+	review.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
 
-	got, err := History(t.Context(), root, "review", "bb1", 0)
+	got, err := History(t.Context(), root, "review", "ab1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got.Versions) != 1 {
-		t.Fatalf("the review board's history of bb1 has %d versions, want 1: %+v", len(got.Versions), got.Versions)
+		t.Fatalf("the review board's history of ab1 has %d versions, want 1: %+v", len(got.Versions), got.Versions)
 	}
 	if got.Versions[0].By != "agent-2" {
 		t.Errorf("the review board's history names %q — that is the other board's write", got.Versions[0].By)
@@ -131,15 +131,15 @@ func TestHistoryOnANamedBoardSeesOnlyItsOwnWrites(t *testing.T) {
 func TestTheRestoreHintNamesTheBoard(t *testing.T) {
 	root := Root(t.TempDir())
 	review := boardServer(t, root, "review")
-	review.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
+	review.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
 
-	got, err := History(t.Context(), root, "review", "bb1", 0)
+	got, err := History(t.Context(), root, "review", "ab1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	line := got.Human()
-	want := "aboard history bb1 --at 1 --name review | aboard apply --name review --by agent-1"
+	want := "aboard history ab1 --at 1 --name review | aboard apply --name review --by agent-1"
 	if !strings.Contains(line, want) {
 		t.Errorf("the restore hint does not carry the board name:\nwant %q in\n%s", want, line)
 	}
@@ -147,9 +147,9 @@ func TestTheRestoreHintNamesTheBoard(t *testing.T) {
 	// The default board's hint is unchanged: a flag nobody needs on every
 	// listing is noise, and this is the form the docs print.
 	def := boardServer(t, root, "")
-	def.postDocument(t, `{"version":3,"rev":1,"nextId":2,"tabs":[
-		{"id":"bb1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`)
-	plain, err := History(t.Context(), root, "", "bb1", 0)
+	def.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
+		{"id":"ab1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`)
+	plain, err := History(t.Context(), root, "", "ab1", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,24 +159,24 @@ func TestTheRestoreHintNamesTheBoard(t *testing.T) {
 }
 
 // A mount receipt is per tab, and tab ids repeat across boards — so one shared
-// rendered.json meant the review board's bb1 overwriting the default board's,
-// and `aboard rendered bb1` answering about whichever browser reported last.
+// rendered.json meant the review board's ab1 overwriting the default board's,
+// and `aboard rendered ab1` answering about whichever browser reported last.
 func TestMountReceiptsAreKeptPerBoard(t *testing.T) {
 	root := Root(t.TempDir())
 	review := boardServer(t, root, "review")
 
 	rec := httptest.NewRecorder()
 	review.route(rec, httptest.NewRequest(http.MethodPost, "http://localhost/rendered",
-		strings.NewReader(`{"tab":"bb1","type":"notes","mount":true,"controls":["save"]}`)))
+		strings.NewReader(`{"tab":"ab1","type":"notes","mount":true,"controls":["save"]}`)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /rendered = %d: %s", rec.Code, rec.Body.String())
 	}
 
-	mine, err := Rendered(t.Context(), root, "review", "bb1")
+	mine, err := Rendered(t.Context(), root, "review", "ab1")
 	if err != nil || len(mine) != 1 {
 		t.Fatalf("the named board's own receipts: %v %+v", err, mine)
 	}
-	theirs, err := Rendered(t.Context(), root, "", "bb1")
+	theirs, err := Rendered(t.Context(), root, "", "ab1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,22 +188,22 @@ func TestMountReceiptsAreKeptPerBoard(t *testing.T) {
 	}
 }
 
-// A `log` tab's sidecar is keyed by tab id too, so two boards' bb1 appended to
+// A `log` tab's sidecar is keyed by tab id too, so two boards' ab1 appended to
 // ONE file and the human read one command's output interleaved with another's.
 func TestSidecarLogsAreKeptPerBoard(t *testing.T) {
 	root := Root(t.TempDir())
 	review := boardServer(t, root, "review")
 
 	rec := httptest.NewRecorder()
-	review.route(rec, httptest.NewRequest(http.MethodPost, "http://localhost/log?tab=bb1",
+	review.route(rec, httptest.NewRequest(http.MethodPost, "http://localhost/log?tab=ab1",
 		strings.NewReader("a line from the review board\n")))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("POST /log = %d: %s", rec.Code, rec.Body.String())
 	}
 
-	mine, ok := root.LogFile("review", "bb1")
+	mine, ok := root.LogFile("review", "ab1")
 	if !ok {
-		t.Fatal(`LogFile("review", "bb1") refused a plain tab id`)
+		t.Fatal(`LogFile("review", "ab1") refused a plain tab id`)
 	}
 	body, err := os.ReadFile(mine)
 	if err != nil {
@@ -215,7 +215,7 @@ func TestSidecarLogsAreKeptPerBoard(t *testing.T) {
 	if filepath.Dir(mine) != root.LogsDir("review") {
 		t.Errorf("%s is not in the named board's logs directory %s", mine, root.LogsDir("review"))
 	}
-	theirs, _ := root.LogFile("", "bb1")
+	theirs, _ := root.LogFile("", "ab1")
 	if _, err := os.Stat(theirs); !os.IsNotExist(err) {
 		t.Errorf("the line also reached the default board's log at %s: %v", theirs, err)
 	}

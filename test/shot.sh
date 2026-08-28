@@ -3,8 +3,8 @@
 #
 #   ./test/shot.sh                 # all five tabs
 #   ./test/shot.sh dag diagram     # just these
-#   ./test/shot.sh bb22#help       # the help panel over that tab
-#   ./test/shot.sh /tab/bb72/html  # a raw path — how you shoot an html tab, since
+#   ./test/shot.sh ab22#help       # the help panel over that tab
+#   ./test/shot.sh /tab/ab72/html  # a raw path — how you shoot an html tab, since
 #                                  # headless chromium does not paint iframes
 #
 # Two gotchas this encodes:
@@ -99,7 +99,7 @@ case "$OUT" in
 esac
 
 for tab in $TABS; do
-  # A target may carry a fragment — `./test/shot.sh bb22#help` shoots the help
+  # A target may carry a fragment — `./test/shot.sh ab22#help` shoots the help
   # panel over that tab. The panel opens on a `?` keypress, which headless
   # chromium cannot send, and #help exists precisely so it can be captured
   # anyway. Worth wiring in here: a panel nobody can screenshot is a panel whose

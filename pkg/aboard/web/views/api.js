@@ -25,7 +25,7 @@ export const BASE = (() => {
 
 /**
  * Build a server URL from a root-relative path.
- * @param {string} path e.g. '/aboard.json', '/tab/bb72/html', 'assets/x.svg'
+ * @param {string} path e.g. '/aboard.json', '/tab/ab72/html', 'assets/x.svg'
  * @returns {string}
  */
 export function api(path) {

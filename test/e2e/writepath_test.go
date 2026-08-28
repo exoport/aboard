@@ -27,7 +27,7 @@ func makeUITab(t *testing.T, name string) string {
 	if !ok {
 		t.Fatalf("the board has no nextId to allocate from: %v", d["nextId"])
 	}
-	id := fmt.Sprintf("bb%d", int(next))
+	id := fmt.Sprintf("ab%d", int(next))
 	d["nextId"] = int(next) + 1
 	list, _ := d["tabs"].([]any)
 	d["tabs"] = append(list, map[string]any{
@@ -124,8 +124,8 @@ func TestTheTraceTabShowsAWritesLabelAndItsWarnings(t *testing.T) {
 	s.tab(id)
 	breakTheTree(t, id, why)
 
-	s.tab("bb127")
-	if err := s.control("bb127", "reload").Click(); err != nil {
+	s.tab("ab127")
+	if err := s.control("ab127", "reload").Click(); err != nil {
 		t.Fatalf("reloading the trace: %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestTheTraceTabShowsAWritesLabelAndItsWarnings(t *testing.T) {
 	// one. The suite shares a board and other tests warn on purpose too, so
 	// `.Last()` was picking somebody else's write whenever the order put one after
 	// this: a test that passes only in some orders is one that pins nothing.
-	dot := s.view("bb127").Locator(`.event[data-warned="yes"][title*="` + why + `"]`)
+	dot := s.view("ab127").Locator(`.event[data-warned="yes"][title*="` + why + `"]`)
 	if err := expect.Locator(dot).ToBeVisible(); err != nil {
 		t.Fatalf("this write is not marked as having warned: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestTheTraceTabShowsAWritesLabelAndItsWarnings(t *testing.T) {
 	if err := dot.Click(); err != nil {
 		t.Fatalf("selecting the write: %v", err)
 	}
-	detail := s.view("bb127").Locator(".detail")
+	detail := s.view("ab127").Locator(".detail")
 	if err := expect.Locator(detail).ToContainText(why); err != nil {
 		t.Fatalf("the entry does not say why the write happened: %v", err)
 	}

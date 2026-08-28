@@ -18,13 +18,13 @@ inside a tab's state would mean rewriting the entire board once per line. The
 tab's state holds only a pointer.
 
 A named board writes into .aboard/run/logs/<name>/ instead — tab ids are
-allocated per board, so both boards have a bb1 and one directory would have
+allocated per board, so both boards have a ab1 and one directory would have
 interleaved two commands' output in one file.
 
 Lines are echoed to stdout as well — piping output to the board should not mean
 losing it from the terminal you are watching.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  go test ./... 2>&1 | aboard log bb126",
+		Example: "  go test ./... 2>&1 | aboard log ab126",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := projectRoot(cmd)
 			if err != nil {

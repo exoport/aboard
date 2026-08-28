@@ -23,11 +23,11 @@ func TestDraggingADagNodeOntoAnotherReparentsIt(t *testing.T) {
 	covers(t, "dag", "drag to move")
 	covers(t, "dag", "drop one node ON another to reparent")
 
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
-	const child, newParent = "bb3", "bb4"
+	const child, newParent = "ab3", "ab4"
 	if got := dagParent(t, child); got == newParent {
 		t.Fatalf("%s is already parented to %s — this test would prove nothing", child, newParent)
 	}
@@ -48,11 +48,11 @@ func TestDraggingADagNodeOntoAnotherReparentsIt(t *testing.T) {
 // Dragging to EMPTY canvas pins a position instead — the other half of the same
 // gesture, and the one that writes `pos`.
 func TestDraggingADagNodeToEmptyCanvasPinsIt(t *testing.T) {
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
-	const node = "bb5"
+	const node = "ab5"
 	svg := view.Locator("svg")
 	from := s.centre(view.Locator(`.node-box[data-id="` + node + `"]`))
 	// The bottom-left corner of the canvas: far from the tidied tree, and inside
@@ -72,11 +72,11 @@ func TestDraggingADagNodeToEmptyCanvasPinsIt(t *testing.T) {
 func TestDoubleClickingADagNodeRenamesIt(t *testing.T) {
 	covers(t, "dag", "double-click to rename")
 
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
-	const node = "bb8"
+	const node = "ab8"
 	if err := view.Locator(`.node-box[data-id="` + node + `"]`).Dblclick(); err != nil {
 		t.Fatalf("double-clicking the node: %v", err)
 	}
@@ -121,18 +121,18 @@ func TestDoubleClickingADagNodeRenamesIt(t *testing.T) {
 func TestClickingSelectsADagNodeAndEmptyCanvasDeselects(t *testing.T) {
 	covers(t, "dag", "click to select")
 
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
-	node := view.Locator(`.node-box[data-id="bb6"]`)
+	node := view.Locator(`.node-box[data-id="ab6"]`)
 	if err := node.Click(); err != nil {
 		t.Fatalf("clicking the node: %v", err)
 	}
 	if err := expect.Locator(node).ToHaveAttribute("data-selected", "yes"); err != nil {
 		t.Fatalf("the node did not select: %v", err)
 	}
-	if err := expect.Locator(view.Locator(".detail .id-chip")).ToContainText("bb6"); err != nil {
+	if err := expect.Locator(view.Locator(".detail .id-chip")).ToContainText("ab6"); err != nil {
 		t.Errorf("the detail panel is not showing the selected node: %v", err)
 	}
 
@@ -155,8 +155,8 @@ func TestTheDagPansAndZoomsWithoutWritingToTheBoard(t *testing.T) {
 	covers(t, "dag", "drag the background to pan")
 	covers(t, "dag", "wheel to zoom")
 
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
 	scene := view.Locator("svg > g")
@@ -191,11 +191,11 @@ func TestTheDagPansAndZoomsWithoutWritingToTheBoard(t *testing.T) {
 // It operates on a node this test creates, so a failure cannot cost the example
 // board a node — and creating it exercises the `add-root` control on the way in.
 func TestDeletingADagNodeGoesThroughItsOwnDialog(t *testing.T) {
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 
 	before := dagNodeCount(t)
-	if err := s.control("bb1", "add-root").Click(); err != nil {
+	if err := s.control("ab1", "add-root").Click(); err != nil {
 		t.Fatalf("adding a root node: %v", err)
 	}
 	eventually(t, "the new node to reach the server", func() bool { return dagNodeCount(t) == before+1 })
@@ -209,7 +209,7 @@ func TestDeletingADagNodeGoesThroughItsOwnDialog(t *testing.T) {
 	}
 	added = strings.TrimSpace(added)
 
-	if err := s.control("bb1", "delete").Click(); err != nil {
+	if err := s.control("ab1", "delete").Click(); err != nil {
 		t.Fatalf("pressing Delete: %v", err)
 	}
 	dialog := view.Locator("dialog.sheet-dialog")
@@ -232,7 +232,7 @@ func TestDeletingADagNodeGoesThroughItsOwnDialog(t *testing.T) {
 		t.Fatalf("Cancel deleted the node anyway")
 	}
 
-	if err := s.control("bb1", "delete").Click(); err != nil {
+	if err := s.control("ab1", "delete").Click(); err != nil {
 		t.Fatalf("pressing Delete again: %v", err)
 	}
 	if err := dialog.GetByText("Delete", playwright.LocatorGetByTextOptions{
@@ -247,17 +247,17 @@ func TestDeletingADagNodeGoesThroughItsOwnDialog(t *testing.T) {
 func TestRightClickingADagNodeOffersALinkToIt(t *testing.T) {
 	covers(t, "dag", "right-click for id, link, markdown")
 
-	s := open(t, "tab=bb1")
-	view := s.view("bb1")
+	s := open(t, "tab=ab1")
+	view := s.view("ab1")
 	fitTheGraph(t, s)
 
-	if err := view.Locator(`.node-box[data-id="bb2"]`).Click(playwright.LocatorClickOptions{
+	if err := view.Locator(`.node-box[data-id="ab2"]`).Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("right-clicking a node: %v", err)
 	}
 	menu := s.page.Locator(".ctx-menu")
-	if err := expect.Locator(menu).ToContainText("bb2"); err != nil {
+	if err := expect.Locator(menu).ToContainText("ab2"); err != nil {
 		t.Fatalf("the menu does not head with the node's id: %v", err)
 	}
 	if err := expect.Locator(menu.GetByText("Copy link", playwright.LocatorGetByTextOptions{
@@ -278,7 +278,7 @@ func TestRightClickingADagNodeOffersALinkToIt(t *testing.T) {
 // fails as "the drag did nothing" rather than "the node was off screen".
 func fitTheGraph(t *testing.T, s *session) {
 	t.Helper()
-	if err := s.control("bb1", "fit").Click(); err != nil {
+	if err := s.control("ab1", "fit").Click(); err != nil {
 		t.Fatalf("pressing Fit: %v", err)
 	}
 }
@@ -298,7 +298,7 @@ func (s *session) nodeUnder(p point) string {
 
 func dagNode(t *testing.T, id string) map[string]any {
 	t.Helper()
-	list, _ := readDoc(t).state(t, "bb1")["nodes"].([]any)
+	list, _ := readDoc(t).state(t, "ab1")["nodes"].([]any)
 	for _, raw := range list {
 		if n, ok := raw.(map[string]any); ok && n["id"] == id {
 			return n
@@ -316,7 +316,7 @@ func dagParent(t *testing.T, id string) string {
 
 func dagNodeCount(t *testing.T) int {
 	t.Helper()
-	list, _ := readDoc(t).state(t, "bb1")["nodes"].([]any)
+	list, _ := readDoc(t).state(t, "ab1")["nodes"].([]any)
 	return len(list)
 }
 

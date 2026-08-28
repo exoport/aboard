@@ -15,11 +15,11 @@ import (
 // renderer with the largest gap between "it mounted" and "it works", because
 // every mark it stores comes from a drag on an <svg> overlay.
 //
-// The fixture gives `bb22` two images and three marks — the example board ships
+// The fixture gives `ab22` two images and three marks — the example board ships
 // it EMPTY, because an image with somebody else's annotations on it is not what
 // a new project should start with. See test/e2e/testdata/fixture.json.
 
-const markupTab = "bb22"
+const markupTab = "ab22"
 
 // Drag with the region tool to draw a rectangle. This is also the negative case
 // for the tool switch: move and resize deliberately do nothing on empty canvas,
@@ -276,11 +276,11 @@ func TestEachImageGetsItsOwnMarksTable(t *testing.T) {
 		"layout": "stacked",
 		"images": []any{
 			map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "first.svg", "regions": []any{
-				map[string]any{"id": "bb301", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2},
-				map[string]any{"id": "bb302", "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.2},
+				map[string]any{"id": "ab301", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2},
+				map[string]any{"id": "ab302", "x": 0.4, "y": 0.1, "w": 0.2, "h": 0.2},
 			}},
 			map[string]any{"id": "two", "src": "assets/mock-screen-after.svg", "caption": "second.svg", "regions": []any{
-				map[string]any{"id": "bb303", "x": 0.1, "y": 0.5, "w": 0.2, "h": 0.2},
+				map[string]any{"id": "ab303", "x": 0.1, "y": 0.5, "w": 0.2, "h": 0.2},
 			}},
 		},
 	}
@@ -308,7 +308,7 @@ func TestEachImageGetsItsOwnMarksTable(t *testing.T) {
 	if err := expect.Locator(second.Locator(".markup-row:not(.markup-row-head)")).ToHaveCount(1); err != nil {
 		t.Errorf("the second image's table does not hold its one mark: %v", err)
 	}
-	if err := expect.Locator(first.Locator(".markup-chip").Filter(playwright.LocatorFilterOptions{HasText: "bb303"})).ToHaveCount(0); err != nil {
+	if err := expect.Locator(first.Locator(".markup-chip").Filter(playwright.LocatorFilterOptions{HasText: "ab303"})).ToHaveCount(0); err != nil {
 		t.Errorf("the second image's mark is listed under the first image: %v", err)
 	}
 
@@ -683,7 +683,7 @@ func TestACropCanBeAddedToTheTabAsANewImage(t *testing.T) {
 		"layout": "stacked",
 		"images": []any{map[string]any{
 			"id": "one", "src": "assets/mock-screen.svg", "caption": "source.svg",
-			"regions": []any{map[string]any{"id": "bb501", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2, "color": "danger"}},
+			"regions": []any{map[string]any{"id": "ab501", "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2, "color": "danger"}},
 		}},
 	}
 	apply(t, d)
@@ -904,7 +904,7 @@ func TestTheDialogAddsThePictureItIsShowing(t *testing.T) {
 		"layout": "stacked",
 		"images": []any{map[string]any{
 			"id": "one", "src": "assets/mock-screen.svg", "caption": "source.svg",
-			"regions": []any{map[string]any{"id": "bb601", "x": 0.45, "y": 0.45, "w": 0.3, "h": 0.3, "color": "danger"}},
+			"regions": []any{map[string]any{"id": "ab601", "x": 0.45, "y": 0.45, "w": 0.3, "h": 0.3, "color": "danger"}},
 		}},
 	}
 	apply(t, d)
@@ -1020,7 +1020,7 @@ func TestTheDialogOffersToAddAViewToo(t *testing.T) {
 }
 
 // The image caption names the image's ID on hover. It is what you say to an
-// agent — "the image bb214" — and the caption itself is a label the human is
+// agent — "the image ab214" — and the caption itself is a label the human is
 // free to change, so the two are not interchangeable.
 func TestHoveringAnImageNameShowsItsId(t *testing.T) {
 	id := makeScratchTab(t, "Named image")
@@ -1028,7 +1028,7 @@ func TestHoveringAnImageNameShowsItsId(t *testing.T) {
 	d.tab(t, id)["type"] = "markup"
 	d.tab(t, id)["state"] = map[string]any{
 		"layout": "stacked",
-		"images": []any{map[string]any{"id": "bb777", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+		"images": []any{map[string]any{"id": "ab777", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
 	}
 	apply(t, d)
 
@@ -1037,7 +1037,7 @@ func TestHoveringAnImageNameShowsItsId(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading the caption's title: %v", err)
 	}
-	if !strings.Contains(title, "bb777") {
+	if !strings.Contains(title, "ab777") {
 		t.Errorf("hovering the image name shows %q, which does not name the image", title)
 	}
 	// The rename affordance survives: the title is the only thing saying the
@@ -1111,7 +1111,7 @@ func TestChoosingAToolDoesNotScrollThePage(t *testing.T) {
 		images = append(images, map[string]any{
 			"id": fmt.Sprintf("im%d", i), "src": "assets/mock-screen.svg",
 			"caption": fmt.Sprintf("shot-%d.svg", i),
-			"regions": []any{map[string]any{"id": fmt.Sprintf("bb%d", 400+i), "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2}},
+			"regions": []any{map[string]any{"id": fmt.Sprintf("ab%d", 400+i), "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2}},
 		})
 	}
 	d := readDoc(t)
@@ -1363,10 +1363,10 @@ func TestAMarkupImageFillsTheRowWithoutBeingUpscaled(t *testing.T) {
 // `hidden`, and `hidden` is `display: none` — a display:none grid item is not
 // placed in the grid AT ALL, so every remaining cell in that row slid one
 // column left while the header's own image cell stayed put. The id landed in
-// the 22px mark-number track and rendered as "bb"; the delete button landed in
+// the 22px mark-number track and rendered as "ab"; the delete button landed in
 // the note track and became a full-width box with an ✕ adrift in it. With TWO
 // images nothing is hidden and nothing shifts, and two images is what
-// fixture.json gives `bb22`.
+// fixture.json gives `ab22`.
 //
 // The second was there at any image count: each row declared the shared column
 // template itself, and grid aligns tracks within a container. A row was its own
@@ -1384,10 +1384,10 @@ func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
 		"images": []any{map[string]any{
 			"id": "only", "src": "assets/mock-screen.svg", "caption": "one.svg",
 			"regions": []any{
-				map[string]any{"id": "bb206", "x": 0.04, "y": 0.01, "w": 0.15, "h": 0.93, "color": "danger"},
-				map[string]any{"id": "bb207", "shape": "ellipse", "x": 0.23, "y": 0.77, "w": 0.12, "h": 0.14, "color": "accent"},
+				map[string]any{"id": "ab206", "x": 0.04, "y": 0.01, "w": 0.15, "h": 0.93, "color": "danger"},
+				map[string]any{"id": "ab207", "shape": "ellipse", "x": 0.23, "y": 0.77, "w": 0.12, "h": 0.14, "color": "accent"},
 			},
-			"strokes": []any{map[string]any{"id": "bb208", "points": []any{[]any{0.2, 0.7}, []any{0.3, 0.74}}, "color": "focus"}},
+			"strokes": []any{map[string]any{"id": "ab208", "points": []any{[]any{0.2, 0.7}, []any{0.3, 0.74}}, "color": "focus"}},
 		}},
 	}
 	apply(t, d)
@@ -1480,7 +1480,7 @@ func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
 		const el = document.querySelector(sel);
 		return { Text: el.textContent.trim(), Scroll: el.scrollWidth, Client: el.clientWidth };
 	}`, `[data-tab="`+id+`"] .markup-row:not(.markup-row-head) .markup-chip`)
-	if chip.Text != "bb206" {
+	if chip.Text != "ab206" {
 		t.Errorf("the id cell reads %q, want the mark's own id", chip.Text)
 	}
 	if chip.Scroll > chip.Client+1 {

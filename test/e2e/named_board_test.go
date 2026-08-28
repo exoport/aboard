@@ -35,25 +35,25 @@ func TestTheChangeBannersRestoreLineNamesTheBoard(t *testing.T) {
 
 	// Two writes: the one that creates a tab has no previous state, so the
 	// journal would hold nothing to offer back.
-	pushNamed(t, url, `{"id":"bb1","name":"Side note","type":"notes","state":{"text":"the first thing it said"}}`)
-	pushNamed(t, url, `{"id":"bb1","name":"Side note","type":"notes","state":{"text":"the second thing it said"}}`)
+	pushNamed(t, url, `{"id":"ab1","name":"Side note","type":"notes","state":{"text":"the first thing it said"}}`)
+	pushNamed(t, url, `{"id":"ab1","name":"Side note","type":"notes","state":{"text":"the second thing it said"}}`)
 
-	s := openAt(t, url, "tab=bb1")
-	s.tab("bb1")
+	s := openAt(t, url, "tab=ab1")
+	s.tab("ab1")
 
-	banner := s.view("bb1").Locator(".banner").First()
+	banner := s.view("ab1").Locator(".banner").First()
 	if err := expect.Locator(banner).ToContainText("changed this tab"); err != nil {
 		t.Fatalf("no change banner on a tab an agent just wrote to: %v", err)
 	}
-	link := s.view("bb1").Locator(`button:has-text("What it said before")`)
+	link := s.view("ab1").Locator(`button:has-text("What it said before")`)
 	if err := link.Click(); err != nil {
 		t.Fatalf("pressing the history link: %v", err)
 	}
-	prev := s.view("bb1").Locator(".history-prev")
+	prev := s.view("ab1").Locator(".history-prev")
 	if err := expect.Locator(prev).ToBeVisible(); err != nil {
 		t.Fatalf("the previous state never appeared: %v", err)
 	}
-	want := "aboard history bb1 --at 1 --name review | aboard apply --name review --by agent-1"
+	want := "aboard history ab1 --at 1 --name review | aboard apply --name review --by agent-1"
 	if err := expect.Locator(prev).ToContainText(want); err != nil {
 		t.Errorf("the panel's restore line does not name the board: %v", err)
 	}

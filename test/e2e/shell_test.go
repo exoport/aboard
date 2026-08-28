@@ -27,17 +27,17 @@ import (
 func TestDismissingANoticeWritesAsTheHuman(t *testing.T) {
 	// An agent write, which is what stamps the marker in the first place.
 	d := readDoc(t)
-	d.state(t, "bb202")["text"] = "Touched by an agent at " + strconv.Itoa(len(d))
+	d.state(t, "ab202")["text"] = "Touched by an agent at " + strconv.Itoa(len(d))
 	apply(t, d)
 
-	s := open(t, "tab=bb202")
-	view := s.view("bb202")
+	s := open(t, "tab=ab202")
+	view := s.view("ab202")
 
 	banner := view.Locator(".banner").Filter(playwright.LocatorFilterOptions{HasText: "agent-e2e changed this tab."})
 	if err := expect.Locator(banner).ToBeVisible(); err != nil {
 		t.Fatalf("no touched notice after an agent write: %v", err)
 	}
-	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="bb202"] .tab-dot`)).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="ab202"] .tab-dot`)).ToBeVisible(); err != nil {
 		t.Errorf("the tab strip shows no unread dot: %v", err)
 	}
 
@@ -46,14 +46,14 @@ func TestDismissingANoticeWritesAsTheHuman(t *testing.T) {
 	}
 
 	eventually(t, "the marker to clear on the server", func() bool {
-		tab := readDoc(t).tab(t, "bb202")
+		tab := readDoc(t).tab(t, "ab202")
 		_, still := tab["touched"]
 		return !still
 	})
 	// Dismissing records WHEN you looked, not only that you did: `seen.human` is
 	// the timestamp another session compares against to tell "changed since the
 	// human last read it" from "unread".
-	if got := dig(readDoc(t).tab(t, "bb202"), "seen", "human"); got == nil {
+	if got := dig(readDoc(t).tab(t, "ab202"), "seen", "human"); got == nil {
 		t.Error("dismissing left no seen.human stamp")
 	}
 	// `lastEditedBy` is the evidence, and NOT the journal — which is worth
@@ -66,7 +66,7 @@ func TestDismissingANoticeWritesAsTheHuman(t *testing.T) {
 	if by := readDoc(t)["lastEditedBy"]; by != "human" {
 		t.Errorf("the dismiss was written by %q, want \"human\" — the server refuses an agent's clear, so the notice would come back", by)
 	}
-	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="bb202"] .tab-dot`)).ToBeHidden(); err != nil {
+	if err := expect.Locator(s.page.Locator(`#tabs .tab[data-id="ab202"] .tab-dot`)).ToBeHidden(); err != nil {
 		t.Errorf("the unread dot survived the dismiss: %v", err)
 	}
 }
@@ -323,7 +323,7 @@ func TestANewTabStartsWithItsDeclaredState(t *testing.T) {
 	if _, ok := state["layout"]; !ok {
 		t.Errorf("a new markup tab has no `layout`: %v", keysOf(state))
 	}
-	if id, _ := created["id"].(string); !strings.HasPrefix(id, "bb") {
+	if id, _ := created["id"].(string); !strings.HasPrefix(id, "ab") {
 		t.Errorf("the browser allocated the id %q — ids are board-wide monotonic and tagged bb", id)
 	}
 }
@@ -429,11 +429,11 @@ func TestTheNewTabSheetSaysWhatEachTypeIs(t *testing.T) {
 // started, with a tab they cannot see and no message saying so. The write also
 // echoes back over SSE and repaints, which is the second way this can regress.
 func TestCreatingATabSwitchesToIt(t *testing.T) {
-	s := open(t, "#tab=bb13")
+	s := open(t, "#tab=ab13")
 
 	// The premise: the deep link landed, so the fragment names a tab that is NOT
 	// the one about to be created.
-	if err := expect.Locator(s.view("bb13")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab13")).ToBeVisible(); err != nil {
 		t.Fatalf("the deep link did not land, so this test is not testing the case it exists for: %v", err)
 	}
 
@@ -466,7 +466,7 @@ func TestCreatingATabSwitchesToIt(t *testing.T) {
 	if err := expect.Locator(selected).ToContainText(name); err != nil {
 		t.Errorf("the board switched away from the new tab after the write settled: %v", err)
 	}
-	if err := expect.Locator(s.view("bb13")).ToBeHidden(); err != nil {
+	if err := expect.Locator(s.view("ab13")).ToBeHidden(); err != nil {
 		t.Errorf("the deep-linked tab came back on screen: %v", err)
 	}
 }
@@ -493,20 +493,20 @@ func TestTheNotifyButtonIsDisabledWithNobodyWaiting(t *testing.T) {
 // of the few things in this project that would be catastrophic to get wrong
 // quietly.
 func TestAnActionStripRecordsAnIntentInsteadOfActing(t *testing.T) {
-	s := open(t, "tab=bb26")
+	s := open(t, "tab=ab26")
 
-	strip := s.view("bb26").Locator(".action-strip")
+	strip := s.view("ab26").Locator(".action-strip")
 	if err := expect.Locator(strip).ToBeVisible(); err != nil {
 		t.Fatalf("the chat tab declares state.actions but no strip rendered: %v", err)
 	}
-	before := len(intents(t, "bb26"))
+	before := len(intents(t, "ab26"))
 
 	if err := strip.Locator(".action-btn").First().Click(); err != nil {
 		t.Fatalf("pressing an action: %v", err)
 	}
-	eventually(t, "the intent to be recorded", func() bool { return len(intents(t, "bb26")) == before+1 })
+	eventually(t, "the intent to be recorded", func() bool { return len(intents(t, "ab26")) == before+1 })
 
-	last, _ := intents(t, "bb26")[before].(map[string]any)
+	last, _ := intents(t, "ab26")[before].(map[string]any)
 	if last["by"] != "human" {
 		t.Errorf("the intent was recorded by %v, want human", last["by"])
 	}
@@ -532,8 +532,8 @@ func intents(t *testing.T, tabID string) []any {
 // It used to keep a private counter starting at 800, "well above the fixture's
 // nextId so nothing the board allocates can collide". That reasoning is wrong in
 // one direction it did not consider: ids.go drives nextId ABOVE every id in use
-// on every accepted write, so the first scratch tab at bb801 pushed the board's
-// counter to 802 — and the next tab the BROWSER made took bb802, which the next
+// on every accepted write, so the first scratch tab at ab801 pushed the board's
+// counter to 802 — and the next tab the BROWSER made took ab802, which the next
 // scratch tab then allocated again. Two tabs with one id, `strict mode
 // violation: resolved to 2 elements`, and a board that breaks the project's
 // oldest invariant. It was invisible in the declaration order and reproduced
@@ -553,7 +553,7 @@ func makeScratchTabOfType(t *testing.T, name, typ string, state map[string]any) 
 	if !ok {
 		t.Fatalf("the board has no nextId to allocate from: %v", d["nextId"])
 	}
-	id := fmt.Sprintf("bb%d", int(next))
+	id := fmt.Sprintf("ab%d", int(next))
 	d["nextId"] = int(next) + 1
 	list, _ := d["tabs"].([]any)
 	d["tabs"] = append(list, map[string]any{
@@ -651,11 +651,11 @@ func TestRemovingATabSurvivesAReloadArrivingMidSave(t *testing.T) {
 	// A second actor writes while the save is parked. The page hears it on SSE
 	// and reloads — which is the moment the removal used to be undone.
 	d := readDoc(t)
-	d.state(t, "bb126")["probeMidSave"] = time.Now().Format(time.RFC3339Nano)
+	d.state(t, "ab126")["probeMidSave"] = time.Now().Format(time.RFC3339Nano)
 	apply(t, d)
 	eventually(t, "the page to take the foreign write", func() bool {
 		return s.evalBool(`() => !!(window.__aboardProbe.doc.tabs
-          .find((t) => t.id === 'bb126') || {}).state?.probeMidSave`)
+          .find((t) => t.id === 'ab126') || {}).state?.probeMidSave`)
 	})
 	if s.evalBool(`(id) => window.__aboardProbe.doc.tabs.some((t) => t.id === id)`, id) {
 		t.Error("the reload put the removed tab back into the document — this is the defect")

@@ -2,8 +2,11 @@ package aboard
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -341,5 +344,39 @@ func TestEveryDeclaredTextPropIsARealProp(t *testing.T) {
 				t.Errorf("%s: %s is declared layout AND declares text %v", spec.Type, name, component.Text)
 			}
 		}
+	}
+}
+
+// The schema version is declared TWICE — here in Go, and in the shell as
+// SCHEMA_VERSION — and the two must agree.
+//
+// Not a style rule: `repaint()` compares the document's version against the
+// shell's constant and, when they differ, clears the tab strip and raises a
+// notice instead of drawing. That is right when a page has been open across an
+// upgrade, and catastrophic when it is the CONSTANTS that disagree — the board
+// comes up with no tabs at all, no console error, and a document that is
+// perfectly valid. Measured on 2026-08-28: resetting SchemaVersion to 1 without
+// the shell left every board blank, and six browser tests reported it as "the
+// tab strip never appeared", which reads like a broken suite.
+//
+// caps.go says the constant is kept in Go "so the manifest can state it without
+// parsing JavaScript". Parsing the JavaScript is exactly what a CHECK should do.
+func TestTheShellAgreesWithTheDeclaredSchemaVersion(t *testing.T) {
+	shell, err := fs.ReadFile(web.FS, "aboard.html")
+	if err != nil {
+		t.Fatalf("reading the shell: %v", err)
+	}
+	m := regexp.MustCompile(`(?m)^const SCHEMA_VERSION = (\d+);`).FindSubmatch(shell)
+	if m == nil {
+		t.Fatal("aboard.html no longer declares `const SCHEMA_VERSION = <n>;` at the start of a line — " +
+			"if it moved, move this check with it rather than deleting it")
+	}
+	got, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		t.Fatalf("SCHEMA_VERSION is not a number: %v", err)
+	}
+	if got != SchemaVersion {
+		t.Errorf("aboard.html understands schema %d and this package writes %d — "+
+			"every board would come up with an empty tab strip and no error", got, SchemaVersion)
 	}
 }

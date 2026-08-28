@@ -12,8 +12,8 @@ import (
 // contribute no line, text that comes from `value` and from `text`, a two-part
 // node, a {bind} read, a field whose answer lives in state.data, each of the
 // four item-bearing components, and a component the catalog does not have.
-const uiTabDocument = `{"version":3,"rev":1,"nextId":40,"tabs":[
-  {"id":"bb1","key":"panel","name":"Release","type":"ui","note":"What the outline has to carry.","state":{
+const uiTabDocument = `{"version":1,"rev":1,"nextId":40,"tabs":[
+  {"id":"ab1","key":"panel","name":"Release","type":"ui","note":"What the outline has to carry.","state":{
     "data":{"count":25,"who":"agent-1","answers":{"name":"Diego"},"ticks":{"one":true}},
     "root":{"type":"col","children":[
       {"type":"card","title":"Today","children":[
@@ -106,7 +106,7 @@ func TestAUITreeExportsAsAnOutline(t *testing.T) {
 // no text form gets — so seeing that sentence here means the ui case is gone.
 func TestTheUIGalleryExportsSomethingRatherThanNothing(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if err := Export("example/aboard.json", "bb133", "md", &out, &errOut); err != nil {
+	if err := Export("example/aboard.json", "ab133", "md", &out, &errOut); err != nil {
 		t.Fatalf("%v: %s", err, errOut.String())
 	}
 	body := out.String()
@@ -133,14 +133,14 @@ func TestTheUIGalleryExportsSomethingRatherThanNothing(t *testing.T) {
 func TestTheTypesWithNoTextFormSaySo(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"rev":1,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Output","type":"log","state":{}},
-	  {"id":"bb2","name":"Widget","type":"html","state":{"html":"<p>hi</p>"}},
-	  {"id":"bb3","name":"Trace","type":"trace","state":{}}
+	if err := os.WriteFile(state, []byte(`{"version":1,"rev":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Output","type":"log","state":{}},
+	  {"id":"ab2","name":"Widget","type":"html","state":{"html":"<p>hi</p>"}},
+	  {"id":"ab3","name":"Trace","type":"trace","state":{}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"bb1", "bb2", "bb3"} {
+	for _, id := range []string{"ab1", "ab2", "ab3"} {
 		var out, errOut bytes.Buffer
 		if err := Export(state, id, "md", &out, &errOut); err != nil {
 			t.Fatal(err)
@@ -158,10 +158,10 @@ func TestTheTypesWithNoTextFormSaySo(t *testing.T) {
 func TestAnExportedTableHasAWellFormedDelimiterRow(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "aboard.json")
-	if err := os.WriteFile(state, []byte(`{"version":3,"rev":1,"nextId":5,"tabs":[
-	  {"id":"bb1","key":"rows","name":"Rows","type":"table","state":{
+	if err := os.WriteFile(state, []byte(`{"version":1,"rev":1,"nextId":5,"tabs":[
+	  {"id":"ab1","key":"rows","name":"Rows","type":"table","state":{
 	    "columns":[{"id":"thing","label":"cell type"},{"id":"count","label":"number"}],
-	    "rows":[{"id":"bb2","thing":"text","count":1}]}}
+	    "rows":[{"id":"ab2","thing":"text","count":1}]}}
 	]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}

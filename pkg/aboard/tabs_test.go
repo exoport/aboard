@@ -35,14 +35,14 @@ func tabByID(t *testing.T, tabs []tab, id string) tab {
 // most agents never touch it — erased every other actor's read stamp.
 func TestAgentCannotClearAnotherActorsSeen(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Seen:  map[string]string{"human": "T-human", "agent-2": "T-two"},
 	})
 
 	// A normal write: the agent edits the state and says nothing about `seen`.
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"two"}`),
 	})
 
@@ -50,7 +50,7 @@ func TestAgentCannotClearAnotherActorsSeen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tabByID(t, out, "bb1").Seen
+	got := tabByID(t, out, "ab1").Seen
 	if got["human"] != "T-human" || got["agent-2"] != "T-two" {
 		t.Fatalf("a write that never mentioned seen erased it: %v", got)
 	}
@@ -58,13 +58,13 @@ func TestAgentCannotClearAnotherActorsSeen(t *testing.T) {
 
 func TestAgentMaySetOnlyItsOwnSeen(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Seen:  map[string]string{"human": "T-human", "agent-2": "T-two"},
 	})
 	// The write claims a stamp for itself AND rewrites two it does not own.
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Seen:  map[string]string{"agent-1": "T-mine", "human": "FORGED", "agent-2": "FORGED"},
 	})
@@ -73,7 +73,7 @@ func TestAgentMaySetOnlyItsOwnSeen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tabByID(t, out, "bb1").Seen
+	got := tabByID(t, out, "ab1").Seen
 	if got["agent-1"] != "T-mine" {
 		t.Errorf("the writer's own stamp was not accepted: %v", got)
 	}
@@ -88,10 +88,10 @@ func TestAgentMaySetOnlyItsOwnSeen(t *testing.T) {
 func TestHumanWriteIsTakenAsIs(t *testing.T) {
 	current := boardJSON(
 		t,
-		tab{ID: "bb1", Name: "Plan", Type: "notes", Seen: map[string]string{"agent-2": "T"}},
-		tab{ID: "bb2", Name: "Gone", Type: "notes"},
+		tab{ID: "ab1", Name: "Plan", Type: "notes", Seen: map[string]string{"agent-2": "T"}},
+		tab{ID: "ab2", Name: "Gone", Type: "notes"},
 	)
-	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
+	incoming := boardJSON(t, tab{ID: "ab1", Name: "Plan", Type: "notes"})
 
 	out, err := reconcileTabs(current, incoming, "human", testLogger())
 	if err != nil {
@@ -111,12 +111,12 @@ func TestHumanWriteIsTakenAsIs(t *testing.T) {
 // no trace at all.
 func TestNoteOnlyEditIsMarkedAndJournaled(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Note:  "what the human wanted this for",
 	})
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`),
 		Note:  "something an agent decided instead",
 	})
@@ -125,14 +125,14 @@ func TestNoteOnlyEditIsMarkedAndJournaled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mark := tabByID(t, out, "bb1").Touched; mark == nil {
+	if mark := tabByID(t, out, "ab1").Touched; mark == nil {
 		t.Error("a note-only edit raised no change marker")
 	} else if mark.By != "agent-1" {
 		t.Errorf("the marker names %q", mark.By)
 	}
 
 	entry := changeSummary(current, out, "agent-1", "apply")
-	if len(entry.Tabs) != 1 || entry.Tabs[0] != "bb1" {
+	if len(entry.Tabs) != 1 || entry.Tabs[0] != "ab1" {
 		t.Errorf("a note-only edit was not journaled: %v", entry.Tabs)
 	}
 }
@@ -142,7 +142,7 @@ func TestNoteOnlyEditIsMarkedAndJournaled(t *testing.T) {
 // line (visible but untraceable).
 func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 	base := tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`), Note: "n", StateFrom: "",
 	}
 	for _, tc := range []struct {
@@ -153,7 +153,7 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 		{"state", func(x tab) tab { x.State = json.RawMessage(`{"text":"two"}`); return x }, true},
 		{"name", func(x tab) tab { x.Name = "Renamed"; return x }, true},
 		{"type", func(x tab) tab { x.Type = "markdown"; return x }, true},
-		{"stateFrom", func(x tab) tab { x.StateFrom = "bb9"; return x }, true},
+		{"stateFrom", func(x tab) tab { x.StateFrom = "ab9"; return x }, true},
 		{"note", func(x tab) tab { x.Note = "rewritten"; return x }, true},
 		{"nothing", func(x tab) tab { return x }, false},
 	} {
@@ -164,7 +164,7 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", tc.what, err)
 		}
-		marked := tabByID(t, out, "bb1").Touched != nil
+		marked := tabByID(t, out, "ab1").Touched != nil
 		journaled := len(changeSummary(current, out, "agent-1", "apply").Tabs) > 0
 
 		if marked != tc.want || journaled != tc.want {
@@ -179,11 +179,11 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 func TestUnknownActorGetsAgentPowersOnly(t *testing.T) {
 	current := boardJSON(
 		t,
-		tab{ID: "bb1", Name: "Plan", Type: "notes", Touched: &touchMark{By: "agent-2", At: "T"}},
-		tab{ID: "bb2", Name: "Queue", Type: "notes"},
+		tab{ID: "ab1", Name: "Plan", Type: "notes", Touched: &touchMark{By: "agent-2", At: "T"}},
+		tab{ID: "ab2", Name: "Queue", Type: "notes"},
 	)
 	// A write that drops one tab and clears the other's marker.
-	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
+	incoming := boardJSON(t, tab{ID: "ab1", Name: "Plan", Type: "notes"})
 
 	out, err := reconcileTabs(current, incoming, "unknown", testLogger())
 	if err != nil {
@@ -192,10 +192,10 @@ func TestUnknownActorGetsAgentPowersOnly(t *testing.T) {
 	if len(out) != 2 {
 		t.Fatalf("an unknown actor deleted a tab: %d remain", len(out))
 	}
-	if gone := tabByID(t, out, "bb2"); gone.PendingRemoval == nil {
+	if gone := tabByID(t, out, "ab2"); gone.PendingRemoval == nil {
 		t.Error("the dropped tab came back without a removal request")
 	}
-	if kept := tabByID(t, out, "bb1"); kept.Touched == nil {
+	if kept := tabByID(t, out, "ab1"); kept.Touched == nil {
 		t.Error("an unknown actor cleared a change marker")
 	}
 }
@@ -204,20 +204,20 @@ func TestUnknownActorGetsAgentPowersOnly(t *testing.T) {
 // human's edit window closed when a session consumed the message.
 func TestAgentCannotUnreadAChatMessage(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Coordination", Type: "chat",
-		State: json.RawMessage(`{"messages":[{"id":"bb2","text":"hi","ackBy":"agent-2","ackAt":"T"}]}`),
+		ID: "ab1", Name: "Coordination", Type: "chat",
+		State: json.RawMessage(`{"messages":[{"id":"ab2","text":"hi","ackBy":"agent-2","ackAt":"T"}]}`),
 	})
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Coordination", Type: "chat",
-		State: json.RawMessage(`{"messages":[{"id":"bb2","text":"hi"}]}`),
+		ID: "ab1", Name: "Coordination", Type: "chat",
+		State: json.RawMessage(`{"messages":[{"id":"ab2","text":"hi"}]}`),
 	})
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(tabByID(t, out, "bb1").State), "agent-2") {
-		t.Errorf("the ack was dropped: %s", tabByID(t, out, "bb1").State)
+	if !strings.Contains(string(tabByID(t, out, "ab1").State), "agent-2") {
+		t.Errorf("the ack was dropped: %s", tabByID(t, out, "ab1").State)
 	}
 }
 
@@ -229,14 +229,14 @@ func TestAgentCannotUnreadAChatMessage(t *testing.T) {
 // vanished with nothing to say it had ever been raised.
 func TestAgentWriteCannotClearAPendingRemoval(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State:          json.RawMessage(`{"text":"one"}`),
 		PendingRemoval: &removalAsk{By: "agent-2", At: "T0", Reason: "superseded by the new plan"},
 	})
 
 	// agent-1 edits the tab and says nothing about the request.
 	incoming := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"two"}`),
 	})
 
@@ -244,7 +244,7 @@ func TestAgentWriteCannotClearAPendingRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := tabByID(t, out, "bb1").PendingRemoval
+	got := tabByID(t, out, "ab1").PendingRemoval
 	if got == nil {
 		t.Fatal("an agent write erased another agent's removal request")
 	}
@@ -257,16 +257,16 @@ func TestAgentWriteCannotClearAPendingRemoval(t *testing.T) {
 // and a carry-forward that applied to them too would make the request permanent.
 func TestAHumanWriteAnswersAPendingRemoval(t *testing.T) {
 	current := boardJSON(t, tab{
-		ID: "bb1", Name: "Plan", Type: "notes",
+		ID: "ab1", Name: "Plan", Type: "notes",
 		PendingRemoval: &removalAsk{By: "agent-2", At: "T0", Reason: "spent"},
 	})
-	incoming := boardJSON(t, tab{ID: "bb1", Name: "Plan", Type: "notes"})
+	incoming := boardJSON(t, tab{ID: "ab1", Name: "Plan", Type: "notes"})
 
 	out, err := reconcileTabs(current, incoming, actorHuman, testLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tabByID(t, out, "bb1").PendingRemoval != nil {
+	if tabByID(t, out, "ab1").PendingRemoval != nil {
 		t.Error("the human declined the removal and the request came back anyway")
 	}
 }
@@ -282,8 +282,8 @@ func testLogger() *log.Logger { return log.New(io.Discard, "", 0) }
 // stamped, an agent could PLANT a stamp for the human and the "changed since I
 // last looked" dot would never light for that tab again.
 func TestAnAgentCannotPlantASeenStampOnATabThatHadNone(t *testing.T) {
-	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{}}]}`)
-	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{},
+	current := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{},
 		"seen":{"human":"2099-01-01T00:00:00.000Z","agent-1":"2026-08-26T00:00:00.000Z"}}]}`)
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
@@ -304,7 +304,7 @@ func TestAnAgentCannotPlantASeenStampOnATabThatHadNone(t *testing.T) {
 // the very write that made it.
 func TestANewTabCannotArriveWithSomebodyElsesSeenStamp(t *testing.T) {
 	current := []byte(`{"tabs":[]}`)
-	incoming := []byte(`{"tabs":[{"id":"bb9","name":"Questions","type":"form","state":{},
+	incoming := []byte(`{"tabs":[{"id":"ab9","name":"Questions","type":"form","state":{},
 		"seen":{"human":"2099-01-01T00:00:00.000Z","agent-2":"2099-01-01T00:00:00.000Z","agent-1":"2026-08-26T00:00:00.000Z"}}]}`)
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
@@ -332,9 +332,9 @@ func TestANewTabCannotArriveWithSomebodyElsesSeenStamp(t *testing.T) {
 // The common case must not regress: a write that never mentions `seen` at all —
 // which is most writes — leaves every stamp exactly as it was.
 func TestAWriteThatIgnoresSeenLeavesEveryStampAlone(t *testing.T) {
-	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{},
+	current := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{},
 		"seen":{"human":"2026-08-01T00:00:00.000Z","agent-2":"2026-08-02T00:00:00.000Z"}}]}`)
-	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {
@@ -348,8 +348,8 @@ func TestAWriteThatIgnoresSeenLeavesEveryStampAlone(t *testing.T) {
 // And a tab that genuinely has no stamps still writes none, rather than an empty
 // object nobody asked for.
 func TestATabWithNoSeenStaysWithoutOne(t *testing.T) {
-	current := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{}}]}`)
-	incoming := []byte(`{"tabs":[{"id":"bb1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
+	current := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{}}]}`)
+	incoming := []byte(`{"tabs":[{"id":"ab1","name":"Plan","type":"dag","state":{"nodes":[]}}]}`)
 
 	out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
 	if err != nil {

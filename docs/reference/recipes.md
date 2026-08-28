@@ -284,7 +284,7 @@ description: "A list of things only the human can do, each item's explanation, t
 when_to_use: "When you are handing over steps only a person can carry out — verify this by hand, install that, look at it in the real app — and you need to read back which ones they actually did. Not for work you could do yourself, and not for an approval on the record."
 tags: [ui, checklist, handover, verification]
 requires:
-  min_schema: 3
+  min_schema: 1
 ---
 
 # A checklist the human works through
@@ -451,7 +451,7 @@ $ aboard recipes list --output-format json
       "verification"
     ],
     "requires": {
-      "minSchema": 3
+      "minSchema": 1
     },
     "scope": "dot-aboard",
     "path": "<project>/.aboard/recipes/human-checklist.md",

@@ -38,7 +38,7 @@ to ship alongside, and nothing on the network at runtime.
 > ./cmd/aboard`). Everything below is how installing will work, and is kept here rather
 > than removed so that it is right on the day the tag lands.
 
-With a Go toolchain (1.26 or later):
+With a Go toolchain (1.27 or later — the JSON codec is `encoding/json/v2`, which is stdlib from 1.27):
 
 ```bash
 go install github.com/exoport/aboard/cmd/aboard@latest
@@ -97,9 +97,11 @@ A board with nothing on it is the normal starting point: `aboard init` without
 `--example` gives you an empty one, and agents open the tabs they need.
 
 There is also a **VS Code extension** — a sidebar tree of the board's tabs beside the
-board in a panel — in a separate repository. It is written and unit-tested but has never
-been loaded into a running editor, so the Simple Browser above is the route to take
-today: [How to use the VS Code extension](docs/how-to/use-the-vscode-extension.md).
+board in a panel, following the editor's theme, with a New Tab button and a nudge for a
+waiting session — in a separate repository. It is packaged as a `.vsix` and in daily use
+here, and it is not published to any marketplace: you build and install it yourself. The
+Simple Browser above still needs nothing installed:
+[How to use the VS Code extension](docs/how-to/use-the-vscode-extension.md).
 
 Forgotten which boards you left running? **`aboard boards`** lists every one on the
 machine, with its project path, from the process table rather than a registry (Linux

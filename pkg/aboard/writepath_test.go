@@ -11,16 +11,16 @@ import (
 // The three features of the write-path cluster, tested where each of them could
 // actually be wrong.
 //
-//	bb361  the warnings travel with the write, scoped to what it touched
-//	bb362  apply --check / --strict
-//	bb371  a write carries a label, and the journal keeps it
+//	ab361  the warnings travel with the write, scoped to what it touched
+//	ab362  apply --check / --strict
+//	ab371  a write carries a label, and the journal keeps it
 
 // A board with one ui tab, whose state is a component tree — the surface where a
 // write fails silently and successfully, which is the whole reason these checks
 // exist.
-const uiBoard = `{"version":3,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
-  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"text","value":"hello"}}},
-  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"one"}}
+const uiBoard = `{"version":1,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
+  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"text","value":"hello"}}},
+  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"one"}}
 ]}`
 
 func postAs(t *testing.T, srv *server, envelope, doc string) map[string]any {
@@ -44,16 +44,16 @@ func postAs(t *testing.T, srv *server, envelope, doc string) map[string]any {
 func TestAWriteThatCannotRenderSaysSoToTheWriterAndInTheJournal(t *testing.T) {
 	srv := testServer(t, uiBoard)
 
-	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":3,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
-	  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"one"}}
+	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
+	  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
 
 	warnings, ok := reply["warnings"].(map[string]any)
 	if !ok {
 		t.Fatalf("the POST reply carries no warnings: %v", reply)
 	}
-	lines, _ := warnings["bb1"].([]any)
+	lines, _ := warnings["ab1"].([]any)
 	if len(lines) == 0 {
 		t.Fatalf("no warning for the tab that was written: %v", warnings)
 	}
@@ -66,7 +66,7 @@ func TestAWriteThatCannotRenderSaysSoToTheWriterAndInTheJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := entries[len(entries)-1]
-	if len(last.Warnings["bb1"]) == 0 {
+	if len(last.Warnings["ab1"]) == 0 {
 		t.Errorf("the journal entry kept no warnings: %+v", last)
 	}
 	// And nowhere near the document: a note about a write is not content, and a
@@ -84,24 +84,24 @@ func TestAWriteThatCannotRenderSaysSoToTheWriterAndInTheJournal(t *testing.T) {
 // to every write anyone ever made — and a warning that always fires is one people
 // learn to skip.
 //
-// Fails before if postState is given writeWarnings(assets, wholeBody): bb1 warns
-// on a write that only touched bb2.
+// Fails before if postState is given writeWarnings(assets, wholeBody): ab1 warns
+// on a write that only touched ab2.
 func TestAWriteIsOnlyWarnedAboutTheTabsItTouched(t *testing.T) {
-	broken := `{"version":3,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
-	  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"one"}}
+	broken := `{"version":1,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
+	  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`
 	srv := testServer(t, broken)
 
 	before := warningScans.Load()
-	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":3,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
-	  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"two"}}
+	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
+	  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"two"}}
 	]}`)
 	scanned := warningScans.Load() - before
 
 	if _, warned := reply["warnings"]; warned {
-		t.Errorf("a write that only touched bb2 was warned about bb1: %v", reply["warnings"])
+		t.Errorf("a write that only touched ab2 was warned about ab1: %v", reply["warnings"])
 	}
 	if scanned != 1 {
 		t.Errorf("the checker looked inside %d tabs; the write changed 1", scanned)
@@ -112,13 +112,13 @@ func TestAWriteIsOnlyWarnedAboutTheTabsItTouched(t *testing.T) {
 // DOES touch the bad tab is warned about it, every time, and no suppression
 // mechanism exists for it.
 func TestTheDeliberatelyInvalidTabStillWarnsWhenItIsWrittenTo(t *testing.T) {
-	broken := `{"version":3,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"col","children":[{"type":"sparkline","values":[1,2]}]}}}
+	broken := `{"version":1,"rev":1,"nextId":9,"updatedAt":"T0","tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"col","children":[{"type":"sparkline","values":[1,2]}]}}}
 	]}`
 	srv := testServer(t, broken)
 
-	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":3,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"col","children":[{"type":"sparkline","values":[1,2,3]}]}}}
+	reply := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"col","children":[{"type":"sparkline","values":[1,2,3]}]}}}
 	]}`)
 	warnings, _ := reply["warnings"].(map[string]any)
 	if len(warnings) == 0 {
@@ -126,7 +126,7 @@ func TestTheDeliberatelyInvalidTabStillWarnsWhenItIsWrittenTo(t *testing.T) {
 	}
 }
 
-// bb371: the label rides the envelope, is stripped like __by and __base, and
+// ab371: the label rides the envelope, is stripped like __by and __base, and
 // lands on the journal entry.
 //
 // Fails before with `__label` written through into the document as a root key no
@@ -135,9 +135,9 @@ func TestAWriteLabelReachesTheJournalAndNotTheBoard(t *testing.T) {
 	srv := testServer(t, uiBoard)
 
 	postAs(t, srv, `"__by":"agent-1","__base":"1","__label":"rebuilding the gallery"`,
-		`{"version":3,"nextId":9,"tabs":[
-		  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"text","value":"hello"}}},
-		  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"two"}}
+		`{"version":1,"nextId":9,"tabs":[
+		  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"text","value":"hello"}}},
+		  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"two"}}
 		]}`)
 
 	entries, err := journalFromDisk(srv.root, srv.name, 10)
@@ -178,13 +178,13 @@ func TestALabelIsClampedRatherThanTrusted(t *testing.T) {
 	}
 }
 
-/* ---------- bb362: apply --check and --strict ---------- */
+/* ---------- ab362: apply --check and --strict ---------- */
 
-const warningDoc = `{"version":3,"rev":1,"nextId":2,"tabs":[
-  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}}]}`
+const warningDoc = `{"version":1,"rev":1,"nextId":2,"tabs":[
+  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}}]}`
 
-const cleanDoc = `{"version":3,"rev":1,"nextId":2,"tabs":[
-  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`
+const cleanDoc = `{"version":1,"rev":1,"nextId":2,"tabs":[
+  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`
 
 // --check is the cheap habit before a write: it says what is wrong and posts
 // nothing. Fails before with "unknown flag: --check".
@@ -224,7 +224,7 @@ func TestApplyCheckNeedsNoBaseAndNoBoard(t *testing.T) {
 	root := Root(t.TempDir())
 
 	out, _, err := runApplyWith(t, root, ApplyOptions{By: "agent-1", Check: true},
-		`{"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
+		`{"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}}]}`)
 	if err != nil {
 		t.Fatalf("--check on a base-less document with no board running failed: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestApplyStrictRefusesAWarningDocumentAndWritesNothing(t *testing.T) {
 
 func errorIsWarnings(err error) bool { return err != nil && strings.Contains(err.Error(), "--strict") }
 
-// bb371 end to end through the client: the label reaches the envelope, and only
+// ab371 end to end through the client: the label reaches the envelope, and only
 // when there is one.
 func TestApplySendsTheLabelOnlyWhenGiven(t *testing.T) {
 	root, last := applyTarget(t)
@@ -327,23 +327,23 @@ func readFileForTest(t *testing.T, path string) []byte {
 func TestAWriteNamesTheTabsItsChecksRanOver(t *testing.T) {
 	srv := testServer(t, uiBoard)
 
-	broke := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":3,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
-	  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"one"}}
+	broke := postAs(t, srv, `"__by":"agent-1","__base":"1"`, `{"version":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"widgets"}}},
+	  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
-	if got := checkedTabs(t, broke); !slices.Contains(got, "bb1") {
-		t.Fatalf("the write that broke bb1 does not say it checked it: %v", got)
+	if got := checkedTabs(t, broke); !slices.Contains(got, "ab1") {
+		t.Fatalf("the write that broke ab1 does not say it checked it: %v", got)
 	}
 
-	fixed := postAs(t, srv, `"__by":"agent-1","__base":"2"`, `{"version":3,"nextId":9,"tabs":[
-	  {"id":"bb1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","label":"widgets"}}},
-	  {"id":"bb2","name":"Plan","type":"notes","state":{"text":"one"}}
+	fixed := postAs(t, srv, `"__by":"agent-1","__base":"2"`, `{"version":1,"nextId":9,"tabs":[
+	  {"id":"ab1","name":"Gallery","type":"ui","state":{"root":{"type":"stat","value":"3","label":"widgets"}}},
+	  {"id":"ab2","name":"Plan","type":"notes","state":{"text":"one"}}
 	]}`)
 	if _, warned := fixed["warnings"]; warned {
 		t.Fatalf("the repaired tree still warns: %v", fixed["warnings"])
 	}
-	if got := checkedTabs(t, fixed); !slices.Contains(got, "bb1") {
-		t.Errorf("the write that repaired bb1 does not say it checked it, so nothing can take the banner down: %v", got)
+	if got := checkedTabs(t, fixed); !slices.Contains(got, "ab1") {
+		t.Errorf("the write that repaired ab1 does not say it checked it, so nothing can take the banner down: %v", got)
 	}
 }
 

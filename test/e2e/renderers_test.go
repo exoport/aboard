@@ -20,8 +20,8 @@ import (
 func TestSortingATableByItsHeader(t *testing.T) {
 	covers(t, "table", "click a header to sort")
 
-	s := open(t, "tab=bb111")
-	view := s.view("bb111")
+	s := open(t, "tab=ab111")
+	view := s.view("ab111")
 
 	header := view.Locator(`th`).Filter(playwright.LocatorFilterOptions{HasText: "number"}).First()
 	if err := header.Click(); err != nil {
@@ -54,10 +54,10 @@ func TestSortingATableByItsHeader(t *testing.T) {
 func TestTypingInATableCellSaves(t *testing.T) {
 	covers(t, "table", "edits save as you type")
 
-	s := open(t, "tab=bb111")
-	view := s.view("bb111")
+	s := open(t, "tab=ab111")
+	view := s.view("ab111")
 
-	cell := view.Locator(`tr[data-id="bb188"] .cell-input`).First()
+	cell := view.Locator(`tr[data-id="ab188"] .cell-input`).First()
 	written := "text, edited by the suite"
 	if err := cell.Fill(written); err != nil {
 		t.Fatalf("typing in the cell: %v", err)
@@ -66,13 +66,13 @@ func TestTypingInATableCellSaves(t *testing.T) {
 		t.Fatalf("blurring: %v", err)
 	}
 	eventually(t, "the cell to reach the server", func() bool {
-		return tableCell(t, "bb188", "thing") == written
+		return tableCell(t, "ab188", "thing") == written
 	})
 	// The cell flashes "saved" on blur, which is the only feedback a
 	// saves-as-you-type surface gives — and it hangs off the promise ctx.save()
 	// returns, the one that used to be stranded when a foreign write re-armed
 	// the debounce.
-	if err := expect.Locator(view.Locator(`tr[data-id="bb188"] .inline-flash`).First()).
+	if err := expect.Locator(view.Locator(`tr[data-id="ab188"] .inline-flash`).First()).
 		ToContainText("saved"); err != nil {
 		t.Errorf("the cell never flashed saved: %v", err)
 	}
@@ -81,14 +81,14 @@ func TestTypingInATableCellSaves(t *testing.T) {
 func TestRightClickingATableRow(t *testing.T) {
 	covers(t, "table", "right-click a row to copy or duplicate it")
 
-	s := open(t, "tab=bb111")
-	if err := s.view("bb111").Locator(`tr[data-id="bb189"]`).Click(playwright.LocatorClickOptions{
+	s := open(t, "tab=ab111")
+	if err := s.view("ab111").Locator(`tr[data-id="ab189"]`).Click(playwright.LocatorClickOptions{
 		Button: playwright.MouseButtonRight,
 	}); err != nil {
 		t.Fatalf("right-clicking the row: %v", err)
 	}
 	menu := s.page.Locator(".ctx-menu")
-	if err := expect.Locator(menu).ToContainText("bb189"); err != nil {
+	if err := expect.Locator(menu).ToContainText("ab189"); err != nil {
 		t.Errorf("the menu does not name the row: %v", err)
 	}
 	if err := s.page.Keyboard().Press("Escape"); err != nil {
@@ -109,7 +109,7 @@ func TestRightClickingATableRow(t *testing.T) {
 // orders, on a board with enough tabs for the strip to wrap and the page to
 // scroll at all.
 func TestAContextMenuOutlivesTheScrollThatOpenedItAndClosesOnTheNextOne(t *testing.T) {
-	s := open(t, "tab=bb111")
+	s := open(t, "tab=ab111")
 
 	// A short window, so the page is taller than the viewport and can scroll at
 	// all. This is not a contrivance: it is the same condition a docked board or a
@@ -133,7 +133,7 @@ func TestAContextMenuOutlivesTheScrollThatOpenedItAndClosesOnTheNextOne(t *testi
 	// event before it clicks and hides the very race being pinned. The
 	// `contextmenu` event is a real one on the real row; only its timing is ours.
 	if _, err := s.page.Evaluate(`() => {
-		const row = document.querySelector('[data-tab="bb111"][data-active="yes"] tr[data-id="bb189"]');
+		const row = document.querySelector('[data-tab="ab111"][data-active="yes"] tr[data-id="ab189"]');
 		if (!row) throw new Error('no row to right-click');
 		window.scrollTo(0, document.documentElement.scrollHeight);
 		const at = row.getBoundingClientRect();
@@ -145,7 +145,7 @@ func TestAContextMenuOutlivesTheScrollThatOpenedItAndClosesOnTheNextOne(t *testi
 		t.Fatal(err)
 	}
 	menu := s.page.Locator(".ctx-menu")
-	if err := expect.Locator(menu).ToContainText("bb189"); err != nil {
+	if err := expect.Locator(menu).ToContainText("ab189"); err != nil {
 		t.Fatalf("the menu did not survive the scroll that was already in flight when it opened: %v", err)
 	}
 	// Still there after a frame has actually passed — an assertion that looked
@@ -176,11 +176,11 @@ func TestAContextMenuOutlivesTheScrollThatOpenedItAndClosesOnTheNextOne(t *testi
 // skill advertised the feature, which is the incident the whole declared-controls
 // series exists to prevent.
 func TestDeletingATableRow(t *testing.T) {
-	s := open(t, "tab=bb111")
-	view := s.view("bb111")
+	s := open(t, "tab=ab111")
+	view := s.view("ab111")
 
 	before := len(storedRowIDs(t))
-	if err := s.control("bb111", "add").Click(); err != nil {
+	if err := s.control("ab111", "add").Click(); err != nil {
 		t.Fatalf("adding a row: %v", err)
 	}
 	eventually(t, "the new row to reach the server", func() bool { return len(storedRowIDs(t)) == before+1 })
@@ -211,7 +211,7 @@ func rowIDs(t *testing.T, view playwright.Locator) []string {
 
 func storedRowIDs(t *testing.T) []string {
 	t.Helper()
-	rows, _ := readDoc(t).state(t, "bb111")["rows"].([]any)
+	rows, _ := readDoc(t).state(t, "ab111")["rows"].([]any)
 	out := make([]string, 0, len(rows))
 	for _, raw := range rows {
 		if r, ok := raw.(map[string]any); ok {
@@ -224,7 +224,7 @@ func storedRowIDs(t *testing.T) []string {
 
 func tableCell(t *testing.T, rowID, col string) string {
 	t.Helper()
-	rows, _ := readDoc(t).state(t, "bb111")["rows"].([]any)
+	rows, _ := readDoc(t).state(t, "ab111")["rows"].([]any)
 	for _, raw := range rows {
 		if r, ok := raw.(map[string]any); ok && r["id"] == rowID {
 			v, _ := r[col].(string)
@@ -243,10 +243,10 @@ func TestAllowingAGateRequestWithAReasonAndUndoingIt(t *testing.T) {
 	covers(t, "gate", "a reason is optional but it is what the agent learns from")
 	covers(t, "gate", "nothing here executes — the agent that asked reads your verdict")
 
-	s := open(t, "tab=bb128")
-	view := s.view("bb128")
+	s := open(t, "tab=ab128")
+	view := s.view("ab128")
 
-	ask := view.Locator(`.ask[data-id="bb201"]`)
+	ask := view.Locator(`.ask[data-id="ab201"]`)
 	if err := expect.Locator(ask).ToBeVisible(); err != nil {
 		t.Fatalf("the pending request is not on the tab: %v", err)
 	}
@@ -260,9 +260,9 @@ func TestAllowingAGateRequestWithAReasonAndUndoingIt(t *testing.T) {
 	}
 
 	eventually(t, "the verdict to reach the server", func() bool {
-		return gateVerdict(t, "bb201") == "allow"
+		return gateVerdict(t, "ab201") == "allow"
 	})
-	if got := gateReason(t, "bb201"); got != why {
+	if got := gateReason(t, "ab201"); got != why {
 		t.Errorf("the reason did not travel with the verdict: %q", got)
 	}
 	if err := expect.Locator(view.Locator(".decided")).ToContainText(why); err != nil {
@@ -276,9 +276,9 @@ func TestAllowingAGateRequestWithAReasonAndUndoingIt(t *testing.T) {
 	if err := row.Locator(`[data-gesture="undo"]`).Click(); err != nil {
 		t.Fatalf("pressing undo: %v", err)
 	}
-	eventually(t, "the request to return to the queue", func() bool { return gatePending(t, "bb201") })
+	eventually(t, "the request to return to the queue", func() bool { return gatePending(t, "ab201") })
 
-	entry := gateDecidedEntry(t, "bb201")
+	entry := gateDecidedEntry(t, "ab201")
 	if entry["undone"] != true {
 		t.Errorf("the reversed verdict was deleted rather than marked undone: %v", entry)
 	}
@@ -289,7 +289,7 @@ func TestAllowingAGateRequestWithAReasonAndUndoingIt(t *testing.T) {
 
 func gateDecidedEntry(t *testing.T, id string) map[string]any {
 	t.Helper()
-	decided, _ := readDoc(t).state(t, "bb128")["decided"].([]any)
+	decided, _ := readDoc(t).state(t, "ab128")["decided"].([]any)
 	for _, raw := range decided {
 		if e, ok := raw.(map[string]any); ok && e["id"] == id {
 			return e
@@ -312,7 +312,7 @@ func gateReason(t *testing.T, id string) string {
 
 func gatePending(t *testing.T, id string) bool {
 	t.Helper()
-	pending, _ := readDoc(t).state(t, "bb128")["pending"].([]any)
+	pending, _ := readDoc(t).state(t, "ab128")["pending"].([]any)
 	for _, raw := range pending {
 		if p, ok := raw.(map[string]any); ok && p["id"] == id {
 			return true
@@ -329,15 +329,15 @@ func gatePending(t *testing.T, id string) bool {
 func TestAUiButtonRecordsAnIntentAndAFieldWritesData(t *testing.T) {
 	covers(t, "ui", "whatever the agent described — buttons record an intent, fields write into the data model")
 
-	s := open(t, "tab=bb133")
-	view := s.view("bb133")
+	s := open(t, "tab=ab133")
+	view := s.view("ab133")
 
 	// The buttons and fields live in the gallery's "Input" panel, which is not
 	// the one that opens by default — so the test has to get there the way a
 	// human does.
 	openGalleryPanel(t, s, "Input")
 
-	before := len(intents(t, "bb133"))
+	before := len(intents(t, "ab133"))
 	btn := view.Locator(".uic-panel .action-btn").First()
 	label, err := btn.TextContent()
 	if err != nil {
@@ -346,9 +346,9 @@ func TestAUiButtonRecordsAnIntentAndAFieldWritesData(t *testing.T) {
 	if err := btn.Click(); err != nil {
 		t.Fatalf("pressing the button: %v", err)
 	}
-	eventually(t, "the intent to be recorded", func() bool { return len(intents(t, "bb133")) == before+1 })
+	eventually(t, "the intent to be recorded", func() bool { return len(intents(t, "ab133")) == before+1 })
 
-	recorded, _ := intents(t, "bb133")[before].(map[string]any)
+	recorded, _ := intents(t, "ab133")[before].(map[string]any)
 	if recorded["by"] != "human" {
 		t.Errorf("the intent was recorded by %v", recorded["by"])
 	}
@@ -370,7 +370,7 @@ func TestAUiButtonRecordsAnIntentAndAFieldWritesData(t *testing.T) {
 		t.Fatalf("blurring: %v", err)
 	}
 	eventually(t, "the field to reach state.data", func() bool {
-		return dig(readDoc(t).state(t, "bb133"), "data", "demo", "text") == written
+		return dig(readDoc(t).state(t, "ab133"), "data", "demo", "text") == written
 	})
 }
 
@@ -380,7 +380,7 @@ func TestAUiButtonRecordsAnIntentAndAFieldWritesData(t *testing.T) {
 func TestAUiTabsComponentRemembersItsPanelPerViewer(t *testing.T) {
 	covers(t, "ui", "a tabs component remembers which panel you had open, per viewer")
 
-	s := open(t, "tab=bb133")
+	s := open(t, "tab=ab133")
 
 	revBefore := readDoc(t)["rev"]
 	openGalleryPanel(t, s, "Data")
@@ -394,8 +394,8 @@ func TestAUiTabsComponentRemembersItsPanelPerViewer(t *testing.T) {
 	if _, err := s.page.Reload(); err != nil {
 		t.Fatalf("reloading: %v", err)
 	}
-	s.tab("bb133")
-	if err := expect.Locator(s.view("bb133").Locator(`.uic-tabs button[aria-selected="true"]`)).
+	s.tab("ab133")
+	if err := expect.Locator(s.view("ab133").Locator(`.uic-tabs button[aria-selected="true"]`)).
 		ToContainText("Data"); err != nil {
 		t.Errorf("the chosen panel was not remembered across a reload: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestAUiTabsComponentRemembersItsPanelPerViewer(t *testing.T) {
 // it fails as "no such element" rather than as "wrong panel".
 func openGalleryPanel(t *testing.T, s *session, label string) {
 	t.Helper()
-	btn := s.view("bb133").Locator(".uic-tabs button").Filter(playwright.LocatorFilterOptions{
+	btn := s.view("ab133").Locator(".uic-tabs button").Filter(playwright.LocatorFilterOptions{
 		HasText: label,
 	}).First()
 	if err := btn.Click(); err != nil {
@@ -425,8 +425,8 @@ func openGalleryPanel(t *testing.T, s *session, label string) {
 func TestScoringAVoteAndSeeingTheSplit(t *testing.T) {
 	covers(t, "vote", "a wide split is called out rather than averaged away")
 
-	s := open(t, "tab=bb132")
-	view := s.view("bb132")
+	s := open(t, "tab=ab132")
+	view := s.view("ab132")
 
 	row := view.Locator("tbody tr").First()
 	pips, err := row.Locator(`[data-gesture="score"]`).All()
@@ -437,16 +437,16 @@ func TestScoringAVoteAndSeeingTheSplit(t *testing.T) {
 		t.Fatalf("scoring 1: %v", err)
 	}
 	eventually(t, "the score to reach the server", func() bool {
-		return dig(readDoc(t).state(t, "bb132"), "ballots", "human", "opt-visual") != nil
+		return dig(readDoc(t).state(t, "ab132"), "ballots", "human", "opt-visual") != nil
 	})
 
 	// A second actor disagrees sharply. Through the HTTP API, because that is how
 	// the other participant in a real vote arrives.
 	d := readDoc(t)
-	ballots, _ := d.state(t, "bb132")["ballots"].(map[string]any)
+	ballots, _ := d.state(t, "ab132")["ballots"].(map[string]any)
 	if ballots == nil {
 		ballots = map[string]any{}
-		d.state(t, "bb132")["ballots"] = ballots
+		d.state(t, "ab132")["ballots"] = ballots
 	}
 	ballots["agent-e2e"] = map[string]any{"opt-visual": 5}
 	apply(t, d)
@@ -461,8 +461,8 @@ func TestScoringAVoteAndSeeingTheSplit(t *testing.T) {
 func TestSendingAChatMessageWithEnter(t *testing.T) {
 	covers(t, "chat", "Enter sends, Shift/Alt/Ctrl+Enter for a newline")
 
-	s := open(t, "tab=bb26")
-	view := s.view("bb26")
+	s := open(t, "tab=ab26")
+	view := s.view("ab26")
 
 	composer := view.Locator(".composer-input")
 	// Shift+Enter must NOT send: it is the newline, and a composer that sends on
@@ -500,7 +500,7 @@ func TestSendingAChatMessageWithEnter(t *testing.T) {
 
 func chatMessages(t *testing.T) []any {
 	t.Helper()
-	list, _ := readDoc(t).state(t, "bb26")["messages"].([]any)
+	list, _ := readDoc(t).state(t, "ab26")["messages"].([]any)
 	return list
 }
 
@@ -510,15 +510,15 @@ func TestTypingInNotesSavesAndTabIndents(t *testing.T) {
 	covers(t, "notes", "type freely")
 	covers(t, "notes", "Tab indents (Escape then Tab to leave)")
 
-	s := open(t, "tab=bb202")
-	view := s.view("bb202")
+	s := open(t, "tab=ab202")
+	view := s.view("ab202")
 
 	area := view.Locator(".notes-area")
 	if err := area.Fill("a line"); err != nil {
 		t.Fatalf("typing: %v", err)
 	}
 	eventually(t, "the note to reach the server", func() bool {
-		text, _ := readDoc(t).state(t, "bb202")["text"].(string)
+		text, _ := readDoc(t).state(t, "ab202")["text"].(string)
 		return text == "a line"
 	})
 
@@ -528,7 +528,7 @@ func TestTypingInNotesSavesAndTabIndents(t *testing.T) {
 		t.Fatalf("pressing Tab: %v", err)
 	}
 	eventually(t, "the indent to reach the server", func() bool {
-		text, _ := readDoc(t).state(t, "bb202")["text"].(string)
+		text, _ := readDoc(t).state(t, "ab202")["text"].(string)
 		return text == "a line  "
 	})
 	if err := expect.Locator(area).ToBeFocused(); err != nil {
@@ -552,8 +552,8 @@ func TestTypingInNotesSavesAndTabIndents(t *testing.T) {
 func TestAnsweringAFormFieldSaves(t *testing.T) {
 	covers(t, "form", "answer and it saves")
 
-	s := open(t, "tab=bb15")
-	view := s.view("bb15")
+	s := open(t, "tab=ab15")
+	view := s.view("ab15")
 
 	box := view.Locator(`input[type="checkbox"]`).First()
 	before := formFieldValue(t, "keep")
@@ -572,7 +572,7 @@ func TestAnsweringAFormFieldSaves(t *testing.T) {
 // window.confirm, which a webview suppresses, so the button did nothing at all
 // and said nothing about why.
 //
-// Its own scratch tab rather than bb15, because resetting the fixture's form
+// Its own scratch tab rather than ab15, because resetting the fixture's form
 // would reach into whatever TestAnsweringAFormFieldSaves is doing with it, and
 // the suite is run shuffled.
 func TestResettingAFormAsksInThePageAndCancelKeepsTheAnswers(t *testing.T) {
@@ -634,7 +634,7 @@ func TestResettingAFormAsksInThePageAndCancelKeepsTheAnswers(t *testing.T) {
 
 func formFieldValue(t *testing.T, fieldID string) any {
 	t.Helper()
-	fields, _ := readDoc(t).state(t, "bb15")["fields"].([]any)
+	fields, _ := readDoc(t).state(t, "ab15")["fields"].([]any)
 	for _, raw := range fields {
 		if f, ok := raw.(map[string]any); ok && f["id"] == fieldID {
 			return f["value"]
@@ -649,8 +649,8 @@ func TestTypingMermaidSourceSavesAndRerenders(t *testing.T) {
 	covers(t, "diagram", "type in the source editor — it saves as you type and re-renders after a short pause")
 	covers(t, "diagram", "hover a node for its mermaid key, which is what you need in order to edit the source")
 
-	s := open(t, "tab=bb14")
-	view := s.view("bb14")
+	s := open(t, "tab=ab14")
+	view := s.view("ab14")
 
 	// The mermaid bundle is committed at pkg/aboard/web/lib/, so this renders
 	// with no network at all — which is the reason it is vendored.
@@ -670,7 +670,7 @@ func TestTypingMermaidSourceSavesAndRerenders(t *testing.T) {
 		t.Fatalf("typing the source: %v", err)
 	}
 	eventually(t, "the source to reach the server", func() bool {
-		got, _ := readDoc(t).state(t, "bb14")["source"].(string)
+		got, _ := readDoc(t).state(t, "ab14")["source"].(string)
 		return got == next
 	})
 	if err := expect.Locator(view.Locator(`[data-role="status"]`)).ToContainText("rendered"); err != nil {
@@ -687,8 +687,8 @@ func TestFilteringAndUnfollowingALog(t *testing.T) {
 	covers(t, "log", "type in the filter to narrow")
 	covers(t, "log", "scroll up to stop following, scroll to the bottom to resume")
 
-	s := open(t, "tab=bb126")
-	view := s.view("bb126")
+	s := open(t, "tab=ab126")
+	view := s.view("ab126")
 
 	if err := expect.Locator(view.Locator(".log-line").First()).ToBeVisible(); err != nil {
 		t.Fatalf("the log tab shows no lines — the sidecar file is seeded in TestMain: %v", err)
@@ -734,10 +734,10 @@ func TestFilteringAndUnfollowingALog(t *testing.T) {
 func TestTheTraceTabDrawsTheJournalAndFiltersByActor(t *testing.T) {
 	covers(t, "trace", "")
 
-	s := open(t, "tab=bb127")
-	view := s.view("bb127")
+	s := open(t, "tab=ab127")
+	view := s.view("ab127")
 
-	if err := s.control("bb127", "reload").Click(); err != nil {
+	if err := s.control("ab127", "reload").Click(); err != nil {
 		t.Fatalf("reloading the trace: %v", err)
 	}
 	if err := expect.Locator(view.Locator(".lane").First()).ToBeVisible(); err != nil {

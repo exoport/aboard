@@ -22,8 +22,8 @@ func TestAStaleBaseIsRefusedEvenWhenTheTimestampIsUnchanged(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
 	first := srv.postDocument(t, `{"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"one"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"one"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	],"__by":"agent-1"}`)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first write: %d %s", first.Code, first.Body)
@@ -32,8 +32,8 @@ func TestAStaleBaseIsRefusedEvenWhenTheTimestampIsUnchanged(t *testing.T) {
 	frozen := updatedAtOf(t, srv)
 
 	second := srv.postDocument(t, `{"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"MINE"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"MINE"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	],"__by":"agent-2","__base":"`+stale+`"}`)
 	if second.Code != http.StatusOK {
 		t.Fatalf("second write: %d %s", second.Code, second.Body)
@@ -44,8 +44,8 @@ func TestAStaleBaseIsRefusedEvenWhenTheTimestampIsUnchanged(t *testing.T) {
 	freezeUpdatedAt(t, srv, frozen)
 
 	third := srv.postDocument(t, `{"tabs":[
-	  {"id":"bb1","name":"Plan","type":"notes","state":{"text":"CLOBBER"}},
-	  {"id":"bb2","name":"Queue","type":"notes","state":{"text":"two"}}
+	  {"id":"ab1","name":"Plan","type":"notes","state":{"text":"CLOBBER"}},
+	  {"id":"ab2","name":"Queue","type":"notes","state":{"text":"two"}}
 	],"__by":"agent-3","__base":"`+stale+`"}`)
 	if third.Code != http.StatusConflict {
 		t.Fatalf("a stale base was accepted with %d — the write it clobbered is gone; body: %s",
@@ -64,8 +64,8 @@ func TestEveryAcceptedWriteAdvancesTheRevision(t *testing.T) {
 	seen := map[string]bool{}
 	prev := ""
 	for i := range 5 {
-		body := `{"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"n":` +
-			string(rune('0'+i)) + `}},{"id":"bb2","name":"Queue","type":"notes"}],"__by":"agent-1"`
+		body := `{"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"n":` +
+			string(rune('0'+i)) + `}},{"id":"ab2","name":"Queue","type":"notes"}],"__by":"agent-1"`
 		if prev != "" {
 			body += `,"__base":"` + prev + `"`
 		}
@@ -98,15 +98,15 @@ func TestEveryAcceptedWriteAdvancesTheRevision(t *testing.T) {
 func TestATimestampBaseWorksOnceOnAPreRevisionBoard(t *testing.T) {
 	srv := testServer(t, twoTabs) // twoTabs has updatedAt "T0" and no rev
 
-	ok := srv.postDocument(t, `{"tabs":[{"id":"bb1","name":"Plan","type":"notes"},
-	  {"id":"bb2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":"T0"}`)
+	ok := srv.postDocument(t, `{"tabs":[{"id":"ab1","name":"Plan","type":"notes"},
+	  {"id":"ab2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":"T0"}`)
 	if ok.Code != http.StatusOK {
 		t.Fatalf("a timestamp base on a document with no rev was refused: %d %s", ok.Code, ok.Body)
 	}
 
 	stamp := updatedAtOf(t, srv)
-	again := srv.postDocument(t, `{"tabs":[{"id":"bb1","name":"Plan","type":"notes"},
-	  {"id":"bb2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":"`+stamp+`"}`)
+	again := srv.postDocument(t, `{"tabs":[{"id":"ab1","name":"Plan","type":"notes"},
+	  {"id":"ab2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":"`+stamp+`"}`)
 	if again.Code != http.StatusConflict {
 		t.Fatalf("a timestamp base was still accepted after the board had a rev: %d %s", again.Code, again.Body)
 	}
@@ -176,8 +176,8 @@ func TestANumericBaseIsCompared(t *testing.T) {
 	srv := testServer(t, twoTabs)
 
 	body := func(text, base string) string {
-		return `{"tabs":[{"id":"bb1","name":"Plan","type":"notes","state":{"text":"` + text + `"}},
-		  {"id":"bb2","name":"Queue","type":"notes"}],"__by":"agent-1"` + base + `}`
+		return `{"tabs":[{"id":"ab1","name":"Plan","type":"notes","state":{"text":"` + text + `"}},
+		  {"id":"ab2","name":"Queue","type":"notes"}],"__by":"agent-1"` + base + `}`
 	}
 	if rec := srv.postDocument(t, body("one", "")); rec.Code != http.StatusOK {
 		t.Fatalf("first write: %d %s", rec.Code, rec.Body)
@@ -202,8 +202,8 @@ func TestANumericBaseIsCompared(t *testing.T) {
 func TestAnUnusableBaseIsRefusedRatherThanIgnored(t *testing.T) {
 	srv := testServer(t, twoTabs)
 	for _, base := range []string{`true`, `{"rev":1}`, `[1]`, `1.5`} {
-		rec := srv.postDocument(t, `{"tabs":[{"id":"bb1","name":"Plan","type":"notes"},
-		  {"id":"bb2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":`+base+`}`)
+		rec := srv.postDocument(t, `{"tabs":[{"id":"ab1","name":"Plan","type":"notes"},
+		  {"id":"ab2","name":"Queue","type":"notes"}],"__by":"agent-1","__base":`+base+`}`)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("__base %s was accepted with %d, want 400: %s", base, rec.Code, rec.Body)
 		}
@@ -211,8 +211,8 @@ func TestAnUnusableBaseIsRefusedRatherThanIgnored(t *testing.T) {
 	// Absent and null both still mean "no base", which is a legitimate
 	// unconditional write (`apply --force`, a seeding script).
 	for _, doc := range []string{
-		`{"tabs":[{"id":"bb1","name":"Plan","type":"notes"},{"id":"bb2","name":"Q","type":"notes"}],"__by":"agent-1"}`,
-		`{"tabs":[{"id":"bb1","name":"Plan","type":"notes"},{"id":"bb2","name":"Q","type":"notes"}],"__by":"agent-1","__base":null}`,
+		`{"tabs":[{"id":"ab1","name":"Plan","type":"notes"},{"id":"ab2","name":"Q","type":"notes"}],"__by":"agent-1"}`,
+		`{"tabs":[{"id":"ab1","name":"Plan","type":"notes"},{"id":"ab2","name":"Q","type":"notes"}],"__by":"agent-1","__base":null}`,
 	} {
 		if rec := srv.postDocument(t, doc); rec.Code != http.StatusOK {
 			t.Errorf("an unconditional write was refused: %d %s", rec.Code, rec.Body)

@@ -35,7 +35,7 @@ import (
 // properly — the host does NOT reimplement anything, it posts
 // `{__aboard:'newtab'}` and the board opens its own sheet (see the test below).
 func TestChromeNotabsHidesTheStripAndKeepsEverythingElse(t *testing.T) {
-	s := openChrome(t, "chrome=notabs&tab=bb13")
+	s := openChrome(t, "chrome=notabs&tab=ab13")
 
 	if got := s.chrome(); got != "notabs" {
 		t.Fatalf("body[data-chrome] is %q, want \"notabs\"", got)
@@ -65,15 +65,15 @@ func TestChromeNotabsHidesTheStripAndKeepsEverythingElse(t *testing.T) {
 	}
 	// And the deep link still landed: ?chrome= composes with tab addressing
 	// rather than replacing it.
-	if err := expect.Locator(s.view("bb13")).ToBeVisible(); err != nil {
-		t.Errorf("?chrome=notabs&tab=bb13 did not activate the tab: %v", err)
+	if err := expect.Locator(s.view("ab13")).ToBeVisible(); err != nil {
+		t.Errorf("?chrome=notabs&tab=ab13 did not activate the tab: %v", err)
 	}
 }
 
 // `none` is the screenshot and bare-embedding case: the view, and nothing around
 // it.
 func TestChromeNoneHidesTheWholeHead(t *testing.T) {
-	s := openChrome(t, "chrome=none&tab=bb13")
+	s := openChrome(t, "chrome=none&tab=ab13")
 
 	if got := s.chrome(); got != "none" {
 		t.Fatalf("body[data-chrome] is %q, want \"none\"", got)
@@ -81,7 +81,7 @@ func TestChromeNoneHidesTheWholeHead(t *testing.T) {
 	if err := expect.Locator(s.page.Locator(".board-head")).ToBeHidden(); err != nil {
 		t.Errorf("the board head survived chrome=none: %v", err)
 	}
-	if err := expect.Locator(s.view("bb13")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab13")).ToBeVisible(); err != nil {
 		t.Errorf("chrome=none took the view with it: %v", err)
 	}
 }
@@ -115,8 +115,8 @@ func TestChromeAndTheDeepLinkSurviveASelfReload(t *testing.T) {
 
 	// Ready on `.topbar` rather than `#add-tab`: under notabs the + is hidden
 	// with the strip, and a hidden element is not something to wait for.
-	s := openReady(t, dev.url, "chrome=notabs#tab=bb14", ".topbar")
-	if err := expect.Locator(s.view("bb14")).ToBeVisible(); err != nil {
+	s := openReady(t, dev.url, "chrome=notabs#tab=ab14", ".topbar")
+	if err := expect.Locator(s.view("ab14")).ToBeVisible(); err != nil {
 		t.Fatalf("the deep link did not land: %v", err)
 	}
 	s.markPage()
@@ -130,7 +130,7 @@ func TestChromeAndTheDeepLinkSurviveASelfReload(t *testing.T) {
 	// showing. A reloading page has an empty tab strip for a moment, and every
 	// assertion below is one an empty page would sail through.
 	s.stripBuilt()
-	if err := expect.Locator(s.view("bb14")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab14")).ToBeVisible(); err != nil {
 		t.Errorf("the self-reload landed on a different tab than the human was reading: %v", err)
 	}
 	if err := expect.Locator(s.page.Locator("#tabs .tab:visible")).ToHaveCount(0); err != nil {
@@ -198,7 +198,7 @@ func TestTheBoardTellsAnEmbedderWhichTabIsActive(t *testing.T) {
 		return len(after) > 0 && after[len(after)-1] != first
 	})
 	moved := after[len(after)-1]
-	if !strings.HasPrefix(moved, "bb") {
+	if !strings.HasPrefix(moved, "ab") {
 		t.Errorf("the active message named %q, which is not a board id", moved)
 	}
 	// It is the tab actually on screen, not merely a different string.
@@ -522,7 +522,7 @@ func TestAHostThatNeverAnnouncedIsAskedAnyway(t *testing.T) {
 // the path everything else depends on: the read is in load(), so the board came
 // up EMPTY, and the write is in activate(), so tab switching died with it.
 func TestTheBoardWorksWhereStorageIsRefused(t *testing.T) {
-	s := open(t, "tab=bb13")
+	s := open(t, "tab=ab13")
 
 	// Applied to every document created from here on, and then the page is
 	// reloaded so the refusal is in place before the shell's first line runs.
@@ -545,16 +545,16 @@ func TestTheBoardWorksWhereStorageIsRefused(t *testing.T) {
 		t.Fatalf("the board never rendered with storage refused: %v", err)
 	}
 	// And the one gesture an embedder depends on still works.
-	if err := s.page.Locator(`#tabs .tab[data-id="bb14"]`).Click(); err != nil {
+	if err := s.page.Locator(`#tabs .tab[data-id="ab14"]`).Click(); err != nil {
 		t.Fatalf("clicking a tab: %v", err)
 	}
-	if err := expect.Locator(s.view("bb14")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab14")).ToBeVisible(); err != nil {
 		t.Errorf("tab switching died with storage: %v", err)
 	}
-	if err := s.page.Locator(`#tabs .tab[data-id="bb111"]`).Click(); err != nil {
+	if err := s.page.Locator(`#tabs .tab[data-id="ab111"]`).Click(); err != nil {
 		t.Fatalf("clicking a second tab: %v", err)
 	}
-	if err := expect.Locator(s.view("bb111")).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab111")).ToBeVisible(); err != nil {
 		t.Errorf("the second switch failed: %v", err)
 	}
 }

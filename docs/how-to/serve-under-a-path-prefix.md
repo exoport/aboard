@@ -26,7 +26,7 @@ aboard  ->  http://localhost:41237/aboard   (embedded UI, 0.1.0)
 ```
 
 Every route moves under the prefix — `/aboard/aboard.json`, `/aboard/events`,
-`/aboard/tab/bb72/html` — and the instance record and `GET /health` gain a `base` field
+`/aboard/tab/ab72/html` — and the instance record and `GET /health` gain a `base` field
 holding it:
 
 ```json

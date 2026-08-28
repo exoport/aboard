@@ -40,13 +40,13 @@ aboard init --example --gitignore          # create .aboard/, seed it, ignore it
 aboard serve                               # run the server for this project
 aboard apply --by "agent-1" < next.json    # compare-and-set write (the only safe write)
 aboard requests                            # what the human has asked for, oldest first, naming the tab
-aboard requests done bb199 --by agent-1 --note "redrew the arrow"   # say you acted on one
+aboard requests done ab199 --by agent-1 --note "redrew the arrow"   # say you acted on one
 aboard wait --by "agent-1" --timeout 10m   # block until the human presses Notify (exit 0), or give up (exit 3)
 aboard poke --by "agent-1" --note "go"     # release every waiting session, as the button does
 aboard watch                               # every change as JSON lines, until interrupted
 aboard journal --limit 40                  # recent writes: when, who, which tabs
-<cmd> 2>&1 | aboard log bb126              # stream output into a log tab
-aboard export bb32 --format csv            # one tab as text, for pasting into a document
+<cmd> 2>&1 | aboard log ab126              # stream output into a log tab
+aboard export ab32 --format csv            # one tab as text, for pasting into a document
 aboard capabilities ui                     # what this board can do — no server needed
 aboard recipes list                        # every recipe available here, with scope and shadowing
 aboard recipes show show-a-structure       # one recipe's body; --template for just the JSON skeleton
@@ -111,7 +111,7 @@ assuming a port; the port is derived from the project root.
 ## Document
 
 ```jsonc
-{ "version": 3,          // server-managed; stamped on every write
+{ "version": 1,          // server-managed; stamped on every write
   "rev": 41,             // server-managed, and the compare-and-set base
   "updatedAt": "…",      // server-managed; when, for a human reading this
   "lastEditedBy": "…",   // server-managed from --by
@@ -123,9 +123,9 @@ All five are the server's, not yours. Set none of them — a hand-written `versi
 in particular is the one mistake that blanks the entire board rather than one
 field, since the browser will not render a schema it does not know.
 
-Ids are board-wide monotonic, never reused, tagged `bb` and with no type prefix:
-`bb49`, `bb148`. Allocate with `'bb' + doc.nextId++`. Bare and legacy ids still
-parse, so `49` still resolves to `bb49`. Refer to objects as `bb49` in prose —
+Ids are board-wide monotonic, never reused, tagged `ab` and with no type prefix:
+`ab49`, `ab148`. Allocate with `'ab' + doc.nextId++`. Bare and legacy ids still
+parse, so `49` still resolves to `ab49`. Refer to objects as `ab49` in prose —
 that is what the tag is for. Form *field* ids stay semantic.
 
 ## Tab
@@ -150,7 +150,7 @@ You cannot delete a tab and cannot clear `touched`. Both are enforced server-sid
 
 ```jsonc
 { "columns": ["todo","doing","done"], "height": "72vh", "density": 130,
-  "nodes": [ { "id":"bb7", "title":"…", "parent":"bb5", "status":"doing",
+  "nodes": [ { "id":"ab7", "title":"…", "parent":"ab5", "status":"doing",
                "order":3, "note":"…", "pos":{"x":120,"y":208} } ] }
 ```
 
@@ -233,7 +233,7 @@ Gotcha: in `requirementDiagram`, quote any `text:` containing punctuation.
 ### form — typed answers
 
 ```jsonc
-{ "id": "bb46", "title": "Cutover", "intro": "Answer and I will act.",
+{ "id": "ab46", "title": "Cutover", "intro": "Answer and I will act.",
   "fields": [
     { "id":"strategy", "type":"select", "label":"…", "options":["a","b"], "value":"a" },
     { "id":"window", "type":"range", "label":"…", "min":0, "max":60, "step":5, "value":10, "hint":"…" },
@@ -253,11 +253,11 @@ The human can answer, and Reset answers.
 ```jsonc
 { "layout": "side-by-side",              // or "stacked"
   "images": [
-    { "id":"bb1", "src":"uploads/before.png", "caption":"Before", "annotatable":true,
-      "regions":[ { "id":"bb2","x":0.47,"y":0.27,"w":0.24,"h":0.19,
+    { "id":"ab1", "src":"uploads/before.png", "caption":"Before", "annotatable":true,
+      "regions":[ { "id":"ab2","x":0.47,"y":0.27,"w":0.24,"h":0.19,
                     "note":"…","color":"mark","shape":"ellipse" } ],
-      "strokes":[ { "id":"bb3","points":"0.10,0.42 0.11,0.43","note":"","color":"focus" } ] },
-    { "id":"bb4", "src":"uploads/after.png", "caption":"After", "annotatable":false } ] }
+      "strokes":[ { "id":"ab3","points":"0.10,0.42 0.11,0.43","note":"","color":"focus" } ] },
+    { "id":"ab4", "src":"uploads/after.png", "caption":"After", "annotatable":false } ] }
 ```
 
 - **Coordinates are normalized 0..1** against each image's own box, never pixels.
@@ -289,7 +289,7 @@ top level) is still read and migrated on load.
 
 ```jsonc
 { "height": "62vh",
-  "messages": [ { "id":"bb5", "at":"2026-08-22T09:14:00Z", "by":"agent-1", "text":"…" } ] }
+  "messages": [ { "id":"ab5", "at":"2026-08-22T09:14:00Z", "by":"agent-1", "text":"…" } ] }
 ```
 
 For two agents coordinating where the human can watch and interject. Append only
@@ -397,7 +397,7 @@ also shows the stored `data`).
                { "id":"cost", "label":"Cost", "type":"number" },
                { "id":"ok",   "label":"Done", "type":"checkbox" },
                { "id":"why",  "label":"Why",  "type":"longtext" } ],
-  "rows": [ { "id":"bb51", "file":"main.go", "risk":"high", "cost":3, "ok":false, "why":"…" } ] }
+  "rows": [ { "id":"ab51", "file":"main.go", "risk":"high", "cost":3, "ok":false, "why":"…" } ] }
 ```
 
 Five cell types. The human edits in place (saves as they type), sorts by clicking
@@ -409,9 +409,9 @@ into `notes`.**
 ### gate — allow, deny, or "not like that"
 
 ```jsonc
-{ "pending": [ { "id":"bb129", "title":"Delete the staging bucket", "risk":"high",
+{ "pending": [ { "id":"ab129", "title":"Delete the staging bucket", "risk":"high",
                  "detail":"…", "command":"aws s3 rb s3://…", "by":"agent-1" } ],
-  "decided": [ { "id":"bb129", "title":"…", "verdict":"edit", "reason":"keep the logs",
+  "decided": [ { "id":"ab129", "title":"…", "verdict":"edit", "reason":"keep the logs",
                  "editedTo":"aws s3 rm s3://…/tmp", "at":"…", "by":"human" } ] }
 ```
 
@@ -426,13 +426,13 @@ they gated something that already ran:
 
 ```sh
 aboard apply --by "agent-1" < next.json          # add to state.pending
-aboard wait --by "agent-1" --for "answer bb128"  # block until a human decides
+aboard wait --by "agent-1" --for "answer ab128"  # block until a human decides
 ```
 
 ### log — output as it happens
 
 ```jsonc
-{ "source": "bb126", "tail": 400, "follow": true, "height": "46vh" }
+{ "source": "ab126", "tail": 400, "follow": true, "height": "46vh" }
 ```
 
 The lines are NOT in the state document — they live in a sidecar file the server
@@ -440,7 +440,7 @@ owns (`.aboard/run/logs/<tab>.log`), because the document is rewritten whole on
 every write. Feed it by piping, and the tab picks it up within two seconds:
 
 ```sh
-go test ./... 2>&1 | aboard log bb126
+go test ./... 2>&1 | aboard log ab126
 ```
 
 The human can follow (scrolling up pauses it, scrolling to the bottom resumes),
@@ -512,9 +512,9 @@ interaction itself is the point.**
 ### stack — several renderers in one tab
 
 ```jsonc
-{ "blocks": [ { "id":"bb6", "type":"dag", "title":"Dependencies", "state":{ … } },
-              { "id":"bb7", "type":"form", "title":"Decide", "state":{ … } },
-              { "id":"bb8", "type":"markup", "title":"On screen", "state":{ … } } ] }
+{ "blocks": [ { "id":"ab6", "type":"dag", "title":"Dependencies", "state":{ … } },
+              { "id":"ab7", "type":"form", "title":"Decide", "state":{ … } },
+              { "id":"ab8", "type":"markup", "title":"On screen", "state":{ … } } ] }
 ```
 
 Blocks render top to bottom, each a full renderer with its own state, each
