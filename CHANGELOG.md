@@ -269,6 +269,17 @@ lines and the ones with no user-visible surface — the suite, the extension —
   Moving it onto the picture as an overlay stopped the shuffling and was still clutter, so
   it is gone. How to pan lives where it costs nothing: the zoom readout's tooltip, and the
   help panel, which is generated from the declared gesture in `views/markup.spec.json`.
+- **fix: `side-by-side` means a PAIR, and several images make several pairs.** It set one
+  grid column per image, so six screenshots became six columns — and now that a slice
+  carries a marks table as well as a picture, a third column is unreadable before it is
+  even narrow. Two columns, wrapping.
+- **fix: the blocked-clipboard dialog leads with something that works.** Its heading said
+  "Right-click the picture to copy or save it" — and in a VS Code webview the host owns
+  the context menu and offers no *Copy image*, so the dialog raised to explain one thing
+  that appeared to do nothing was itself a second thing that appeared to do nothing. The
+  heading states the situation, **Add it to this tab** is the primary button, and
+  right-click is named as the browser option it is. Adding also reports where the file
+  landed (`uploads/…`), which is what makes a closeup reachable from outside the board.
 - **feat: a crop can be added to the tab as a new image, with no clipboard involved.**
   This is what the clipboard was ever for here — *"copy a rectangle so it could then be
   pasted as a new image, like a closeup"* — and it is the one route that works in a VS

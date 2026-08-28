@@ -486,8 +486,16 @@ func TestARefusedCopyOffersThePictureInstead(t *testing.T) {
 	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
 		t.Fatalf("a refused copy offered nothing: %v", err)
 	}
-	if err := expect.Locator(dialog).ToContainText("Right-click"); err != nil {
-		t.Errorf("the dialog does not say what to do with the picture: %v", err)
+	// A BUTTON that works everywhere, not an instruction that does not. The
+	// heading said "Right-click the picture" until 2026-08-28, and in a VS Code
+	// webview the host owns the context menu and offers no "Copy image" — so the
+	// dialog raised to explain one thing that appeared to do nothing was itself a
+	// second thing that appeared to do nothing.
+	if err := expect.Locator(dialog.GetByText("Add it to this tab")).ToBeVisible(); err != nil {
+		t.Errorf("the dialog offers no action that works here: %v", err)
+	}
+	if err := expect.Locator(dialog.Locator(".panel-head")).Not().ToContainText("Right-click"); err != nil {
+		t.Errorf("the dialog still leads with right-click, which a webview cannot do: %v", err)
 	}
 	if err := expect.Locator(dialog).ToContainText("permissions policy"); err != nil {
 		t.Errorf("the dialog does not carry the refusal it is standing in for: %v", err)
@@ -810,6 +818,68 @@ func TestZoomingDoesNotMoveTheImageButtons(t *testing.T) {
 			t.Errorf("returning to Fit moved the head-row buttons: %v became %v", before, fitted)
 			break
 		}
+	}
+}
+
+// side-by-side means a PAIR, and several images make several pairs.
+//
+// It set one grid column per image, so six screenshots became six columns —
+// and a slice now carries a marks table as well as a picture, so a third column
+// is unreadable before it is even narrow.
+func TestSideBySideArrangesImagesInPairs(t *testing.T) {
+	id := makeScratchTab(t, "Pairs")
+
+	const count = 6
+	images := make([]any, 0, count)
+	for i := range count {
+		src := "assets/mock-screen.svg"
+		if i%2 == 1 {
+			src = "assets/mock-screen-after.svg"
+		}
+		images = append(images, map[string]any{
+			"id": fmt.Sprintf("im%d", i), "src": src,
+			"caption": fmt.Sprintf("pair-%d-%d.svg", i/2+1, i%2+1),
+		})
+	}
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{"layout": "side-by-side", "images": images}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if err := expect.Locator(view.Locator(".markup-figure")).ToHaveCount(count); err != nil {
+		t.Fatalf("want %d slices: %v", count, err)
+	}
+
+	// Two per row, three rows: read off the left edges, which is what a column
+	// actually is. A count of distinct edges IS the column count.
+	var lefts []float64
+	s.evalJSON(&lefts, `(q) => [...document.querySelectorAll(q + ' .markup-figure')]
+		.map((f) => Math.round(f.getBoundingClientRect().left))`, `[data-tab="`+id+`"]`)
+	if len(lefts) != count {
+		t.Fatalf("measured %d slices, want %d", len(lefts), count)
+	}
+	columns := map[float64]bool{}
+	for _, x := range lefts {
+		columns[x] = true
+	}
+	if len(columns) != 2 {
+		t.Errorf("the six slices sit in %d columns (left edges %v) — side by side means two", len(columns), lefts)
+	}
+
+	// And they pair in order: 0 and 1 share a row, 2 and 3 the next.
+	var tops []float64
+	s.evalJSON(&tops, `(q) => [...document.querySelectorAll(q + ' .markup-figure')]
+		.map((f) => Math.round(f.getBoundingClientRect().top))`, `[data-tab="`+id+`"]`)
+	for i := 0; i < count; i += 2 {
+		if tops[i] != tops[i+1] {
+			t.Errorf("slices %d and %d are not on the same row (tops %v)", i, i+1, tops)
+			break
+		}
+	}
+	if tops[0] == tops[2] {
+		t.Errorf("all six slices are on one row (tops %v) — the pairs did not wrap", tops)
 	}
 }
 

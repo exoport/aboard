@@ -311,13 +311,22 @@ export function mountMarkup(root, ctx) {
   const imageDialogImg = document.createElement('img');
   imageDialogImg.className = 'markup-offer-img';
   imageDialogEl.append(imageDialogImg);
+
+  const imageDialogAlt = document.createElement('p');
+  imageDialogAlt.className = 'hint';
+  imageDialogAlt.textContent = 'In a browser you can also right-click the picture to copy or save it. '
+    + 'A VS Code panel has its own context menu and does not offer that.';
+  imageDialogEl.append(imageDialogAlt);
   const imageDialogActions = document.createElement('div');
   imageDialogActions.className = 'dialog-actions';
   // The way out that needs no clipboard at all, offered where the refusal is
   // read rather than only in a toolbar the human has just been let down by.
-  const imageDialogAdd = button('Add it to this tab instead', '', { onClick: () => { void cropToImage(); } });
+  const imageDialogAdd = button('Add it to this tab', '', {
+    className: 'primary-btn',
+    onClick: () => { void cropToImage(); },
+  });
+  imageDialogActions.append(button('Close', '', { onClick: () => imageDialogEl.close() }));
   imageDialogActions.append(imageDialogAdd);
-  imageDialogActions.append(button('Close', '', { className: 'primary-btn', onClick: () => imageDialogEl.close() }));
   imageDialogEl.append(imageDialogActions);
   panel.append(imageDialogEl);
 
@@ -750,7 +759,7 @@ export function mountMarkup(root, ctx) {
   async function addImageFile(file) {
     if (!file || !/^image\//.test(file.type || '')) {
       intakeSay('that is not an image', true);
-      return;
+      return undefined;
     }
     intakeSay('uploading…');
     let payload;
@@ -761,10 +770,10 @@ export function mountMarkup(root, ctx) {
         body: file,
       });
       payload = await res.json().catch(() => ({}));
-      if (!res.ok) { intakeSay(payload.error || 'upload refused', true); return; }
+      if (!res.ok) { intakeSay(payload.error || 'upload refused', true); return undefined; }
     } catch {
       intakeSay('upload failed — is the server running?', true);
-      return;
+      return undefined;
     }
 
     const s = ensureState();
@@ -779,6 +788,7 @@ export function mountMarkup(root, ctx) {
     if (s.images.length > 1 && !s.layout) s.layout = 'side-by-side';
     intakeSay('added — draw on it to point at something');
     ctx.save({ immediate: true }).then(render);
+    return payload.url;
   }
 
   // Paste only counts while this tab is the one on screen: a Ctrl+V meant for a
@@ -1211,7 +1221,11 @@ export function mountMarkup(root, ctx) {
       return;
     }
     imagesWrapEl.dataset.layout = state.layout;
-    imagesWrapEl.style.setProperty('--markup-cols', String(state.images.length));
+    // TWO columns, whatever the image count. It used to be one column per image,
+    // so six screenshots became six columns of nothing — and now that a slice
+    // carries a marks table as well as a picture, a third column is unreadable
+    // before it is narrow. "Side by side" means a pair; several pairs stack.
+    imagesWrapEl.style.setProperty('--markup-cols', String(Math.min(2, state.images.length || 1)));
 
     const seen = new Set();
     let order = 0;
@@ -2022,10 +2036,17 @@ export function mountMarkup(root, ctx) {
   // frame is the next thing a host can refuse, and this asks permission for
   // nothing at all.
   function offerImage(canvas, what, err) {
-    imageDialogTitle.textContent = 'Right-click the picture to copy or save it';
+    // The title no longer says "right-click", and that is the point of this
+    // change. Right-click IS the answer in a browser; in a VS Code webview the
+    // host owns the context menu and offers no "Copy image", so the instruction
+    // was one more thing that appeared to do nothing — reported 2026-08-28, and
+    // exactly the failure this whole dialog exists to avoid.
+    //
+    // So the heading states the situation, the ACTION that works everywhere is a
+    // button, and right-click is mentioned as the browser option it is.
+    imageDialogTitle.textContent = 'The clipboard is blocked in this window';
     imageDialogAdd.hidden = cropSel.size === 0;
-    imageDialogWhy.textContent = 'The clipboard could not be written to directly: '
-      + (err && err.message ? err.message : 'it is not permitted in this window')
+    imageDialogWhy.textContent = (err && err.message ? err.message : 'the clipboard is not permitted here')
       + ' — this is the same ' + what + ', ' + canvas.width + '×' + canvas.height + '.';
     imageDialogImg.src = canvas.toDataURL('image/png');
     imageDialogImg.alt = 'The ' + what + ' you asked to copy';
@@ -2066,8 +2087,15 @@ export function mountMarkup(root, ctx) {
     const base = (source && source.caption ? source.caption.replace(/\.[a-z0-9]+$/i, '') : 'image');
     const file = new File([blob], base + '-closeup.png', { type: 'image/png' });
     cropSel.delete(imageId);
-    copyStatus(`added as a new image — ${canvas.width}×${canvas.height}`);
-    await addImageFile(file);
+    copyStatus(`adding as a new image — ${canvas.width}×${canvas.height}`);
+    const url = await addImageFile(file);
+    // The path as well as the picture. An upload is a real file under
+    // `.aboard/uploads/`, so saying where it went is what makes the closeup
+    // reachable from outside the board at all — which is the job the clipboard
+    // was doing before a permissions policy took it away.
+    copyStatus(url
+      ? `added as a new image — ${canvas.width}×${canvas.height}, saved at ${url}`
+      : `added as a new image — ${canvas.width}×${canvas.height}`);
     if (imageDialogEl.open) imageDialogEl.close();
   }
 
