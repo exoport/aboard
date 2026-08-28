@@ -1,6 +1,8 @@
 package aboard
 
 import (
+	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -153,6 +155,114 @@ func TestUnstampedProvenanceComesFromGoBuildInfo(t *testing.T) {
 
 // The linker stamp still beats everything Go recorded: a released binary must
 // report its tag, not the pseudo-version of the commit it was cut from.
+// EMBEDDED: the board is a dependency of somebody else's binary.
+//
+// Every row here reports the HOST in `Main` and the VCS settings, which is what
+// Go actually records when `ape aboard` runs. Before 2026-08-28 the resolver read
+// those as its own and an embedded board called itself by the host's version —
+// found by mounting the tree in a stand-in host, not by any test, because every
+// hand-built BuildInfo in this file left Main.Path empty and so looked standalone.
+func TestAHostedBoardReportsItsOwnModuleVersion(t *testing.T) {
+	const host = "github.com/exoport/apex_process_ape"
+
+	cases := []struct {
+		name          string
+		info          *debug.BuildInfo
+		want          string
+		wantNoCommit  bool
+		wantBuildDate string
+	}{
+		{
+			name: "the host installed at a tag does not lend the board its version",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Path: host, Version: "v1.2.3"},
+				Deps: []*debug.Module{{Path: modulePath, Version: "v0.1.0"}},
+			},
+			want:         "0.1.0",
+			wantNoCommit: true,
+		},
+		{
+			name: "the host built from a checkout does not lend the board its commit",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Path: host, Version: "(devel)"},
+				Deps: []*debug.Module{{Path: modulePath, Version: "v0.2.0"}},
+				Settings: []debug.BuildSetting{
+					{Key: "vcs.revision", Value: "f67e682b8f8a9c1d2e3f4a5b6c7d8e9f00112233"},
+					{Key: "vcs.time", Value: "2026-08-28T12:00:00Z"},
+				},
+			},
+			want:          "0.2.0",
+			wantNoCommit:  true,
+			wantBuildDate: "2026-08-28T12:00:00Z",
+		},
+		{
+			name: "a replace directive during development is honestly dev",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Path: host, Version: "(devel)"},
+				Deps: []*debug.Module{{
+					Path:    modulePath,
+					Version: "v0.1.0",
+					Replace: &debug.Module{Path: "../aboard", Version: "(devel)"},
+				}},
+			},
+			want:         devVersion,
+			wantNoCommit: true,
+		},
+		{
+			name: "a host that does not list us at all is dev, never the host's version",
+			info: &debug.BuildInfo{
+				Main: debug.Module{Path: host, Version: "v9.9.9"},
+				Deps: []*debug.Module{{Path: "github.com/spf13/cobra", Version: "v1.10.1"}},
+			},
+			want:         devVersion,
+			wantNoCommit: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveBuild("", "", "", tc.info, true)
+			if got.Version != tc.want {
+				t.Errorf("Version = %q, want %q", got.Version, tc.want)
+			}
+			if tc.wantNoCommit && got.GitCommit != "" {
+				t.Errorf("GitCommit = %q, want empty — an embedded board has no checkout, "+
+					"and the host's commit is not its provenance", got.GitCommit)
+			}
+			if tc.wantBuildDate != "" && got.BuildDate != tc.wantBuildDate {
+				t.Errorf("BuildDate = %q, want %q — the binary on disk IS the host's, so its "+
+					"build time is the board's too", got.BuildDate, tc.wantBuildDate)
+			}
+		})
+	}
+}
+
+// A stamped build stays stamped even when embedded: if a host goes to the trouble
+// of passing our -X flags, that is more authoritative than any inference.
+func TestALinkerStampBeatsTheHostsBuildInfo(t *testing.T) {
+	info := &debug.BuildInfo{
+		Main: debug.Module{Path: "github.com/exoport/apex_process_ape", Version: "v1.2.3"},
+		Deps: []*debug.Module{{Path: modulePath, Version: "v0.1.0"}},
+	}
+	if got := resolveBuild("9.9.9", "", "", info, true).Version; got != "9.9.9" {
+		t.Errorf("Version = %q, want 9.9.9", got)
+	}
+}
+
+// The module path is a constant that has to keep naming this module.
+func TestTheModulePathMatchesGoMod(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
+	if err != nil {
+		t.Fatalf("reading go.mod: %v", err)
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(string(body)), "\n")
+	want := strings.TrimSpace(strings.TrimPrefix(first, "module"))
+	if want != modulePath {
+		t.Errorf("go.mod says module %q, version.go says %q — an embedded board looks itself up "+
+			"by this string and would silently stop finding itself", want, modulePath)
+	}
+}
+
 func TestALinkerStampBeatsBuildInfo(t *testing.T) {
 	info := &debug.BuildInfo{
 		Main:     debug.Module{Version: "v0.0.0-20260826031230-f67e682b8f8a"},

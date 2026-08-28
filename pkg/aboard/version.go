@@ -37,6 +37,15 @@ import (
 // a version the resolver had already decided was meaningless.
 const devVersion = "dev"
 
+// modulePath is this module's own path, and it is here because an embedded board
+// has to be able to FIND ITSELF in somebody else's build info.
+//
+// A constant rather than something derived: the value has to survive being read
+// out of a binary that is not ours, where nothing else in the process knows or
+// cares what this module is called. `TestTheModulePathMatchesGoMod` compares it
+// against `go.mod`, so it cannot drift from the thing it names.
+const modulePath = "github.com/exoport/aboard"
+
 // The linker stamps these. Left empty for every build that is not a release or a
 // `make build`, which is the normal case.
 var (
@@ -60,6 +69,16 @@ type BuildIdentity struct {
 // Build resolves the identity in four steps, most authoritative first: the
 // linker stamps, then Go's own build info for THIS module (VCS revision, then
 // module version), then "dev".
+//
+// "For THIS module" is the whole subtlety, and it is why this file differs from
+// ape's `internal/buildident`, which it otherwise mirrors. ape is always the main
+// module — it is a binary and nothing embeds it — so `info.Main` IS its identity.
+// aboard is a LIBRARY that another CLI mounts (`ape aboard <cmd>`), and there
+// `info.Main` is the host: its version, its commit, its build time. Reported
+// unchanged, an embedded board would call itself by the host's version, silently
+// and plausibly. Measured on 2026-08-28 by mounting the tree in a stand-in host:
+// it reported `aboard dev`, and a host installed at a tag would have made it
+// report the HOST's tag as aboard's own.
 //
 // Go stamps the VCS revision into a plain `go build`, so an unstamped local build
 // still reports the commit it came from, with "+dirty" when the tree had
@@ -96,6 +115,15 @@ func resolveBuild(version, buildDate, gitCommit string, info *debug.BuildInfo, o
 			id.Version = devVersion
 		}
 		return id
+	}
+
+	// Embedded in somebody else's binary. Everything in `info.Main` and in the VCS
+	// settings describes the HOST, so the only honest source for a version is this
+	// module's own entry in the dependency list — and there is no honest source for
+	// a commit at all, because the source came from a module zip rather than from a
+	// checkout. An empty GitCommit is the right answer, not a gap to fill.
+	if hosted(info) {
+		return hostedBuild(id, info)
 	}
 
 	rev, dirty := "", false
@@ -139,6 +167,62 @@ func resolveBuild(version, buildDate, gitCommit string, info *debug.BuildInfo, o
 	}
 	id.Version = short
 	return id
+}
+
+// hosted reports whether this module is a dependency of the running binary
+// rather than the binary itself.
+//
+// An empty Main.Path means "no module information", which is a plain `go test`
+// binary and every hand-built BuildInfo in the tests — standalone, not hosted.
+// Defaulting the unknown case to standalone is deliberate: it keeps the answer
+// wrong only in the direction that was already true before this existed.
+func hosted(info *debug.BuildInfo) bool {
+	return info.Main.Path != "" && info.Main.Path != modulePath
+}
+
+// hostedBuild is the identity of an embedded board.
+//
+// BuildDate is the one field the host can legitimately answer: the binary on disk
+// IS the host's binary, so when the host was built is when this board was built.
+// The version comes from our own dependency entry — through `Replace`, so a
+// `replace` directive during development names the replacement rather than the
+// requirement it stood in for.
+func hostedBuild(id BuildIdentity, info *debug.BuildInfo) BuildIdentity {
+	if id.BuildDate == "" {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.time" {
+				id.BuildDate = setting.Value
+				break
+			}
+		}
+	}
+	if id.Version == "" {
+		id.Version = depVersion(info, modulePath)
+	}
+	if id.Version == "" {
+		id.Version = devVersion
+	}
+	return id
+}
+
+// depVersion is the version one dependency was built at, or "" when there is
+// nothing true to say — an unreplaced module with no version, or a `replace`
+// pointing at a directory, which carries "(devel)" and means exactly "dev".
+func depVersion(info *debug.BuildInfo, path string) string {
+	for _, dep := range info.Deps {
+		if dep == nil || dep.Path != path {
+			continue
+		}
+		v := dep.Version
+		if dep.Replace != nil {
+			v = dep.Replace.Version
+		}
+		if v == "" || v == "(devel)" {
+			return ""
+		}
+		return strings.TrimPrefix(v, "v")
+	}
+	return ""
 }
 
 // VersionString is the one-word identity: what the top bar shows, what /health
