@@ -269,6 +269,17 @@ lines and the ones with no user-visible surface — the suite, the extension —
   Moving it onto the picture as an overlay stopped the shuffling and was still clutter, so
   it is gone. How to pan lives where it costs nothing: the zoom readout's tooltip, and the
   help panel, which is generated from the declared gesture in `views/markup.spec.json`.
+- **fix: the blocked-clipboard dialog adds the picture it is SHOWING.** *Copy as seen*
+  displayed a region with its marks drawn on and then added the same region **without**
+  them, because the button re-rendered a clean crop from the selection rather than using
+  the picture in front of you; *Copy view* had no selection at all, so the button was
+  hidden for exactly the case where it is the only way out. Both fixed by the same change.
+  The toolbar's own **Add as image** still makes a clean closeup on purpose — that button
+  is about the crop, this one is about what is on screen.
+- **fix: hovering an image's name shows its id.** It said "Rename this image", which is
+  the affordance and not the identity. The id is what you say to an agent — *"the image
+  bb214"* — and the caption is a label the human is free to change, so the two are not
+  interchangeable. It says both now.
 - **feat: the board asks its HOST to copy an image when it cannot do it itself.** A VS
   Code webview blocks the Clipboard API and VS Code offers no way to lift it — but the
   extension host is a Node process and can run `xclip`. So a refused copy now posts

@@ -321,9 +321,9 @@ export function mountMarkup(root, ctx) {
   imageDialogActions.className = 'dialog-actions';
   // The way out that needs no clipboard at all, offered where the refusal is
   // read rather than only in a toolbar the human has just been let down by.
-  const imageDialogAdd = button('Add it to this tab', '', {
+  const imageDialogAdd = button('Add this picture to the tab', '', {
     className: 'primary-btn',
-    onClick: () => { void cropToImage(); },
+    onClick: () => { void addOffered(); },
   });
   imageDialogActions.append(button('Close', '', { onClick: () => imageDialogEl.close() }));
   imageDialogActions.append(imageDialogAdd);
@@ -1510,7 +1510,11 @@ export function mountMarkup(root, ctx) {
   function updateFigure(rec, im) {
     rec.capEl.textContent = im.caption || '(unnamed)';
     rec.capEl.hidden = false;
-    rec.capEl.title = 'Rename this image';
+    // The id first, because that is what you say to an agent — "the image bb214"
+    // — and the caption is a label the human is free to change. Same discipline
+    // as a mark's badge: the thing on screen and the thing in a sentence are one
+    // identifier. Reported 2026-08-28 as wanting the id on hover.
+    rec.capEl.title = im.id + ' · click to rename';
     rec.capEl.style.cursor = 'text';
     if (!rec.capBound) {
       rec.capBound = true;
@@ -2046,7 +2050,7 @@ export function mountMarkup(root, ctx) {
         : 'the clipboard is not available here — copy it from the picture instead', true);
       // The host's reason if it gave one — "xclip is not installed", which the
       // human can act on — and the browser's only if nobody answered.
-      offerImage(canvas, what, (viaHost && viaHost.error) ? { message: viaHost.error } : err);
+      offerImage(canvas, what, (viaHost && viaHost.error) ? { message: viaHost.error } : err, imageId);
     }
   }
 
@@ -2102,7 +2106,16 @@ export function mountMarkup(root, ctx) {
   // right-clicking. Deliberately NOT a download — a download from a sandboxed
   // frame is the next thing a host can refuse, and this asks permission for
   // nothing at all.
-  function offerImage(canvas, what, err) {
+  // What the dialog is currently holding, so the button under it can add THAT.
+  //
+  // It used to re-derive a clean crop from the selection, which was right for
+  // "Copy region" by accident and wrong for everything else: "Copy as seen"
+  // showed a picture WITH marks and then added one without them, and "Copy view"
+  // had no selection at all so the button was hidden. Reported 2026-08-28.
+  let offered = null;
+
+  function offerImage(canvas, what, err, imageId) {
+    offered = { canvas, what, imageId };
     // The title no longer says "right-click", and that is the point of this
     // change. Right-click IS the answer in a browser; in a VS Code webview the
     // host owns the context menu and offers no "Copy image", so the instruction
@@ -2112,7 +2125,9 @@ export function mountMarkup(root, ctx) {
     // So the heading states the situation, the ACTION that works everywhere is a
     // button, and right-click is mentioned as the browser option it is.
     imageDialogTitle.textContent = 'The clipboard is blocked in this window';
-    imageDialogAdd.hidden = cropSel.size === 0;
+    // Always offered now. There is a picture on the dialog either way, and "put
+    // this on the tab" is a sensible thing to do with any of them.
+    imageDialogAdd.hidden = false;
     imageDialogWhy.textContent = (err && err.message ? err.message : 'the clipboard is not permitted here')
       + ' — this is the same ' + what + ', ' + canvas.width + '×' + canvas.height + '.';
     imageDialogImg.src = canvas.toDataURL('image/png');
@@ -2164,6 +2179,36 @@ export function mountMarkup(root, ctx) {
       ? `added as a new image — ${canvas.width}×${canvas.height}, saved at ${url}`
       : `added as a new image — ${canvas.width}×${canvas.height}`);
     if (imageDialogEl.open) imageDialogEl.close();
+  }
+
+  // Add the picture the dialog is showing, exactly as it is showing it.
+  //
+  // Not a re-render from the selection: the human has just been shown a picture
+  // and told they can put it on the tab, and adding a DIFFERENT one — the same
+  // region without its marks — is the kind of quiet mismatch nobody thinks to
+  // check. The toolbar's own "Add as image" still makes a clean closeup on
+  // purpose; that button is about the crop, this one is about what is on screen.
+  async function addOffered() {
+    if (!offered) return;
+    const { canvas, what, imageId } = offered;
+    copyStatus('adding…');
+    let blob;
+    try {
+      blob = await canvasBlob(canvas);
+    } catch {
+      copyStatus('that picture cannot be read back', true);
+      return;
+    }
+    const source = readState().images.find((x) => x.id === imageId);
+    const base = source && source.caption ? source.caption.replace(/\.[a-z0-9]+$/i, '') : 'image';
+    const tag = what.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'copy';
+    const file = new File([blob], `${base}-${tag}.png`, { type: 'image/png' });
+    if (imageId) cropSel.delete(imageId);
+    imageDialogEl.close();
+    const url = await addImageFile(file);
+    copyStatus(url
+      ? `added as a new image — ${canvas.width}×${canvas.height}, saved at ${url}`
+      : `added as a new image — ${canvas.width}×${canvas.height}`);
   }
 
   function copyCrop(withMarks) {

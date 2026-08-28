@@ -491,7 +491,7 @@ func TestARefusedCopyOffersThePictureInstead(t *testing.T) {
 	// webview the host owns the context menu and offers no "Copy image" — so the
 	// dialog raised to explain one thing that appeared to do nothing was itself a
 	// second thing that appeared to do nothing.
-	if err := expect.Locator(dialog.GetByText("Add it to this tab")).ToBeVisible(); err != nil {
+	if err := expect.Locator(dialog.GetByText("Add this picture to the tab")).ToBeVisible(); err != nil {
 		t.Errorf("the dialog offers no action that works here: %v", err)
 	}
 	if err := expect.Locator(dialog.Locator(".panel-head")).Not().ToContainText("Right-click"); err != nil {
@@ -880,6 +880,167 @@ func TestSideBySideArrangesImagesInPairs(t *testing.T) {
 	}
 	if tops[0] == tops[2] {
 		t.Errorf("all six slices are on one row (tops %v) — the pairs did not wrap", tops)
+	}
+}
+
+// The dialog adds the picture it is SHOWING, not one it re-derives.
+//
+// "Copy as seen" showed a region with its marks drawn on and then added the same
+// region WITHOUT them, because the button re-rendered a clean crop from the
+// selection. "Copy view" had no selection at all, so the button was hidden
+// entirely. Both reported 2026-08-28.
+//
+// The picture is compared by its own bytes: the offered <img> and the image that
+// lands on the tab have to be the same PNG, which is the only statement of "what
+// you saw is what you got" that cannot be satisfied by accident.
+func TestTheDialogAddsThePictureItIsShowing(t *testing.T) {
+	id := makeScratchTab(t, "As seen")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{
+			"id": "one", "src": "assets/mock-screen.svg", "caption": "source.svg",
+			"regions": []any{map[string]any{"id": "bb601", "x": 0.45, "y": 0.45, "w": 0.3, "h": 0.3, "color": "danger"}},
+		}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if _, err := s.page.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked for this test')) },
+		});
+	}`, nil); err != nil {
+		t.Fatalf("blocking the clipboard: %v", err)
+	}
+
+	// A crop that OVERLAPS the mark, so "as seen" and "region" genuinely differ.
+	if err := view.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	svg := view.Locator(".markup-svg").First()
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	s.dragPointer(
+		point{box.X + box.Width*0.4, box.Y + box.Height*0.4},
+		point{box.X + box.Width*0.85, box.Y + box.Height*0.85},
+	)
+	if err := view.Locator(`[data-gesture="copy-seen"]`).Click(); err != nil {
+		t.Fatalf("clicking Copy as seen: %v", err)
+	}
+
+	dialog := view.Locator(".markup-image-dialog[open]")
+	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+		t.Fatalf("no dialog after a refused Copy as seen: %v", err)
+	}
+	var shown string
+	s.evalJSON(&shown, `(q) => document.querySelector(q).getAttribute('src')`,
+		`[data-tab="`+id+`"] .markup-offer-img`)
+
+	if err := dialog.GetByText("Add this picture to the tab").Click(); err != nil {
+		t.Fatalf("clicking the dialog's add button: %v", err)
+	}
+	eventually(t, "the picture to reach the server", func() bool {
+		images, _ := readDoc(t).state(t, id)["images"].([]any)
+		return len(images) == 2
+	})
+	images, _ := readDoc(t).state(t, id)["images"].([]any)
+	added, _ := images[1].(map[string]any)
+	src, _ := added["src"].(string)
+
+	// The uploaded bytes, as a data URL, against the ones the dialog displayed.
+	var uploaded string
+	s.evalJSON(&uploaded, `async (u) => {
+		const res = await fetch(u);
+		const blob = await res.blob();
+		return await new Promise((resolve) => {
+			const r = new FileReader();
+			r.onload = () => resolve(String(r.result));
+			r.readAsDataURL(blob);
+		});
+	}`, boardURL+"/"+src)
+	if uploaded != shown {
+		t.Errorf("the tab got a different picture from the one the dialog showed (%d bytes vs %d)",
+			len(uploaded), len(shown))
+	}
+}
+
+// Copy view offers the same button. It has no crop selection, and the button was
+// keyed off the selection existing, so it was hidden for exactly the case where
+// the clipboard is blocked and this is the only way out.
+func TestTheDialogOffersToAddAViewToo(t *testing.T) {
+	id := makeScratchTab(t, "View add")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "source.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if _, err := s.page.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked for this test')) },
+		});
+	}`, nil); err != nil {
+		t.Fatalf("blocking the clipboard: %v", err)
+	}
+
+	if err := view.Locator(`.markup-figure[data-image-id="one"] [data-gesture="copy-view"]`).Click(); err != nil {
+		t.Fatalf("clicking Copy view: %v", err)
+	}
+	dialog := view.Locator(".markup-image-dialog[open]")
+	add := dialog.GetByText("Add this picture to the tab")
+	if err := expect.Locator(add).ToBeVisible(); err != nil {
+		t.Fatalf("Copy view's dialog offers no way to add it: %v", err)
+	}
+	if err := add.Click(); err != nil {
+		t.Fatalf("adding the view: %v", err)
+	}
+	eventually(t, "the view to reach the server", func() bool {
+		images, _ := readDoc(t).state(t, id)["images"].([]any)
+		return len(images) == 2
+	})
+	images, _ := readDoc(t).state(t, id)["images"].([]any)
+	added, _ := images[1].(map[string]any)
+	if caption, _ := added["caption"].(string); !strings.Contains(caption, "view") {
+		t.Errorf("the added picture is captioned %q — it should say it was the view", caption)
+	}
+}
+
+// The image caption names the image's ID on hover. It is what you say to an
+// agent — "the image bb214" — and the caption itself is a label the human is
+// free to change, so the two are not interchangeable.
+func TestHoveringAnImageNameShowsItsId(t *testing.T) {
+	id := makeScratchTab(t, "Named image")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "bb777", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	title, err := s.view(id).Locator(".markup-figure-caption").First().GetAttribute("title")
+	if err != nil {
+		t.Fatalf("reading the caption's title: %v", err)
+	}
+	if !strings.Contains(title, "bb777") {
+		t.Errorf("hovering the image name shows %q, which does not name the image", title)
+	}
+	// The rename affordance survives: the title is the only thing saying the
+	// caption is clickable at all.
+	if !strings.Contains(strings.ToLower(title), "rename") {
+		t.Errorf("the title %q stopped saying the name can be changed", title)
 	}
 }
 
