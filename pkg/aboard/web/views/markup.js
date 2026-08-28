@@ -104,7 +104,7 @@ export function mountMarkup(root, ctx) {
     zoomState.set(rec.id, view);
     rec.zoomEl.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
     rec.stageEl.dataset.zoomed = view.z > 1 ? 'yes' : 'no';
-    if (rec.panHint) rec.panHint.hidden = view.z <= 1;
+    showPanHint(rec, view.z > 1);
     if (!rec.zoomLabel) return;
     // What the reader can actually measure off the screen: the size of a pixel
     // of the ORIGINAL, not the zoom factor. A screenshot wider than the row is
@@ -135,6 +135,26 @@ export function mountMarkup(root, ctx) {
     view.z = next;
     zoomState.set(rec.id, view);
     applyZoom(rec);
+  }
+
+  // Shown on a zoom change and taken away again a few seconds later. The timer
+  // is per image and cleared before it is set, so repeated zooming keeps it up
+  // rather than half-hiding it mid-gesture.
+  function showPanHint(rec, wanted) {
+    if (!rec.panHint) return;
+    if (rec.panHintTimer) {
+      clearTimeout(rec.panHintTimer);
+      rec.panHintTimer = null;
+    }
+    if (!wanted) {
+      rec.panHint.hidden = true;
+      return;
+    }
+    rec.panHint.hidden = false;
+    rec.panHintTimer = setTimeout(() => {
+      rec.panHint.hidden = true;
+      rec.panHintTimer = null;
+    }, 5000);
   }
 
   function resetZoom(imageId) {
@@ -1317,15 +1337,7 @@ export function mountMarkup(root, ctx) {
       headRow.append(copyViewBtn);
     }
 
-    // Only shown while there is somewhere to pan TO. Panning was reported as not
-    // working, and it worked — it was reachable only through the Move tool and
-    // nothing on screen said so, which for the person looking at it is the same
-    // thing. A gesture nobody can find is a gesture that does not exist.
-    const panHint = document.createElement('span');
-    panHint.className = 'hint markup-pan-hint';
-    panHint.textContent = 'drag to pan: Move tool, or the middle button with any tool';
-    panHint.hidden = true;
-    headRow.append(panHint);
+
 
     const removeBtn = ctl('remove-image');
     removeBtn.classList.add('icon-btn--danger');
@@ -1380,6 +1392,23 @@ export function mountMarkup(root, ctx) {
     failEl.className = 'hint markup-fail';
     failEl.hidden = true;
     stageEl.append(failEl); // outside the zoom: a failure message is chrome, not content
+
+    // How to pan, said ON the picture rather than in the head row.
+    //
+    // It was a span in the head row, and appearing and disappearing there
+    // reflowed every button beside it — the toolbar jumped about as you zoomed,
+    // which is worse than the problem it was solving. Reported 2026-08-27.
+    //
+    // Absolutely positioned inside the stage, so it takes part in no layout at
+    // all: it cannot move anything, whether it is there or not. And it fades
+    // after a few seconds instead of sitting on the picture forever — a hint is
+    // for the first time you zoom, not the fiftieth. Any zoom change brings it
+    // back, so it is there whenever somebody is doing the thing it is about.
+    const panHint = document.createElement('p');
+    panHint.className = 'markup-pan-hint';
+    panHint.textContent = 'drag to pan — Move tool, or the middle button with any tool';
+    panHint.hidden = true;
+    stageEl.append(panHint);
 
     let svgEl = null;
     let labelsEl = null;
@@ -2332,7 +2361,23 @@ function ensureStyles() {
   stroke-dasharray: 6 4;
 }
 [data-view="markup"] .markup-copy-status { margin: 0 0 0 4px; }
-[data-view="markup"] .markup-pan-hint { margin: 0; }
+/* On the picture, not in the toolbar: absolutely positioned so it is outside
+   layout entirely and cannot move a single button by appearing. */
+[data-view="markup"] .markup-pan-hint {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.72rem;
+  pointer-events: none;
+}
+[data-view="markup"] .markup-pan-hint[hidden] { display: none; }
 [data-view="markup"] .markup-image-dialog p { margin: 0 0 10px; }
 [data-view="markup"] .markup-offer-img {
   display: block;

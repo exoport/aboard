@@ -263,6 +263,12 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: zooming no longer shuffles an image's buttons.** The "how to pan" hint was a span
+  in the image's head row, so it pushed every button beside it sideways when it appeared
+  and back when it went — measured at ~370px, on every zoom. It is an overlay on the
+  picture now, absolutely positioned and therefore outside layout entirely, and it fades
+  after five seconds instead of sitting there: a hint is for the first time you zoom, not
+  the fiftieth. Any zoom change brings it back.
 - **feat: a crop can be added to the tab as a new image, with no clipboard involved.**
   This is what the clipboard was ever for here — *"copy a rectangle so it could then be
   pasted as a new image, like a closeup"* — and it is the one route that works in a VS

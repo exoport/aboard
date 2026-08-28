@@ -735,6 +735,74 @@ func TestACropCanBeAddedToTheTabAsANewImage(t *testing.T) {
 	}
 }
 
+// Zooming does not move the buttons.
+//
+// The "how to pan" hint started life as a span in the image's head row, so it
+// pushed every button beside it sideways when it appeared and back again when it
+// went — the toolbar jumped about as you zoomed, which is worse than the
+// discoverability problem it was added to solve. Reported 2026-08-27.
+//
+// It is an overlay on the picture now, which is to say it is outside layout, so
+// this measures the one thing that matters: the buttons do not move.
+func TestZoomingDoesNotMoveTheImageButtons(t *testing.T) {
+	id := makeScratchTab(t, "Steady buttons")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	first := s.view(id).Locator(`.markup-figure[data-image-id="one"]`)
+
+	// Every button on the head row, by left edge.
+	positions := func() []float64 {
+		var out []float64
+		s.evalJSON(&out, `(q) => [...document.querySelectorAll(q + ' .markup-figure-head button')]
+			.map((b) => Math.round(b.getBoundingClientRect().left))`, `[data-tab="`+id+`"]`)
+		return out
+	}
+	before := positions()
+	if len(before) < 4 {
+		t.Fatalf("only %d buttons on the head row — this is not measuring what it thinks", len(before))
+	}
+
+	for range 3 {
+		if err := first.Locator(`[data-gesture="zoom-in"]`).Click(); err != nil {
+			t.Fatalf("zooming in: %v", err)
+		}
+	}
+	after := positions()
+	if len(after) != len(before) {
+		t.Fatalf("zooming changed the number of buttons from %d to %d", len(before), len(after))
+	}
+	for i := range before {
+		if before[i] != after[i] {
+			t.Errorf("zooming moved the head-row buttons: %v became %v", before, after)
+			break
+		}
+	}
+
+	// The hint is still SHOWN — it just does not push anything.
+	if err := expect.Locator(first.Locator(".markup-pan-hint")).ToBeVisible(); err != nil {
+		t.Errorf("no pan hint after zooming in: %v", err)
+	}
+
+	// Back to Fit, and the buttons are still where they were.
+	if err := first.Locator(`[data-gesture="zoom-fit"]`).Click(); err != nil {
+		t.Fatalf("clicking fit: %v", err)
+	}
+	fitted := positions()
+	for i := range before {
+		if before[i] != fitted[i] {
+			t.Errorf("returning to Fit moved the head-row buttons: %v became %v", before, fitted)
+			break
+		}
+	}
+}
+
 // Panning a zoomed image with the Move tool, which is the only way to reach the
 // parts of a magnified screenshot that are off the stage.
 func TestPanningAZoomedMarkupImage(t *testing.T) {
