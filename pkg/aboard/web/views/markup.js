@@ -1228,7 +1228,11 @@ export function mountMarkup(root, ctx) {
     imagesWrapEl.style.setProperty('--markup-cols', String(Math.min(2, state.images.length || 1)));
 
     const seen = new Set();
-    let order = 0;
+    // What the wrap's children should be, in order. Built first and reconciled
+    // once, because a pair whose marks table spans both columns puts that table
+    // BETWEEN two figures — so "the figure at index n" stopped being a thing the
+    // loop could count on.
+    const desired = [];
     for (const im of state.images) {
       seen.add(im.id);
       let rec = imageRecords.get(im.id);
@@ -1244,12 +1248,17 @@ export function mountMarkup(root, ctx) {
         renderCropSelection(im.id, rec); // ...so the crop rectangle is re-added after it
       }
       applyZoom(rec);
-      // Only when it is actually out of place. Appending a node that is already
-      // where it belongs still detaches and re-inserts it, and with tall images
-      // that briefly shortens the document and makes the browser clamp the
-      // scroll position — which is how choosing a tool used to jump to the top.
-      if (imagesWrapEl.children[order] !== rec.figureEl) imagesWrapEl.append(rec.figureEl);
-      order += 1;
+      desired.push(rec.figureEl);
+    }
+    placeSpanningTables(state, desired);
+    // Only what is actually out of place moves. Re-inserting a node that is
+    // already where it belongs still detaches and re-inserts it, and with tall
+    // images that briefly shortens the document and makes the browser clamp the
+    // scroll position — which is how choosing a tool used to jump to the top.
+    for (let i = 0; i < desired.length; i += 1) {
+      if (imagesWrapEl.children[i] !== desired[i]) {
+        imagesWrapEl.insertBefore(desired[i], imagesWrapEl.children[i] || null);
+      }
     }
     for (const [id, rec] of imageRecords) {
       if (!seen.has(id)) {
@@ -1258,6 +1267,42 @@ export function mountMarkup(root, ctx) {
         hiddenOverlay.delete(id);
         if (selectedKey && selectedKey.startsWith(id + '::')) selectedKey = null;
         if (hoverKey && hoverKey.startsWith(id + '::')) hoverKey = null;
+      }
+    }
+  }
+
+  // A pair with ONE markable image gives its marks table the width of both.
+  //
+  // Two markable images means two tables, and they belong under their own
+  // pictures — that is the slice, and it is what stopped the scrolling between a
+  // note and the thing it was about. But a before/after pair, where the left is
+  // a reference and only the right is drawn on, has one table and a whole empty
+  // column beside it: the note column was squeezed into half the tab for no
+  // reason, which is what the human reported on 2026-08-28.
+  //
+  // It moves the table OUT of its figure and into the wrap as a full-width grid
+  // item after the pair. The picture stays in its own column — only the table
+  // widens. In stacked layout, or with both images markable, the table goes back
+  // inside its figure, so this is reversible on every render rather than a state
+  // the view can get stuck in.
+  function placeSpanningTables(state, desired) {
+    const paired = state.layout === 'side-by-side';
+    const ims = state.images;
+    for (let i = 0; i < ims.length; i += paired ? 2 : 1) {
+      const pair = paired ? ims.slice(i, i + 2) : ims.slice(i, i + 1);
+      const markable = pair.filter((im) => im.annotatable);
+      const span = paired && pair.length === 2 && markable.length === 1;
+      for (const im of pair) {
+        const rec = imageRecords.get(im.id);
+        if (!rec) continue;
+        rec.figureEl.classList.toggle('has-spanning-table', span);
+        if (!rec.listEl) continue;
+        rec.listEl.classList.toggle('markup-list-span', span);
+        if (span) {
+          desired.push(rec.listEl);
+        } else if (rec.listEl.parentElement !== rec.figureEl) {
+          rec.figureEl.append(rec.listEl);
+        }
       }
     }
   }
@@ -1463,11 +1508,6 @@ export function mountMarkup(root, ctx) {
       colHeadEl.className = 'markup-row markup-row-head';
       listEl.append(colHeadEl);
 
-      const idxHeadCell = document.createElement('span');
-      idxHeadCell.className = 'markup-index';
-      idxHeadCell.textContent = '#';
-      colHeadEl.append(idxHeadCell);
-
       const chipHeadCell = document.createElement('span');
       chipHeadCell.className = 'mono markup-chip';
       chipHeadCell.textContent = 'Id';
@@ -1562,13 +1602,13 @@ export function mountMarkup(root, ctx) {
     for (const r of im.regions) {
       index += 1;
       rec.svgEl.append(buildRegionShape(im.id, r));
-      rec.labelsEl.append(buildLabel(im.id, r.x, r.y, index, r.id, colorToken(r)));
+      rec.labelsEl.append(buildLabel(im.id, r.x, r.y, r.id, colorToken(r)));
     }
     for (const s of im.strokes) {
       index += 1;
       const pts = decodePoints(s.points);
       rec.svgEl.append(buildStrokeShape(im.id, s));
-      if (pts.length) rec.labelsEl.append(buildLabel(im.id, pts[0][0], pts[0][1], index, s.id, colorToken(s)));
+      if (pts.length) rec.labelsEl.append(buildLabel(im.id, pts[0][0], pts[0][1], s.id, colorToken(s)));
     }
   }
 
@@ -1639,7 +1679,7 @@ export function mountMarkup(root, ctx) {
     return el;
   }
 
-  function buildLabel(imageId, x, y, index, id, token) {
+  function buildLabel(imageId, x, y, id, token) {
     const span = document.createElement('span');
     span.className = 'markup-label';
     span.style.left = (clamp01(x) * 100) + '%';
@@ -1681,28 +1721,29 @@ export function mountMarkup(root, ctx) {
 
   /* ---------- rendering: marks list ---------- */
 
-  // One pass over every image, numbering marks as it goes, filling each slice's
-  // own table.
+  // One pass over every image, filling each slice's own table.
   //
-  // The NUMBERING stays global — 1..n across the whole tab, not restarting per
-  // image. That is a decision with a reason: restarting made "mark 1" name two
-  // different things the moment a second image arrived, and pointing at things
-  // is the entire purpose of this view. Grouping the ROWS by image does not
-  // require renumbering them, so it does not.
+  // There is no mark NUMBER any more, and its removal is the end of a long
+  // argument rather than a tidy-up. A per-image counter made "mark 1" name two
+  // different things the moment a second image arrived; a tab-wide counter fixed
+  // that and introduced its own problem, which is that it renumbers — delete the
+  // first mark and every id anyone had written down moves by one. The label on
+  // the picture stopped using it first, then the table's own chip carried the id
+  // beside it, and by 2026-08-28 the `#` column was a second identifier for the
+  // same object, agreeing with nothing outside this view. An `ab` id is unique
+  // board-wide, never reused, and is what you would paste into a sentence — so
+  // it is the only one left.
   function renderList(state) {
     const present = new Set();
-    let idx = 0;
     for (const im of state.images) {
       if (!im.annotatable) continue;
       const rec = imageRecords.get(im.id);
       const entries = [];
       for (const r of im.regions) {
-        idx += 1;
-        entries.push({ imageId: im.id, id: r.id, type: r.shape === 'ellipse' ? 'ellipse' : 'region', obj: r, index: idx });
+        entries.push({ imageId: im.id, id: r.id, type: r.shape === 'ellipse' ? 'ellipse' : 'region', obj: r });
       }
       for (const st of im.strokes) {
-        idx += 1;
-        entries.push({ imageId: im.id, id: st.id, type: 'pen', obj: st, index: idx });
+        entries.push({ imageId: im.id, id: st.id, type: 'pen', obj: st });
       }
       if (!rec || !rec.listEl) continue;
       // Placed relative to the element before it rather than by index: the
@@ -1743,10 +1784,6 @@ export function mountMarkup(root, ctx) {
     const row = document.createElement('div');
     row.className = 'markup-row';
     row.dataset.markKey = key;
-
-    const index = document.createElement('span');
-    index.className = 'markup-index';
-    row.append(index);
 
     const chip = document.createElement('span');
     chip.className = 'mono markup-chip';
@@ -1824,7 +1861,6 @@ export function mountMarkup(root, ctx) {
   }
 
   function updateRow(row, entry) {
-    row.querySelector('.markup-index').textContent = String(entry.index);
     row.querySelector('.markup-chip').textContent = entry.id;
     row.querySelector('.markup-summary').textContent = summarize(entry);
     updateRowSwatches(row.querySelector('.markup-swatch-group'), colorToken(entry.obj));
@@ -2478,6 +2514,15 @@ function ensureStyles() {
   border-bottom: 1px solid var(--line);
 }
 [data-view="markup"] .markup-figure:last-child { border-bottom: 0; padding-bottom: 0; }
+/* A pair whose single marks table spans both columns is ONE unit: the rule
+   belongs under the table, not between each picture and it. */
+[data-view="markup"] .markup-figure.has-spanning-table { border-bottom: 0; padding-bottom: 0; }
+[data-view="markup"] .markup-list.markup-list-span {
+  grid-column: 1 / -1;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+[data-view="markup"] .markup-list.markup-list-span:last-child { border-bottom: 0; padding-bottom: 0; }
 
 /* The thing that moves behind the stage's window. transform-origin at the top
    left keeps the arithmetic in zoomAt honest: a centred origin makes every pan
@@ -2715,8 +2760,7 @@ function ensureStyles() {
 [data-view="markup"] .markup-list {
   display: grid;
   grid-template-columns:
-    22px                          /* mark number */
-    minmax(5ch, max-content)      /* bb id */
+    minmax(5ch, max-content)      /* ab id */
     minmax(9ch, 1fr)              /* what and where */
     max-content                   /* colour swatches */
     minmax(10ch, 2fr)             /* note */
@@ -2725,9 +2769,12 @@ function ensureStyles() {
   row-gap: 6px;
   margin-top: 10px;
 }
-/* Six columns, not seven. The image-name column is gone: every row in a table
-   now belongs to the image directly above it, so a caption repeated down the
-   column was noise with a truncation problem attached. */
+/* Five columns, and each one that went says something. The image-name column
+   went when every table became its own image's, so a caption repeated down the
+   column was noise with a truncation problem attached. The mark-number column
+   went on 2026-08-28: the id beside it already names the mark, is unique across
+   the board and never moves, where a number renumbered every time a mark above
+   it was deleted. */
 [data-view="markup"] .markup-list > .markup-list-empty { grid-column: 1 / -1; margin: 2px 0 0; }
 /* The two full-width children of the list that are not rows. */
 [data-view="markup"] .markup-list > .markup-bulk-panel { grid-column: 1 / -1; }
@@ -2758,18 +2805,6 @@ function ensureStyles() {
   color: var(--muted);
 }
 [data-view="markup"] .markup-row-head-spacer { display: inline-block; width: 24px; flex: 0 0 auto; }
-[data-view="markup"] .markup-index {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--sunken);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.79rem;
-}
 [data-view="markup"] .markup-chip {
   min-width: 0;
   overflow: hidden;

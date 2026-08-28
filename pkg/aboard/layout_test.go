@@ -268,7 +268,7 @@ func TestLogFileRefusesAnIDThatCannotBeAFilename(t *testing.T) {
 		"a/b",
 		`a\b`,
 		"ab42.log",
-		"bb 42",
+		"ab 42",
 		strings.Repeat("b", 65),
 	} {
 		if path, ok := root.LogFile("", bad); ok {

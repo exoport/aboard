@@ -265,7 +265,7 @@ func initialDocument(example bool) (document []byte, tabs int, err error) {
 	return append(body, '\n'), len(seeded), nil
 }
 
-// nextIDFor walks the whole document for `bb<n>` ids and returns one past the
+// nextIDFor walks the whole document for `ab<n>` ids and returns one past the
 // highest, never below the counter the document already carried.
 func nextIDFor(doc map[string]any) int {
 	highest := 0

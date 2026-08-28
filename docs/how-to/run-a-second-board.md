@@ -112,7 +112,7 @@ worth knowing is the uploads accounting, below.
 There is no migration, and none is possible: an entry already in `journal.jsonl` does
 not record which document the write went to, and guessing from the tab id is exactly the
 ambiguity being removed. Old entries stay readable and count as the **default** board's
-history from now on. If you had two boards before this landed, a `bb<n>` in that file
+history from now on. If you had two boards before this landed, a tab id in that file
 may belong to either — read the `by` and the tab name, as you had to then.
 
 ### `aboard uploads` reads every board in the project

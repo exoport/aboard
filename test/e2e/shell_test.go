@@ -324,7 +324,7 @@ func TestANewTabStartsWithItsDeclaredState(t *testing.T) {
 		t.Errorf("a new markup tab has no `layout`: %v", keysOf(state))
 	}
 	if id, _ := created["id"].(string); !strings.HasPrefix(id, "ab") {
-		t.Errorf("the browser allocated the id %q — ids are board-wide monotonic and tagged bb", id)
+		t.Errorf("the browser allocated the id %q — ids are board-wide monotonic and tagged ab", id)
 	}
 }
 

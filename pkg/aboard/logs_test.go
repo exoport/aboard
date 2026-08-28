@@ -31,7 +31,7 @@ func TestTheLogEndpointRefusesATabIDThatCannotBeAFilename(t *testing.T) {
 		"../evil",
 		"a/b",
 		"ab126.log",
-		"bb 126",
+		"ab 126",
 		strings.Repeat("b", 65),
 	}
 	for _, tab := range bad {

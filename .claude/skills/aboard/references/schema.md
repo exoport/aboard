@@ -53,7 +53,7 @@ Two consequences of a single counter:
 - **An id is unique board-wide, so it never needs qualifying by tab.** This is
   the only thing that works inside a `stack` tab holding two kanbans or two
   images, where the tab cannot disambiguate at all.
-- **One namespace tag, no type prefix.** `ab` ("bulletin board") is there so an
+- **One namespace tag, no type prefix.** `ab` (as in aboard) is there so an
   id survives being written in prose: `ab147` is unmistakably a board object
   where `147` is any number at all. It says nothing about kind, so it cannot be
   guessed wrong. A per-kind vocabulary (`node-7`, `tab-3`) stays rejected — a
@@ -80,7 +80,7 @@ independently of whatever tab or stack block holds it.
 
 ```jsonc
 {
-  "id": "ab3",                // "bb<number>"; new ids continue from doc.nextId
+  "id": "ab3",                // "ab<number>"; new ids continue from doc.nextId
   "key": "architecture",      // OPTIONAL stable handle — find by this to update
                               // the same tab next turn instead of opening another
   "name": "Architecture",     // what the user sees; you choose it

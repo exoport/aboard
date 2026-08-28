@@ -578,12 +578,12 @@ re-points an instruction at a different object — which is why the counter is
 board-wide and the server refuses to let it regress. An id is unique board-wide,
 so it never needs qualifying by tab.
 
-**Write `bb<n>`; read anything.** The `ab` tag ("bulletin board") is there so an
+**Write `ab<n>`; read anything.** The `ab` tag (as in aboard) is there so an
 id survives being written in a sentence: `ab49` is unmistakably a board object
 where `49` is any number at all, and most of what passes between you and the user
 is sentences. Say `ab49`, not `49`, whenever you mean the object. Bare `49` and
-legacy `n49` still parse everywhere, so old references keep working — the
-migration prefixed ids without renumbering them.
+the retired `n49` and `bb49` still parse everywhere, so a board written before a
+tag changed keeps working — every change of tag renamed nothing already on disk.
 
 There is still no TYPE prefix (`node-7`, `tab-3`): that is a closed vocabulary in
 a system where you invent new kinds of object, so it would be guessed ad hoc and

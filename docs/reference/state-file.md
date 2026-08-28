@@ -89,7 +89,7 @@ still carries a generated `id`.
 
 ```jsonc
 {
-  "id": "ab3",                // "bb<number>", continuing from doc.nextId
+  "id": "ab3",                // "ab<number>", continuing from doc.nextId
   "key": "architecture",      // OPTIONAL stable handle — find by this to update the same
                               // tab next turn instead of opening another
   "name": "Architecture",     // what the human sees

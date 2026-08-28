@@ -312,13 +312,23 @@ func TestEachImageGetsItsOwnMarksTable(t *testing.T) {
 		t.Errorf("the second image's mark is listed under the first image: %v", err)
 	}
 
-	// Numbering runs 1,2,3 ACROSS the tab. A per-image restart would make this
-	// 1,2 then 1.
+	// There is no mark NUMBER, and that is the assertion — this test used to pin
+	// the numbering to 1,2,3 across the tab. A number is a second identifier for
+	// something the id already names, it disagrees with everything outside this
+	// view, and it renumbers when a mark above it is deleted. Removed 2026-08-28.
 	var nums []string
 	s.evalJSON(&nums, `(q) => [...document.querySelectorAll(q)].map((el) => el.textContent.trim())`,
-		`[data-tab="`+id+`"] .markup-row:not(.markup-row-head) .markup-index`)
-	if strings.Join(nums, ",") != "1,2,3" {
-		t.Errorf("mark numbers are %v — they are numbered across the tab, not restarted per image", nums)
+		`[data-tab="`+id+`"] .markup-index`)
+	if len(nums) != 0 {
+		t.Errorf("the marks table still carries a number column: %v", nums)
+	}
+
+	// What identifies a row is the id, in the table and on the picture both.
+	var chips []string
+	s.evalJSON(&chips, `(q) => [...document.querySelectorAll(q)].map((el) => el.textContent.trim())`,
+		`[data-tab="`+id+`"] .markup-row:not(.markup-row-head) .markup-chip`)
+	if strings.Join(chips, ",") != "ab301,ab302,ab303" {
+		t.Errorf("the rows are identified by %v, want the three mark ids", chips)
 	}
 }
 
@@ -886,6 +896,101 @@ func TestSideBySideArrangesImagesInPairs(t *testing.T) {
 	}
 }
 
+// A pair with ONE markable image gives its marks table the width of both.
+//
+// The before/after shape: the left image is a reference nobody draws on, so its
+// figure has no table and the right image's table was squeezed into half the tab
+// with an empty column beside it. Reported 2026-08-28. Two markable images still
+// get two tables, under their own pictures, which is the slice the whole layout
+// exists for.
+func TestOneMarkableImageInAPairGetsTheFullWidthTable(t *testing.T) {
+	id := makeScratchTab(t, "Before and after")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "side-by-side",
+		"images": []any{
+			map[string]any{"id": "before", "src": "assets/mock-screen.svg", "caption": "before.svg", "annotatable": false},
+			map[string]any{"id": "after", "src": "assets/mock-screen-after.svg", "caption": "after.svg"},
+		},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if err := expect.Locator(view.Locator(".markup-list")).ToHaveCount(1); err != nil {
+		t.Fatalf("a pair with one markable image should have exactly one table: %v", err)
+	}
+
+	// The measurement that matters: the table is as wide as the two pictures
+	// together, and the pictures are still side by side.
+	var box struct {
+		TableWidth  float64 `json:"tableWidth"`
+		LeftFigure  float64 `json:"leftFigure"`
+		RightFigure float64 `json:"rightFigure"`
+		SameRow     bool    `json:"sameRow"`
+		TableBelow  bool    `json:"tableBelow"`
+	}
+	s.evalJSON(&box, `(q) => {
+		const root = document.querySelector(q);
+		const figs = [...root.querySelectorAll('.markup-figure')];
+		const list = root.querySelector('.markup-list');
+		const a = figs[0].getBoundingClientRect(), b = figs[1].getBoundingClientRect();
+		const l = list.getBoundingClientRect();
+		return {
+			tableWidth: Math.round(l.width),
+			leftFigure: Math.round(a.width),
+			rightFigure: Math.round(b.width),
+			sameRow: Math.round(a.top) === Math.round(b.top),
+			tableBelow: Math.round(l.top) >= Math.round(Math.max(a.bottom, b.bottom)) - 1,
+		};
+	}`, `[data-tab="`+id+`"]`)
+
+	if !box.SameRow {
+		t.Errorf("the two pictures are not side by side any more (widths %v / %v)", box.LeftFigure, box.RightFigure)
+	}
+	if !box.TableBelow {
+		t.Error("the table is not below the pair — it has to clear both pictures to be allowed their width")
+	}
+	// Wider than one column by a real margin, rather than "not exactly equal":
+	// a few pixels of grid gap would satisfy a strict inequality and prove
+	// nothing.
+	if box.TableWidth < box.RightFigure*3/2 {
+		t.Errorf("the table is %.0fpx wide against a %.0fpx column — it is still living in one column",
+			box.TableWidth, box.RightFigure)
+	}
+}
+
+// Both markable keeps two tables, each under its own picture. This is the half
+// of the rule that the change above must not have broken.
+func TestTwoMarkableImagesKeepTheirOwnTables(t *testing.T) {
+	id := makeScratchTab(t, "Both markable")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "side-by-side",
+		"images": []any{
+			map[string]any{"id": "l", "src": "assets/mock-screen.svg", "caption": "l.svg"},
+			map[string]any{"id": "r", "src": "assets/mock-screen-after.svg", "caption": "r.svg"},
+		},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	if err := expect.Locator(view.Locator(".markup-list")).ToHaveCount(2); err != nil {
+		t.Fatalf("two markable images should keep two tables: %v", err)
+	}
+	if err := expect.Locator(view.Locator(".markup-list.markup-list-span")).ToHaveCount(0); err != nil {
+		t.Errorf("a table spanned the pair even though both images are markable: %v", err)
+	}
+	// Each table is inside its own figure, which is what makes a row belong to
+	// the picture above it by construction.
+	if err := expect.Locator(view.Locator(`.markup-figure[data-image-id="l"] .markup-list`)).ToHaveCount(1); err != nil {
+		t.Errorf("the left image's table is not in its own slice: %v", err)
+	}
+}
+
 // The dialog adds the picture it is SHOWING, not one it re-derives.
 //
 // "Copy as seen" showed a region with its marks drawn on and then added the same
@@ -1399,8 +1504,8 @@ func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
 	}
 
 	// Every cell of the header and of the first data row, as {left, width}. The
-	// seven cells are in the same order in both, and the pairs must land on the
-	// same track.
+	// cells are in the same order in both, and the pairs must land on the same
+	// track.
 	type cell struct {
 		X, W float64
 		Text string
@@ -1414,20 +1519,22 @@ func TestTheMarksTableHeaderSitsOverItsColumns(t *testing.T) {
 	s.evalJSON(&body, probe, `[data-tab="`+id+`"] .markup-row:not(.markup-row-head)`)
 
 	// Same number of cells, which is the `hidden` fault stated directly: a row
-	// with six children against a header with seven cannot line up whatever the
-	// tracks do.
+	// with one child fewer than its header cannot line up whatever the tracks
+	// do.
 	if len(head) != len(body) {
 		t.Fatalf("the header has %d cells and a row has %d — a cell is being taken out of the grid flow, not emptied", len(head), len(body))
 	}
-	if len(head) != 6 {
-		t.Fatalf("the header has %d cells, want 6", len(head))
+	if len(head) != 5 {
+		t.Fatalf("the header has %d cells, want 5", len(head))
 	}
 
-	// Six, not seven: the image-name column went with the restructure. Every row
-	// in this table belongs to the image directly above it, so a caption repeated
-	// down a column was noise — and it was the cell whose `hidden` caused the
-	// shift this test was written for.
-	names := []string{"index", "id", "summary", "colour", "note", "delete"}
+	// Five, and each column that went says something. The image-name column went
+	// when every table became its own image's — a caption repeated down a column
+	// was noise, and it was the cell whose `hidden` caused the shift this test
+	// was written for. The mark-number column went on 2026-08-28: the id beside
+	// it already names the mark and does not renumber when a mark above it is
+	// deleted.
+	names := []string{"id", "summary", "colour", "note", "delete"}
 
 	// LEFT EDGES, not widths. A cell's width is the element's, and two elements
 	// can share a column honestly while differing in size — the header's delete
