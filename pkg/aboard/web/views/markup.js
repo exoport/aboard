@@ -104,7 +104,22 @@ export function mountMarkup(root, ctx) {
     zoomState.set(rec.id, view);
     rec.zoomEl.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.z})`;
     rec.stageEl.dataset.zoomed = view.z > 1 ? 'yes' : 'no';
-    if (rec.zoomLabel) rec.zoomLabel.textContent = Math.round(view.z * 100) + '%';
+    if (rec.panHint) rec.panHint.hidden = view.z <= 1;
+    if (!rec.zoomLabel) return;
+    // What the reader can actually measure off the screen: the size of a pixel
+    // of the ORIGINAL, not the zoom factor. A screenshot wider than the row is
+    // shrunk to fit it, and the readout said 100% while the picture was at
+    // something like 60% — so "100%" meant two different things depending on how
+    // wide the board happened to be. Reported 2026-08-27 with a picture of it.
+    //
+    // Fit is still z = 1; it is the LABEL that stops pretending z is the answer.
+    const nat = rec.imgEl.naturalWidth;
+    const shown = rec.imgEl.clientWidth;
+    const effective = nat > 0 && shown > 0 ? (shown / nat) * view.z : view.z;
+    rec.zoomLabel.textContent = Math.round(effective * 100) + '%';
+    rec.zoomLabel.title = nat > 0
+      ? `${Math.round(effective * 100)}% of the original ${nat}px — Fit is whatever makes it fill the row`
+      : '';
   }
 
   // Zoom about a point, so the pixel under the cursor stays under the cursor.
@@ -270,6 +285,29 @@ export function mountMarkup(root, ctx) {
   const bulkCancelBtn = button('Cancel', '', { onClick: closeBulkColorPanel });
   bulkPanelEl.append(bulkCancelBtn);
 
+  // The picture a refused copy falls back to. Built once, filled on demand.
+  const imageDialogEl = document.createElement('dialog');
+  // NOT `markup-dialog`: that class names the renderer's confirm dialog and is
+  // what `dialog.markup-dialog` in the browser suite reaches for. A second
+  // dialog wearing it makes that locator match two elements and the assertion
+  // fails on strict mode rather than on behaviour — which is exactly what
+  // happened when this was written.
+  imageDialogEl.className = 'sheet-dialog markup-image-dialog';
+  const imageDialogTitle = document.createElement('p');
+  imageDialogTitle.className = 'panel-head';
+  imageDialogEl.append(imageDialogTitle);
+  const imageDialogWhy = document.createElement('p');
+  imageDialogWhy.className = 'hint';
+  imageDialogEl.append(imageDialogWhy);
+  const imageDialogImg = document.createElement('img');
+  imageDialogImg.className = 'markup-offer-img';
+  imageDialogEl.append(imageDialogImg);
+  const imageDialogActions = document.createElement('div');
+  imageDialogActions.className = 'dialog-actions';
+  imageDialogActions.append(button('Close', '', { className: 'primary-btn', onClick: () => imageDialogEl.close() }));
+  imageDialogEl.append(imageDialogActions);
+  panel.append(imageDialogEl);
+
   /* ---------- shared modal confirm (bulk recolour / clear marks) ---------- */
 
   const confirmDialogEl = document.createElement('dialog');
@@ -347,6 +385,18 @@ export function mountMarkup(root, ctx) {
     if (!existing) rec.svgEl.append(el);
   }
 
+  // Choosing a tool changes almost nothing on screen: which button looks pressed,
+  // the svg's cursor, whether the resize hint applies, whether the crop
+  // rectangle is drawn and whether the copy buttons are live.
+  //
+  // It used to call render(), which re-appends every figure and every row to
+  // keep DOM order in sync with the document. Moving a node is a remove and an
+  // insert, so on a tab with several tall images the page briefly lost its
+  // height and the browser clamped the scroll — picking a tool threw you back to
+  // the top. Reported 2026-08-27.
+  //
+  // So this touches only what the tool actually decides. The full render still
+  // happens on every real change, where re-ordering is the point.
   function setTool(next) {
     tool = next;
     regionBtn.setAttribute('aria-pressed', String(tool === 'region'));
@@ -355,7 +405,13 @@ export function mountMarkup(root, ctx) {
     moveBtn.setAttribute('aria-pressed', String(tool === 'move'));
     resizeBtn.setAttribute('aria-pressed', String(tool === 'resize'));
     cropBtn.setAttribute('aria-pressed', String(tool === 'crop'));
-    render(); // handle visibility, the pen-not-resizable hint and the svg cursor all key off the active tool
+    for (const rec of imageRecords.values()) {
+      if (!rec.svgEl) continue;
+      rec.svgEl.dataset.tool = tool;
+      renderCropSelection(rec.id, rec);
+    }
+    updateResizeHint(readState());
+    updateCopyButtons();
   }
 
   /* ---------- state shape: migration + read/write helpers ---------- */
@@ -766,7 +822,9 @@ export function mountMarkup(root, ctx) {
     // already means "reposition", and the alternative — a sixth tool that does
     // nothing until you have zoomed — is a button that is dead most of the time.
     // At z=1 clampPan pins it, so the gesture is harmless rather than absent.
-    if (tool === 'move') {
+    // The middle button pans with ANY tool, so you can zoom in, draw, move
+    // across and draw again without changing tool twice each time.
+    if (tool === 'move' || evt.button === 1) {
       const rec = imageRecords.get(imageId);
       if (!rec || zoomOf(imageId).z <= 1) return;
       evt.preventDefault();
@@ -1139,6 +1197,7 @@ export function mountMarkup(root, ctx) {
     imagesWrapEl.style.setProperty('--markup-cols', String(state.images.length));
 
     const seen = new Set();
+    let order = 0;
     for (const im of state.images) {
       seen.add(im.id);
       let rec = imageRecords.get(im.id);
@@ -1154,7 +1213,12 @@ export function mountMarkup(root, ctx) {
         renderCropSelection(im.id, rec); // ...so the crop rectangle is re-added after it
       }
       applyZoom(rec);
-      imagesWrapEl.append(rec.figureEl); // re-appending an existing node moves it, keeping order in sync
+      // Only when it is actually out of place. Appending a node that is already
+      // where it belongs still detaches and re-inserts it, and with tall images
+      // that briefly shortens the document and makes the browser clamp the
+      // scroll position — which is how choosing a tool used to jump to the top.
+      if (imagesWrapEl.children[order] !== rec.figureEl) imagesWrapEl.append(rec.figureEl);
+      order += 1;
     }
     for (const [id, rec] of imageRecords) {
       if (!seen.has(id)) {
@@ -1243,6 +1307,16 @@ export function mountMarkup(root, ctx) {
       headRow.append(copyViewBtn);
     }
 
+    // Only shown while there is somewhere to pan TO. Panning was reported as not
+    // working, and it worked — it was reachable only through the Move tool and
+    // nothing on screen said so, which for the person looking at it is the same
+    // thing. A gesture nobody can find is a gesture that does not exist.
+    const panHint = document.createElement('span');
+    panHint.className = 'hint markup-pan-hint';
+    panHint.textContent = 'drag to pan: Move tool, or the middle button with any tool';
+    panHint.hidden = true;
+    headRow.append(panHint);
+
     const removeBtn = ctl('remove-image');
     removeBtn.classList.add('icon-btn--danger');
     removeBtn.addEventListener('click', () => deleteImage(imageId));
@@ -1271,10 +1345,25 @@ export function mountMarkup(root, ctx) {
     });
     imgEl.addEventListener('load', () => {
       const rec = imageRecords.get(imageId);
-      if (!rec || !rec.failed) return;
+      if (!rec) return;
+      // The readout is a fraction of naturalWidth, which is 0 until the picture
+      // has actually loaded — so the first honest value is only knowable here.
+      applyZoom(rec);
+      if (!rec.failed) return;
       rec.failed = false;
       render();
     });
+
+    // And again whenever the picture's LAYOUT size changes, which happens with
+    // no interaction at all: narrowing the window shrinks a wide screenshot to
+    // fit, and the percentage on screen has to follow it down. It also re-clamps
+    // the pan, since the stage the pan is bounded by has just changed size.
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => {
+        const rec = imageRecords.get(imageId);
+        if (rec) applyZoom(rec);
+      }).observe(stageEl);
+    }
     zoomEl.append(imgEl);
 
     const failEl = document.createElement('p');
@@ -1390,7 +1479,7 @@ export function mountMarkup(root, ctx) {
     return {
       id: imageId, figureEl, capEl, hideBtn, clearBtn,
       stageEl, zoomEl, imgEl, failEl, svgEl, labelsEl, handlesEl,
-      listEl, colHeadEl, listEmptyEl, zoomLabel,
+      listEl, colHeadEl, listEmptyEl, zoomLabel, panHint,
       annotatable, failed: false,
     };
   }
@@ -1589,6 +1678,11 @@ export function mountMarkup(root, ctx) {
         entries.push({ imageId: im.id, id: st.id, type: 'pen', obj: st, index: idx });
       }
       if (!rec || !rec.listEl) continue;
+      // Placed relative to the element before it rather than by index: the
+      // bulk-recolour panel moves into this list when it is open, so an index
+      // into children is right only some of the time.
+      let prev = rec.colHeadEl;
+      if (bulkPanelEl.parentElement === rec.listEl) prev = bulkPanelEl;
       for (const entry of entries) {
         const key = markKey(entry.imageId, entry.id);
         present.add(key);
@@ -1598,7 +1692,11 @@ export function mountMarkup(root, ctx) {
           rowEls.set(key, row);
         }
         updateRow(row, entry);
-        rec.listEl.append(row); // re-appending moves it, keeping list order in sync
+        // Same rule as the figures above: move it only if it is in the wrong
+        // place. Moving a node that is already correct still detaches it, and
+        // that is what made the page lose its height and jump to the top.
+        if (row.previousElementSibling !== prev || row.parentElement !== rec.listEl) prev.after(row);
+        prev = row;
       }
       rec.listEmptyEl.hidden = entries.length !== 0;
       // The empty line goes last so it sits under the header rather than under
@@ -1868,8 +1966,36 @@ export function mountMarkup(root, ctx) {
       cropSel.delete(imageId);
       render();
     } catch (err) {
-      copyStatus('the clipboard refused this copy: ' + (err && err.message ? err.message : 'not permitted here'), true);
+      // The clipboard is not always reachable, and in the place this board most
+      // wants to be — a VS Code panel — it usually is not. The webview applies a
+      // permissions policy the board is inside of, so `clipboard-write` has to
+      // be delegated to it by the HOST; when it is not, Chromium refuses with
+      // "The Clipboard API has been blocked because of a permissions policy
+      // applied to the current document". Nothing this page can do fixes that
+      // from the inside.
+      //
+      // So there is a second way out, and it works everywhere because it asks
+      // for nothing: put the picture on screen and let the human use their own
+      // browser's context menu on it. Right-click, Copy Image — the same gesture
+      // they would use on any image on any page, available in a VS Code webview
+      // too. A refusal becomes one extra click rather than a dead end.
+      copyStatus('the clipboard is not available here — copy it from the picture instead', true);
+      offerImage(canvas, what, err);
     }
+  }
+
+  // The fallback: the cropped picture in the board's own dialog, at a size worth
+  // right-clicking. Deliberately NOT a download — a download from a sandboxed
+  // frame is the next thing a host can refuse, and this asks permission for
+  // nothing at all.
+  function offerImage(canvas, what, err) {
+    imageDialogTitle.textContent = 'Right-click the picture to copy or save it';
+    imageDialogWhy.textContent = 'The clipboard could not be written to directly: '
+      + (err && err.message ? err.message : 'it is not permitted in this window')
+      + ' — this is the same ' + what + ', ' + canvas.width + '×' + canvas.height + '.';
+    imageDialogImg.src = canvas.toDataURL('image/png');
+    imageDialogImg.alt = 'The ' + what + ' you asked to copy';
+    if (!imageDialogEl.open) imageDialogEl.showModal();
   }
 
   // The crop tool's selection. `withMarks` is the difference between the two
@@ -2121,6 +2247,19 @@ function ensureStyles() {
   stroke-dasharray: 6 4;
 }
 [data-view="markup"] .markup-copy-status { margin: 0 0 0 4px; }
+[data-view="markup"] .markup-pan-hint { margin: 0; }
+[data-view="markup"] .markup-image-dialog p { margin: 0 0 10px; }
+[data-view="markup"] .markup-offer-img {
+  display: block;
+  max-width: min(70vw, 900px);
+  max-height: 60vh;
+  width: auto;
+  height: auto;
+  margin: 10px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--sunken);
+}
 [data-view="markup"] .markup-copy-status.is-bad { color: var(--danger); }
 [data-view="markup"] .markup-figure-head {
   display: flex;

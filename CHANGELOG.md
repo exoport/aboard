@@ -263,6 +263,29 @@ lines and the ones with no user-visible surface — the suite, the extension —
   journal, the sidecar logs, the mount receipts, `uploads/` and `recipes/` are per PROJECT,
   so `aboard journal` and `aboard history` in a named board show the other board's entries
   too, and tab ids are per board — a `bb12` in the journal may belong to either.
+- **fix: four more on markup, and the clipboard gets a way out.**
+  **The zoom readout is the effective scale.** A screenshot wider than the row is shrunk
+  to fit it, and the label said `100%` while the picture was at something nearer 60% — so
+  the number meant two different things depending on how wide the board happened to be.
+  It now reports the picture's size against the ORIGINAL, and follows a window resize,
+  which nothing recomputed before.
+  **Choosing a tool no longer scrolls to the top.** `setTool` called a full render, which
+  re-appends every figure and row to keep DOM order in sync — and moving a node is a
+  remove and an insert, so on a tall tab the document briefly lost its height and the
+  browser clamped the scroll. Measured: picking a tool jumped 2000px to the top. The tool
+  now updates only what it decides, and both renders place a node only when it is
+  actually out of order.
+  **Panning is findable.** It worked, and only through the Move tool, with nothing on
+  screen saying so — which for the person looking at it is the same as not working. The
+  middle button now pans with any tool, and a hint appears beside the zoom controls while
+  there is anywhere to pan to.
+  **And a refused clipboard hands over the picture instead.** In a VS Code panel the
+  board sits inside a permissions policy it cannot change, so Chromium blocks
+  `clipboard.write` outright — "The Clipboard API has been blocked because of a
+  permissions policy applied to the current document". The crop is already drawn by then,
+  so the refusal path opens it in a dialog for a right-click → Copy Image, carrying the
+  browser's own reason. Deliberately not a download, which is the next thing a host can
+  refuse.
 - **fix: five follow-ups on the markup and new-tab work, all reported from using it.**
   The new-tab sheet had `min-width`, so it sized itself to its widest line — which is the
   type description — and picking a type slid the whole modal sideways under the cursor.

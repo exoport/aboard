@@ -327,7 +327,7 @@ func TestEachImageGetsItsOwnMarksTable(t *testing.T) {
 // view of the same board, which is the rule that already keeps scroll, theme and
 // the selection out of it.
 func TestZoomingAMarkupImageIsPerImageAndNeverStored(t *testing.T) {
-	covers(t, "markup", "Ctrl/Cmd+wheel over an image to zoom it; drag with Move to pan a zoomed one")
+	covers(t, "markup", "Ctrl/Cmd+wheel over an image to zoom it (the readout is its size against the original, not the zoom factor); pan a zoomed one by dragging with Move, or with the middle button and any tool")
 
 	id := makeScratchTab(t, "Zoom me")
 	d := readDoc(t)
@@ -417,6 +417,239 @@ func TestZoomingAMarkupImageIsPerImageAndNeverStored(t *testing.T) {
 	after := readDoc(t).state(t, id)
 	if fmt.Sprint(before) != fmt.Sprint(after) {
 		t.Errorf("zooming changed the document:\n before %v\n after  %v", before, after)
+	}
+}
+
+// When the clipboard is refused, the picture is offered instead — which is not
+// a nicety, it is the ONLY route in the place this board most wants to be.
+//
+// A VS Code webview applies a permissions policy the board sits inside of, so
+// `clipboard-write` has to be delegated by the host; when it is not, Chromium
+// refuses with "The Clipboard API has been blocked because of a permissions
+// policy applied to the current document", which is exactly what was reported on
+// 2026-08-27 from the panel. Nothing the page can do fixes that from the inside.
+//
+// So the refusal path puts the cropped picture in a dialog and the human uses
+// their own context menu on it. Driven here by denying the permission, which is
+// the same refusal arriving by a different road.
+func TestARefusedCopyOffersThePictureInstead(t *testing.T) {
+	id := makeScratchTab(t, "Refused copy")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+
+	// The board's own copy path, with the clipboard replaced by one that refuses
+	// the way a permissions policy does. Overriding the API rather than revoking
+	// the permission because a revoked permission and a policy-blocked one reject
+	// at different layers, and the string in the message is what the human reads.
+	if _, err := s.page.Evaluate(`() => {
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error(
+				"Failed to execute 'write' on 'Clipboard': The Clipboard API has been blocked because of a permissions policy applied to the current document.")) },
+		});
+	}`, nil); err != nil {
+		t.Fatalf("replacing the clipboard: %v", err)
+	}
+
+	if err := view.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	svg := view.Locator(".markup-svg").First()
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	s.dragPointer(
+		point{box.X + box.Width*0.2, box.Y + box.Height*0.2},
+		point{box.X + box.Width*0.6, box.Y + box.Height*0.6},
+	)
+	if err := view.Locator(`[data-gesture="copy-region"]`).Click(); err != nil {
+		t.Fatalf("clicking Copy region: %v", err)
+	}
+
+	// It says the clipboard failed...
+	status := view.Locator(".markup-copy-status")
+	if err := expect.Locator(status).ToContainText("not available"); err != nil {
+		got, _ := status.TextContent()
+		t.Fatalf("a refused copy did not say so (status %q): %v", got, err)
+	}
+	// ...and hands over the picture, with the reason on it.
+	dialog := view.Locator(".markup-image-dialog[open]")
+	if err := expect.Locator(dialog).ToBeVisible(); err != nil {
+		t.Fatalf("a refused copy offered nothing: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("Right-click"); err != nil {
+		t.Errorf("the dialog does not say what to do with the picture: %v", err)
+	}
+	if err := expect.Locator(dialog).ToContainText("permissions policy"); err != nil {
+		t.Errorf("the dialog does not carry the refusal it is standing in for: %v", err)
+	}
+
+	// A real picture, not an empty box: the crop is drawn before the clipboard is
+	// ever asked, so a refusal costs the human nothing.
+	var img struct {
+		Src      string
+		W, H     float64
+		Complete bool
+	}
+	s.evalJSON(&img, `(q) => {
+		const el = document.querySelector(q);
+		return { Src: el.getAttribute('src').slice(0, 22), W: el.naturalWidth, H: el.naturalHeight, Complete: el.complete };
+	}`, `[data-tab="`+id+`"] .markup-offer-img`)
+	if img.Src != "data:image/png;base64," {
+		t.Errorf("the offered picture is not a PNG data URL (src starts %q)", img.Src)
+	}
+	if img.W < 10 || img.H < 10 {
+		t.Errorf("the offered picture is %.0f×%.0f — the crop was not drawn", img.W, img.H)
+	}
+}
+
+// The readout says how big a pixel of the ORIGINAL is, not what the zoom factor
+// happens to be. A screenshot wider than the row is shrunk to fit it, and the
+// label said 100% while the picture was at something nearer 60% — so "100%"
+// meant two different things depending on how wide the board was. Reported
+// 2026-08-27 with a picture of it.
+func TestTheZoomReadoutIsTheEffectiveScale(t *testing.T) {
+	id := makeScratchTab(t, "Shrunk to fit")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "900px.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	label := s.view(id).Locator(".markup-zoom-label")
+
+	// Wide enough that the 900px picture is NOT shrunk: it is at 1:1, so the
+	// readout is 100% and the two numbers agree. This is the control.
+	if err := expect.Locator(label).ToHaveText("100%"); err != nil {
+		t.Fatalf("at full size the readout is not 100%%: %v", err)
+	}
+
+	// Now narrow the window until the picture has to shrink. The zoom factor has
+	// not changed — nobody pressed anything — but what is on screen has.
+	if err := s.page.SetViewportSize(600, 900); err != nil {
+		t.Fatalf("narrowing the viewport: %v", err)
+	}
+	var got string
+	var shown, natural float64
+	eventually(t, "the readout to follow the picture down", func() bool {
+		s.evalJSON(&got, `(q) => document.querySelector(q).textContent.trim()`,
+			`[data-tab="`+id+`"] .markup-zoom-label`)
+		return got != "100%"
+	})
+	s.evalJSON(&shown, `(q) => document.querySelector(q).clientWidth`, `[data-tab="`+id+`"] .markup-img`)
+	s.evalJSON(&natural, `(q) => document.querySelector(q).naturalWidth`, `[data-tab="`+id+`"] .markup-img`)
+
+	want := int((shown/natural)*100 + 0.5)
+	if got != fmt.Sprintf("%d%%", want) {
+		t.Errorf("the readout says %s for a %.0fpx picture shown at %.0fpx — want %d%%", got, natural, shown, want)
+	}
+}
+
+// Panning a zoomed image with the Move tool, which is the only way to reach the
+// parts of a magnified screenshot that are off the stage.
+func TestPanningAZoomedMarkupImage(t *testing.T) {
+	id := makeScratchTab(t, "Pan me")
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{
+		"layout": "stacked",
+		"images": []any{map[string]any{"id": "one", "src": "assets/mock-screen.svg", "caption": "a.svg"}},
+	}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	view := s.view(id)
+	first := view.Locator(`.markup-figure[data-image-id="one"]`)
+
+	for range 3 {
+		if err := first.Locator(`[data-gesture="zoom-in"]`).Click(); err != nil {
+			t.Fatalf("zooming in: %v", err)
+		}
+	}
+	if err := view.Locator(`[data-gesture="move"]`).Click(); err != nil {
+		t.Fatalf("choosing the move tool: %v", err)
+	}
+
+	transform := func() string {
+		var out string
+		s.evalJSON(&out, `(q) => getComputedStyle(document.querySelector(q)).transform`,
+			`[data-tab="`+id+`"] .markup-zoom`)
+		return out
+	}
+	before := transform()
+
+	stage := first.Locator(".markup-stage")
+	box, err := stage.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no stage to drag on: %v", err)
+	}
+	// From the middle, towards the top-left, well inside the stage.
+	s.dragPointer(
+		point{box.X + box.Width*0.6, box.Y + box.Height*0.6},
+		point{box.X + box.Width*0.3, box.Y + box.Height*0.3},
+	)
+
+	after := transform()
+	if after == before {
+		t.Errorf("dragging with Move did not pan the zoomed image (transform stayed %s)", before)
+	}
+}
+
+// Choosing a tool does not move the page. It called render(), which re-appends
+// every figure and every row to keep DOM order in sync — and moving a node is a
+// remove and an insert, so on a tab with several tall images the document
+// briefly lost its height and the browser clamped the scroll. Picking a tool
+// threw you back to the top. Reported 2026-08-27.
+func TestChoosingAToolDoesNotScrollThePage(t *testing.T) {
+	id := makeScratchTab(t, "Tall markup")
+
+	const count = 4
+	images := make([]any, 0, count)
+	for i := range count {
+		images = append(images, map[string]any{
+			"id": fmt.Sprintf("im%d", i), "src": "assets/mock-screen.svg",
+			"caption": fmt.Sprintf("shot-%d.svg", i),
+			"regions": []any{map[string]any{"id": fmt.Sprintf("bb%d", 400+i), "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2}},
+		})
+	}
+	d := readDoc(t)
+	d.tab(t, id)["type"] = "markup"
+	d.tab(t, id)["state"] = map[string]any{"layout": "stacked", "images": images}
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+
+	if _, err := s.page.Evaluate(`() => window.scrollTo(0, 2000)`, nil); err != nil {
+		t.Fatalf("scrolling: %v", err)
+	}
+	var before float64
+	s.evalJSON(&before, `() => window.scrollY`)
+	if before < 500 {
+		t.Fatalf("the page only scrolled %.0fpx — not long enough to catch a jump", before)
+	}
+
+	// Every tool, because the one that re-renders most is not obvious from here.
+	for _, tool := range []string{"ellipse", "pen", "move", "resize", "crop", "region"} {
+		if err := s.view(id).Locator(`[data-gesture="` + tool + `"]`).Click(); err != nil {
+			t.Fatalf("choosing %s: %v", tool, err)
+		}
+		var after float64
+		s.evalJSON(&after, `() => window.scrollY`)
+		if diff := after - before; diff > 2 || diff < -2 {
+			t.Fatalf("choosing %s moved the page %.0fpx (from %.0f to %.0f)", tool, diff, before, after)
+		}
 	}
 }
 
