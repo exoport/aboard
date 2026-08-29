@@ -9,7 +9,7 @@ the reader actually has. It was gated on the `ape aboard` mount existing, becaus
 landed in ape on 2026-08-28, so this is the other half.
 
 - **Every message and every help example names the invocation the reader typed.**
-  Under `ape aboard` the board used to print `run \`aboard init\`` — a command that
+  Under `ape aboard` the board used to print "run `aboard init`" — a command that
   user does not have — directly beneath a cobra `Usage:` line that was always
   correct, because that one derives from the command path. `Options.Argv0`
   already carried the right invocation and was already plumbed to the instance
