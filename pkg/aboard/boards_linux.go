@@ -45,9 +45,9 @@ const (
 // on somebody's behalf, which is one of the two ways this project is meant to
 // run. `/proc/<pid>/cmdline` is the whole argv, NUL-separated, so it can see the
 // subcommand as well as the binary.
-func scanBoards(ctx context.Context, procRoot string) (BoardsReport, error) {
+func scanBoards(ctx context.Context, procRoot string, inv Invocation) (BoardsReport, error) {
 	if _, err := os.Stat(procSelfPath(procRoot)); err != nil {
-		return BoardsReport{}, noProcFS(procRoot)
+		return BoardsReport{}, noProcFS(procRoot, inv)
 	}
 	entries, err := os.ReadDir(procRoot)
 	if err != nil {

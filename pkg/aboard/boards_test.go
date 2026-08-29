@@ -16,7 +16,7 @@ import (
 // bare "not supported" from the stub with nothing to run instead.
 func TestTheNoProcessTableRefusalNamesThePlatformAndTheAlternative(t *testing.T) {
 	for _, goos := range []string{"darwin", "windows"} {
-		err := noProcessTable(goos)
+		err := noProcessTable(goos, DefaultInvocation)
 		if !errors.Is(err, ErrNoProcessTable) {
 			t.Errorf("%s: refusal does not wrap ErrNoProcessTable, so the cli cannot map it to exit 2", goos)
 		}
@@ -31,14 +31,14 @@ func TestTheNoProcessTableRefusalNamesThePlatformAndTheAlternative(t *testing.T)
 
 // A Linux with no procfs is a different sentence, because the reader's next move
 // is different: nothing is wrong with their platform. It still has to end in the
-// same alternative, which is why both refusals share msgUseStatusPerProject.
+// same alternative, which is why both refusals share msgUseStatusPerProject(DefaultInvocation).
 func TestTheMissingProcFSRefusalNamesThePathAndTheAlternative(t *testing.T) {
-	err := noProcFS("/proc")
+	err := noProcFS("/proc", DefaultInvocation)
 	if !errors.Is(err, ErrNoProcessTable) {
 		t.Fatal("the missing-procfs refusal does not wrap ErrNoProcessTable")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "/proc") || !strings.Contains(msg, msgUseStatusPerProject) {
+	if !strings.Contains(msg, "/proc") || !strings.Contains(msg, msgUseStatusPerProject(DefaultInvocation)) {
 		t.Errorf("refusal is missing the path or the alternative: %s", msg)
 	}
 	if strings.Contains(msg, "Linux only") {
@@ -72,7 +72,7 @@ func TestRowsSortByProjectThenName(t *testing.T) {
 // hundred are the same sentence without the count, and they justify opposite
 // next moves.
 func TestAnEmptyListingSaysHowMuchOfTheMachineItSaw(t *testing.T) {
-	out := BoardsReport{Inspected: 412, Unreadable: 3}.Human()
+	out := BoardsReport{Inspected: 412, Unreadable: 3}.Human(DefaultInvocation)
 	for _, want := range []string{"no running board found", "412 processes inspected", "3 processes could not be inspected (permission)", "aboard status"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the empty listing does not say %q:\n%s", want, out)
@@ -89,7 +89,7 @@ func TestAStaleRecordIsListedRatherThanDropped(t *testing.T) {
 			Project: "/p", Name: "review", App: "aboard", URL: "http://localhost:41001",
 			Port: 41001, PID: 42, Started: "T0", Version: "v1", Recorded: true,
 		}},
-	}.Human()
+	}.Human(DefaultInvocation)
 	if !strings.Contains(out, "recorded but not answering") {
 		t.Errorf("a recorded-but-dead board is not labelled:\n%s", out)
 	}
@@ -112,7 +112,7 @@ func TestAnUnidentifiedRowIsNotLabelledTheDefaultBoard(t *testing.T) {
 			{Project: "/p", PID: 41},
 			{Project: "/p", PID: 42},
 		},
-	}.Human()
+	}.Human(DefaultInvocation)
 	if strings.Contains(out, "[default]") {
 		t.Errorf("an unrecorded row claims to be the default board:\n%s", out)
 	}
@@ -132,7 +132,7 @@ func TestALiveRowNamesTheWholeProjectPathAndTheDefaultBoard(t *testing.T) {
 			Port: 41001, PID: 42, Started: "T0", Version: "v1", Tabs: 15,
 			LastEditedBy: "human", UpdatedAt: "T1", Recorded: true, Answering: true,
 		}},
-	}.Human()
+	}.Human(DefaultInvocation)
 	for _, want := range []string{"/home/someone/work/checkout", "[default]", "15 tabs", "last write by human at T1", "1 board "} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the listing does not say %q:\n%s", want, out)

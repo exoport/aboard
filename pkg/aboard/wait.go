@@ -611,13 +611,13 @@ func (s *server) broadcastWaiters() {
 // Wait blocks until the board is poked. It returns ExitOK when poked and
 // ExitTimeout when the timeout ran out — distinguishable so a script can tell
 // "the human said go" from "nobody came".
-func Wait(ctx context.Context, root Root, name, by, forWhat, note string, timeout time.Duration, out io.Writer) (int, error) {
+func Wait(ctx context.Context, root Root, name, by, forWhat, note string, timeout time.Duration, out io.Writer, inv Invocation) (int, error) {
 	// Refused here rather than at the long poll, so a caller learns immediately
 	// instead of after the timeout on something that would never have fired.
 	if _, err := parsePredicate(forWhat); err != nil {
 		return ExitUsage, err
 	}
-	inst, err := RunningInstance(root, name)
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return ExitFailed, err
 	}
@@ -667,8 +667,8 @@ func Wait(ctx context.Context, root Root, name, by, forWhat, note string, timeou
 
 // Poke is the same gesture as the human's notify button, for an agent that wants
 // to hand off to another session without going through the browser.
-func Poke(ctx context.Context, root Root, name, by, note string, out io.Writer) error {
-	inst, err := RunningInstance(root, name)
+func Poke(ctx context.Context, root Root, name, by, note string, out io.Writer, inv Invocation) error {
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return err
 	}

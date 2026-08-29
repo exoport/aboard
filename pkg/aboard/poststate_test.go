@@ -129,7 +129,7 @@ func TestUnattributedWriteIsJournaledAsUnknown(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 
-	entries, source, err := JournalEntries(t.Context(), srv.root, "", 10)
+	entries, source, err := JournalEntries(t.Context(), srv.root, "", 10, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestARemovalRequestIsJournaled(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 
-	entries, _, err := JournalEntries(t.Context(), srv.root, "", 10)
+	entries, _, err := JournalEntries(t.Context(), srv.root, "", 10, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestAnsweringARemovalRequestIsJournaled(t *testing.T) {
 		t.Fatalf("status %d: %s", rec.Code, rec.Body)
 	}
 
-	entries, _, err := JournalEntries(t.Context(), srv.root, "", 10)
+	entries, _, err := JournalEntries(t.Context(), srv.root, "", 10, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}

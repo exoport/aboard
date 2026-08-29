@@ -6,6 +6,7 @@ import (
 )
 
 func newLogCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	return &cobra.Command{
 		Use:   "log <tab>",
 		Short: "Read stdin and append it to a tab's sidecar log, line by line",
@@ -24,9 +25,9 @@ interleaved two commands' output in one file.
 Lines are echoed to stdout as well — piping output to the board should not mean
 losing it from the terminal you are watching.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  go test ./... 2>&1 | aboard log ab126",
+		Example: "  go test ./... 2>&1 | " + inv.Cmd("log ab126"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -34,7 +35,7 @@ losing it from the terminal you are watching.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Log(cmd.Context(), root, name, args[0], stdin(opts), stdout(opts))
+			return aboard.Log(cmd.Context(), root, name, args[0], stdin(opts), stdout(opts), opts.Invocation())
 		},
 	}
 }

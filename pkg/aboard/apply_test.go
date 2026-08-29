@@ -54,7 +54,7 @@ func runApplyWith(t *testing.T, root Root, options ApplyOptions, doc string) (ou
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	err = Apply(t.Context(), root, "", options, web.FS,
-		strings.NewReader(doc), &stdout, &stderr)
+		strings.NewReader(doc), &stdout, &stderr, DefaultInvocation)
 	return stdout.String(), stderr.String(), err
 }
 

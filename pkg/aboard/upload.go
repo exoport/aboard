@@ -258,7 +258,7 @@ type UploadReport struct {
 // not a skipped file — a board whose references cannot be read is a board that
 // might be referencing everything, and the next thing the caller does with this
 // report may be a deletion.
-func Uploads(root Root) (UploadReport, error) {
+func Uploads(root Root, inv Invocation) (UploadReport, error) {
 	rep := UploadReport{Dir: root.UploadsDir(), Files: []UploadRow{}, Boards: []string{}}
 
 	boards, err := root.StateFiles()
@@ -266,7 +266,7 @@ func Uploads(root Root) (UploadReport, error) {
 		return rep, err
 	}
 	if len(boards) == 0 {
-		return rep, fmt.Errorf("no board document in %s — run `aboard init`", root.Dir())
+		return rep, fmt.Errorf("no board document in %s — run `%s init`", root.Dir(), inv)
 	}
 	docs := make([]boardDoc, 0, len(boards))
 	for _, b := range boards {
@@ -385,7 +385,7 @@ func PruneUploads(root Root, rows []UploadRow) ([]string, error) {
 }
 
 // Human is the listing, with the orphans marked and the totals last.
-func (r UploadReport) Human(prune bool) string {
+func (r UploadReport) Human(prune bool, inv Invocation) string {
 	var b strings.Builder
 	if len(r.Files) == 0 {
 		fmt.Fprintf(&b, "no uploads in %s\n", r.Dir)
@@ -415,7 +415,7 @@ func (r UploadReport) Human(prune bool) string {
 	}
 	fmt.Fprintf(&b, "* %d unreferenced, %s\n", r.Orphaned, humanBytes(r.OrphanedBytes))
 	if !prune {
-		b.WriteString("run `aboard uploads --prune` to see what removing them would do\n")
+		fmt.Fprintf(&b, "run `%s uploads --prune` to see what removing them would do\n", inv)
 	}
 	// The scan is textual, and a reader about to delete files has to know on what
 	// evidence. Said here rather than only in the docs, for the same reason the

@@ -535,8 +535,8 @@ const (
 // The source is returned rather than printed here so the caller decides where it
 // says so: on stderr in human mode, and nowhere at all in json mode, where a
 // prose line would be something for jq to choke on.
-func JournalEntries(ctx context.Context, root Root, name string, limit int) ([]JournalEntry, string, error) {
-	inst, err := RunningInstance(root, name)
+func JournalEntries(ctx context.Context, root Root, name string, limit int, inv Invocation) ([]JournalEntry, string, error) {
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return journalDiskAnswer(root, name, limit, JournalFromDisk)
 	}
@@ -661,8 +661,8 @@ func sortedWarningTabs(warnings map[string][]string) []string {
 // Cancellation is a CLEAN exit here, not a failure — the caller asked it to
 // stop — so the context errors are swallowed rather than reported as a broken
 // connection.
-func Watch(ctx context.Context, root Root, name string, out io.Writer) error {
-	inst, err := RunningInstance(root, name)
+func Watch(ctx context.Context, root Root, name string, out io.Writer, inv Invocation) error {
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return err
 	}

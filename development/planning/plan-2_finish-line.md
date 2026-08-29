@@ -397,6 +397,16 @@ Four things, and the first is the one worth keeping.
     exactly those two. They are build plumbing, not surface. Alongside that call: the four
     recipe scope names are `apex` / `aboard` / `dot-aboard` / `builtin`, and `init` in a
     directory that already IS a root but holds no document **completes** rather than refusing.
+- ~~**`aboard <cmd>` is hardcoded in user-facing prose**~~ — **DONE 2026-08-28, aboard v0.1.1.**
+  The ape mount landed the same day, which is what made these verifiable, and the fix went in
+  behind it: `Options.Argv0` now reaches message text through an `aboard.Invocation` type.
+  The count was low twice over — 55 + 12 became **71 sites in 34 functions**, because the
+  measuring grep only matched double-quoted literals and never saw the backtick `Long:` help.
+  **16 sites deliberately stay literal**: the generated artifacts, `recipesReadme` (written to
+  disk), the declared table that feeds `capsHash`, and `boards`' help, which names both
+  spellings on purpose. `capsHash` unchanged at `207b5d93`, verified against a real
+  `ape aboard` build. `TestNoNewHardcodedInvocations` guards the tree from here.
+  The original text is kept below for the record.
 - **`aboard <cmd>` is hardcoded in user-facing prose** — 13 places by item 6's reviewer's count,
   four of them added by item 6 itself, and more again if help text and the generated headers are
   counted. This is the latent hosted-mode finding above, now measured: under `ape aboard` every one

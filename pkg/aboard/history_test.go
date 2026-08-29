@@ -69,7 +69,7 @@ func TestHistoryListsPriorStatesNewestFirst(t *testing.T) {
 		entry(5, "2026-08-26T09:03:00.000Z", "agent-1", "ab1", `{"v":3}`),
 	)
 
-	got, err := History(t.Context(), root, "", "ab1", 0)
+	got, err := History(t.Context(), root, "", "ab1", 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestHistorySkipsTheWriteThatCreatedTheTab(t *testing.T) {
 		JournalEntry{At: "2026-08-26T09:00:00.000Z", By: "agent-1", Rev: 2, Tabs: []string{"ab1"}},
 		entry(3, "2026-08-26T09:01:00.000Z", "human", "ab1", `{"v":1}`),
 	)
-	got, err := History(t.Context(), root, "", "ab1", 0)
+	got, err := History(t.Context(), root, "", "ab1", 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,14 +117,14 @@ func TestHistorySaysWhereTheRecordEnds(t *testing.T) {
 	if !strings.Contains(got.Ends, "2026-08-26T09:00:00.000Z") || !strings.Contains(got.Ends, "rotated generation") {
 		t.Errorf("the end of the record must name where it stops and why, got %q", got.Ends)
 	}
-	if !strings.Contains(got.Human(), got.Ends) {
+	if !strings.Contains(got.Human(DefaultInvocation), got.Ends) {
 		t.Error("the human form must print the same sentence the JSON carries")
 	}
 }
 
 func mustHistory(t *testing.T, root Root, tab string) TabHistory {
 	t.Helper()
-	got, err := History(t.Context(), root, "", tab, 0)
+	got, err := History(t.Context(), root, "", tab, 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestRestorePrintsTheWholeDocumentWithOneTabReplaced(t *testing.T) {
 	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "agent-1", "ab1", `{"v":2}`))
 
 	var out bytes.Buffer
-	if err := Restore(t.Context(), root, "", "ab1", 1, &out); err != nil {
+	if err := Restore(t.Context(), root, "", "ab1", 1, &out, DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := decodeDocument(out.Bytes())
@@ -186,7 +186,7 @@ func TestRestoreRefusesATabThatIsNoLongerOnTheBoard(t *testing.T) {
 	journalWith(t, root, entryV2(7, "2026-08-26T09:03:00.000Z", "human", "ab9",
 		`{"id":"ab9","name":"Gone","type":"notes","state":{"v":1}}`))
 
-	err := Restore(t.Context(), root, "", "ab9", 1, &bytes.Buffer{})
+	err := Restore(t.Context(), root, "", "ab9", 1, &bytes.Buffer{}, DefaultInvocation)
 	if err == nil || !strings.Contains(err.Error(), "removed by the human") {
 		t.Errorf("want a refusal saying who removed it, got %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRestoreRefusesAVersionThatIsNotThere(t *testing.T) {
 	writeBoardFile(t, root)
 	journalWith(t, root, entry(7, "2026-08-26T09:03:00.000Z", "human", "ab1", `{"v":1}`))
 
-	err := Restore(t.Context(), root, "", "ab1", 4, &bytes.Buffer{})
+	err := Restore(t.Context(), root, "", "ab1", 4, &bytes.Buffer{}, DefaultInvocation)
 	if err == nil || !strings.Contains(err.Error(), "1 recorded version") {
 		t.Errorf("want a refusal that says how many versions there are, got %v", err)
 	}

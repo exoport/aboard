@@ -88,7 +88,7 @@ func TestConcurrentPostsProduceExactlyOneWinner(t *testing.T) {
 	// And the record agrees with the disk. A journal entry per racer would mean
 	// the one place a session looks to answer "who changed this while I was
 	// thinking?" reports writes that are not in the file.
-	entries, _, err := JournalEntries(t.Context(), srv.root, "", 100)
+	entries, _, err := JournalEntries(t.Context(), srv.root, "", 100, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}

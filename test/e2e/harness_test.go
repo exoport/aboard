@@ -146,7 +146,7 @@ func run(m *testing.M) int {
 // seedBoard writes the board the suite drives: the embedded example, exactly as
 // `aboard init --example` would, plus the interaction fixture laid over it.
 func seedBoard(dir string) error {
-	res, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true})
+	res, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true}, aboard.DefaultInvocation)
 	if err != nil {
 		return err
 	}

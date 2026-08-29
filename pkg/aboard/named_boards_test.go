@@ -110,7 +110,7 @@ func TestHistoryOnANamedBoardSeesOnlyItsOwnWrites(t *testing.T) {
 	review.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
 		{"id":"ab1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
 
-	got, err := History(t.Context(), root, "review", "ab1", 0)
+	got, err := History(t.Context(), root, "review", "ab1", 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,11 +134,11 @@ func TestTheRestoreHintNamesTheBoard(t *testing.T) {
 	review.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
 		{"id":"ab1","name":"Side note","type":"notes","state":{"text":"second"}}],"__by":"agent-2"}`)
 
-	got, err := History(t.Context(), root, "review", "ab1", 0)
+	got, err := History(t.Context(), root, "review", "ab1", 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	line := got.Human()
+	line := got.Human(DefaultInvocation)
 	want := "aboard history ab1 --at 1 --name review | aboard apply --name review --by agent-1"
 	if !strings.Contains(line, want) {
 		t.Errorf("the restore hint does not carry the board name:\nwant %q in\n%s", want, line)
@@ -149,12 +149,12 @@ func TestTheRestoreHintNamesTheBoard(t *testing.T) {
 	def := boardServer(t, root, "")
 	def.postDocument(t, `{"version":1,"rev":1,"nextId":2,"tabs":[
 		{"id":"ab1","name":"Plan","type":"notes","state":{"text":"edited"}}],"__by":"agent-1"}`)
-	plain, err := History(t.Context(), root, "", "ab1", 0)
+	plain, err := History(t.Context(), root, "", "ab1", 0, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(plain.Human(), "--name") {
-		t.Errorf("the default board's listing grew a --name flag:\n%s", plain.Human())
+	if strings.Contains(plain.Human(DefaultInvocation), "--name") {
+		t.Errorf("the default board's listing grew a --name flag:\n%s", plain.Human(DefaultInvocation))
 	}
 }
 

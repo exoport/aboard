@@ -85,7 +85,7 @@ func project(t *testing.T) string {
 
 func scanFake(t *testing.T, p *fakeProc) BoardsReport {
 	t.Helper()
-	rep, err := scanBoards(context.Background(), p.dir)
+	rep, err := scanBoards(context.Background(), p.dir, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("scanning the fake proc tree: %v", err)
 	}
@@ -225,8 +225,8 @@ func TestABoardWhoseDirectoryCannotBeReadIsCountedNotDropped(t *testing.T) {
 	if rep.Unreadable != 2 {
 		t.Errorf("unreadable = %d, want 2 (one refused cwd, one directory that is not a project)", rep.Unreadable)
 	}
-	if !strings.Contains(rep.Human(), "2 processes could not be inspected") {
-		t.Errorf("the listing does not say what it could not see:\n%s", rep.Human())
+	if !strings.Contains(rep.Human(DefaultInvocation), "2 processes could not be inspected") {
+		t.Errorf("the listing does not say what it could not see:\n%s", rep.Human(DefaultInvocation))
 	}
 	if rep.Inspected != 2 {
 		t.Errorf("inspected %d, want 2", rep.Inspected)
@@ -282,7 +282,7 @@ func TestAnAbsoluteCwdFlagRescuesAnUnreadableProcess(t *testing.T) {
 // A directory that is not a process table is refused with the same sentinel the
 // non-Linux stub uses, so one branch in the cli maps both to exit 2.
 func TestATreeWithNoSelfEntryIsNotAProcessTable(t *testing.T) {
-	_, err := scanBoards(context.Background(), t.TempDir())
+	_, err := scanBoards(context.Background(), t.TempDir(), DefaultInvocation)
 	if !errors.Is(err, ErrNoProcessTable) {
 		t.Fatalf("scanning a directory that is not /proc returned %v, want ErrNoProcessTable", err)
 	}
@@ -334,7 +334,7 @@ func TestTheRealProcAnswersForThisProcess(t *testing.T) {
 // this test exists to prove would be assumed instead.
 func TestBoardsFindsALiveBoardThroughTheRealProc(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := Init(InitConfig{Dir: dir, Example: true}); err != nil {
+	if _, err := Init(InitConfig{Dir: dir, Example: true}, DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	root, err := FindRoot(dir)
@@ -362,7 +362,7 @@ func TestBoardsFindsALiveBoardThroughTheRealProc(t *testing.T) {
 
 	inst := waitForBoard(t, root, &childLog)
 
-	rep, err := scanBoards(t.Context(), procDir)
+	rep, err := scanBoards(t.Context(), procDir, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("scanning the real %s: %v", procDir, err)
 	}
@@ -411,7 +411,7 @@ func waitForBoard(t *testing.T, root Root, out *bytes.Buffer) Instance {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		rec, err := RunningInstance(root, "")
+		rec, err := RunningInstance(root, "", DefaultInvocation)
 		if err == nil && ProbeBoard(t.Context(), rec.Port, rec.Base) != nil {
 			return rec
 		}

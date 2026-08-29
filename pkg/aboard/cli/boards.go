@@ -8,13 +8,14 @@ import (
 )
 
 func newBoardsCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var outputFormat string
 	cmd := &cobra.Command{
 		Use:   "boards",
 		Short: "List every board running on this machine, from the process table (Linux only)",
 		Long: `Every running board on this machine, whichever project it belongs to.
 
-This is the cross-project half of ` + "`aboard status`" + `. It needs no project of its
+This is the cross-project half of ` + "`" + inv.Cmd("status") + "`" + `. It needs no project of its
 own — it works from a directory that has never held a board — because it asks
 the PROCESS TABLE rather than a registry: it walks /proc for an ` + "`aboard serve`" + `
 or an ` + "`ape aboard serve`" + `, resolves each one's project root, and then does exactly
@@ -32,18 +33,18 @@ result, because "no board found" after 3 processes and after 400 mean different
 things.
 
 /proc is Linux only. Everywhere else this command exits 2 and says so, and the
-per-project answer is ` + "`aboard status`" + ` inside each project.`,
+per-project answer is ` + "`" + inv.Cmd("status") + "`" + ` inside each project.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard boards\n  aboard boards --output-format json",
+		Example: "  " + inv.Cmd("boards") + "\n  " + inv.Cmd("boards --output-format json"),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err
 			}
-			rep, err := aboard.Boards(cmd.Context())
+			rep, err := aboard.Boards(cmd.Context(), inv)
 			if err != nil {
 				return boardsExit(err)
 			}
-			return renderOutput(stdout(opts), outputFormat, rep, rep.Human)
+			return renderOutput(stdout(opts), outputFormat, rep, func() string { return rep.Human(opts.Invocation()) })
 		},
 	}
 	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)

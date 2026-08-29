@@ -143,8 +143,8 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 // command shows up on the board as it happens rather than when it finishes:
 //
 //	go test ./... 2>&1 | aboard log ab42
-func Log(ctx context.Context, root Root, name, tab string, in io.Reader, out io.Writer) error {
-	inst, err := RunningInstance(root, name)
+func Log(ctx context.Context, root Root, name, tab string, in io.Reader, out io.Writer, inv Invocation) error {
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return err
 	}

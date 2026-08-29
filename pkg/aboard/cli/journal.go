@@ -36,7 +36,7 @@ moves constantly. Every accepted write funnels through one function, so this
 cannot be bypassed by an agent that forgot to record something.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -44,7 +44,7 @@ cannot be bypassed by an agent that forgot to record something.`,
 			if err != nil {
 				return err
 			}
-			entries, source, err := aboard.JournalEntries(cmd.Context(), root, name, limit)
+			entries, source, err := aboard.JournalEntries(cmd.Context(), root, name, limit, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -79,7 +79,7 @@ be something for jq to strip. Each line says THAT something changed and which
 tabs; re-read the board for the contents.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -87,7 +87,7 @@ tabs; re-read the board for the contents.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Watch(cmd.Context(), root, name, stdout(opts))
+			return aboard.Watch(cmd.Context(), root, name, stdout(opts), opts.Invocation())
 		},
 	}
 }

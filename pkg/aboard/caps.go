@@ -1107,7 +1107,9 @@ func contains(list []string, want string) bool {
 // the generator cannot disagree. A built-in that does not parse is a build
 // defect: report it rather than compare against a table with empty cells.
 func generatedRecipeIndex() (string, error) {
-	built, err := BuiltinRecipes()
+	// DefaultInvocation, not the running one: this index is a GENERATED,
+	// committed file, so its text must not depend on which host regenerated it.
+	built, err := BuiltinRecipes(DefaultInvocation)
 	if err != nil {
 		return "", err
 	}

@@ -48,23 +48,25 @@ var ErrNoProcessTable = errors.New("no process table to scan")
 // msgUseStatusPerProject is the alternative, and both refusals end with it. One
 // string because a reader who cannot have the machine-wide answer must always be
 // pointed at the per-project one, in the same words, whichever refusal they hit.
-const msgUseStatusPerProject = "run `aboard status` inside each project you want the answer for"
+func msgUseStatusPerProject(inv Invocation) string {
+	return fmt.Sprintf("run `%s status` inside each project you want the answer for", inv)
+}
 
 // noProcessTable is the refusal for a platform that has no /proc at all. It
 // takes the OS name rather than reading runtime.GOOS so that it can be tested
 // where it can never fire, which is every machine this repo is developed on.
-func noProcessTable(goos string) error {
+func noProcessTable(goos string, inv Invocation) error {
 	return fmt.Errorf("%w: `boards` finds running boards by reading /proc, and /proc exists on Linux only — this is %s. %s",
-		ErrNoProcessTable, goos, msgUseStatusPerProject)
+		ErrNoProcessTable, goos, msgUseStatusPerProject(inv))
 }
 
 // noProcFS is the refusal for a Linux with no procfs mounted — a chroot, or a
 // container built without one. Different sentence from the one above because the
 // reader's next move is different: nothing is wrong with their platform, and
 // mounting /proc would fix it.
-func noProcFS(procRoot string) error {
+func noProcFS(procRoot string, inv Invocation) error {
 	return fmt.Errorf("%w: %s has no `self` entry, so it is not a process table (a chroot, or a container with no procfs mounted). %s",
-		ErrNoProcessTable, procRoot, msgUseStatusPerProject)
+		ErrNoProcessTable, procRoot, msgUseStatusPerProject(inv))
 }
 
 // BoardRow is one running board: one (project, name) pair, which is why two
@@ -126,8 +128,8 @@ type BoardsReport struct {
 // It needs no project and finds no root of its own: that is the difference
 // between it and `status`, and it is why the command works from a directory that
 // has never held a board.
-func Boards(ctx context.Context) (BoardsReport, error) {
-	return scanBoards(ctx, procDir)
+func Boards(ctx context.Context, inv Invocation) (BoardsReport, error) {
+	return scanBoards(ctx, procDir, inv)
 }
 
 // describeBoard turns one candidate process into a row: which of the project's
@@ -292,11 +294,11 @@ func (b BoardRow) headingName() string {
 // URL, a version, two timestamps — do not fit a terminal on one line, and a
 // table that wraps is harder to read than no table. The ORDER is the table's
 // (project, then name), and the structured forms carry every field as a row.
-func (r BoardsReport) Human() string {
+func (r BoardsReport) Human(inv Invocation) string {
 	var b strings.Builder
 	if len(r.Boards) == 0 {
 		fmt.Fprintf(&b, "no running board found (%d process%s inspected)\n", r.Inspected, pluralES(r.Inspected))
-		b.WriteString(r.limits())
+		b.WriteString(r.limits(inv))
 		return b.String()
 	}
 	fmt.Fprintf(&b, "%d board%s (%d process%s inspected)\n",
@@ -320,7 +322,7 @@ func (r BoardsReport) Human() string {
 		}
 	}
 	b.WriteString("\n")
-	b.WriteString(r.limits())
+	b.WriteString(r.limits(inv))
 	return b.String()
 }
 
@@ -328,13 +330,13 @@ func (r BoardsReport) Human() string {
 // docs — the same reason the mount receipts print their own two limits. A
 // listing of processes reads as a listing of BOARDS, and the gap between those
 // two is where a reader draws a wrong conclusion.
-func (r BoardsReport) limits() string {
+func (r BoardsReport) limits(inv Invocation) string {
 	var b strings.Builder
 	if r.Unreadable > 0 {
 		fmt.Fprintf(&b, "%d process%s could not be inspected (permission)\n", r.Unreadable, pluralES(r.Unreadable))
 	}
 	b.WriteString("(this is the process table, so a board that is not running does not appear here —\n" +
-		" " + msgUseStatusPerProject + ")\n")
+		" " + msgUseStatusPerProject(inv) + ")\n")
 	return b.String()
 }
 

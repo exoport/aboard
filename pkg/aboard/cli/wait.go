@@ -8,6 +8,7 @@ import (
 )
 
 func newWaitCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var (
 		by      string
 		forWhat string
@@ -44,9 +45,9 @@ stale: if this process dies, the button stops claiming anyone is listening.
 
 Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 		Args:    cobra.NoArgs,
-		Example: `  aboard wait --for "answer ab128" --note "waiting on the gate"`,
+		Example: `  ` + inv.Cmd("wait") + ` --for "answer ab128" --note "waiting on the gate"`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -54,7 +55,7 @@ Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 			if err != nil {
 				return err
 			}
-			code, err := aboard.Wait(cmd.Context(), root, name, by, forWhat, note, timeout, stdout(opts))
+			code, err := aboard.Wait(cmd.Context(), root, name, by, forWhat, note, timeout, stdout(opts), opts.Invocation())
 			if err != nil {
 				if code == aboard.ExitUsage {
 					return usageErr(err)
@@ -74,19 +75,20 @@ Exit 0 means released. Exit 3 means the timeout ran out and nobody came.`,
 }
 
 func newPokeCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var by, note string
 	cmd := &cobra.Command{
 		Use:   "poke",
 		Short: "Release every session waiting on this board",
 		Long: `Do what the human's notify button does: release every session currently blocked
-on ` + "`aboard wait`" + `, and tell them who released them and why.
+on ` + "`" + inv.Cmd("wait") + "`" + `, and tell them who released them and why.
 
 Nothing here starts an agent. A session is released only if it had already
 decided to listen; a board with nobody waiting is simply not listening, and this
 command says so rather than pretending otherwise.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -94,7 +96,7 @@ command says so rather than pretending otherwise.`,
 			if err != nil {
 				return err
 			}
-			return aboard.Poke(cmd.Context(), root, name, by, note, stdout(opts))
+			return aboard.Poke(cmd.Context(), root, name, by, note, stdout(opts), opts.Invocation())
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", aboard.DefaultActor, "who is releasing them")

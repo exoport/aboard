@@ -71,7 +71,17 @@ is invisible to a suite that runs at the top level of a browser, and it had ship
 question rather than work: the remote and the first tag, the `ape aboard` mount
 and the `aboard <cmd>` strings that go with it, installing the extension, and the five
 porting judgement calls that stand until overruled (written out in §10 itself since
-2026-08-27, rather than pointing at a file). **Go 1.27 left that list on 2026-08-27**,
+2026-08-27, rather than pointing at a file). **The mount and the strings both left that
+list on 2026-08-28**: ape mounted the tree (`ape aboard`, one `AddCommand`), and this
+repo answered with **v0.1.1** — `Options.Argv0` now reaches message text through an
+`aboard.Invocation`, so a hosted board names `ape aboard init` rather than a command
+that reader does not have. The count was low twice: 55 + 12 became **71 sites in 34
+functions**, because the measuring grep only matched double-quoted literals and never
+saw the backtick `Long:` help. **16 sites stay literal on purpose** — the generated
+artifacts, `recipesReadme` (written to disk), the declared table that feeds `capsHash`,
+and `boards`' help, which names both spellings because that is the content of the
+sentence. `capsHash` is unchanged at `207b5d93`, and `TestNoNewHardcodedInvocations`
+guards the tree from here. **Go 1.27 left that list on 2026-08-27**,
 answered by the human: the toolchain moved on this machine, so `go.mod` says `go 1.27.0`,
 `github.com/go-json-experiment/json` is gone in favour of the stdlib `encoding/json/v2`,
 and the goreleaser pin it was blocking reached v2.18.0 — see the dependency decision

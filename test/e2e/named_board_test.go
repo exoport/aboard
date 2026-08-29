@@ -66,7 +66,7 @@ func TestTheChangeBannersRestoreLineNamesTheBoard(t *testing.T) {
 func namedBoard(t *testing.T, name string) string {
 	t.Helper()
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: name}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: name}, aboard.DefaultInvocation); err != nil {
 		t.Fatalf("seeding the %q board: %v", name, err)
 	}
 

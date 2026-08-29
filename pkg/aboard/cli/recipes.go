@@ -61,12 +61,12 @@ with the reason, and a recipe needing a newer board schema says so.`,
 			if err != nil {
 				return err
 			}
-			found, err := aboard.DiscoverRecipes(root)
+			found, err := aboard.DiscoverRecipes(root, opts.Invocation())
 			if err != nil {
 				return err
 			}
 			return renderOutput(stdout(opts), outputFormat, aboard.RecipeOutputs(found),
-				func() string { return aboard.RecipeListHuman(found) })
+				func() string { return aboard.RecipeListHuman(found, opts.Invocation()) })
 		},
 	}
 	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)
@@ -74,6 +74,7 @@ with the reason, and a recipe needing a newer board schema says so.`,
 }
 
 func newRecipesShowCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var template bool
 	cmd := &cobra.Command{
 		Use:   "show <name>",
@@ -83,17 +84,17 @@ it is for, then the body. The frontmatter is stripped — it is metadata for the
 list, and YAML at the top of something meant to be read as prose is noise.
 
 --template prints ONLY the JSON tab skeleton the recipe carries, so it pipes
-straight into an edit and then into ` + "`aboard apply`" + `. A recipe with no skeleton
+straight into an edit and then into ` + "`" + inv.Cmd("apply") + "`" + `. A recipe with no skeleton
 exits 1 saying so, rather than printing an empty document that would be applied
 as an empty tab.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  aboard recipes show apply-a-write\n  aboard recipes show my-recipe --template | jq .",
+		Example: "  " + inv.Cmd("recipes show apply-a-write") + "\n  " + inv.Cmd("recipes show my-recipe --template") + " | jq .",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root, err := recipeRoot(cmd)
 			if err != nil {
 				return err
 			}
-			r, err := aboard.FindRecipe(root, args[0])
+			r, err := aboard.FindRecipe(root, args[0], opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -103,14 +104,14 @@ as an empty tab.`,
 				return fmt.Errorf("recipe %q (%s) does not parse: %s", r.Name, r.Path, r.Err)
 			}
 			if template {
-				body, err := r.TemplateJSON()
+				body, err := r.TemplateJSON(opts.Invocation())
 				if err != nil {
 					return err
 				}
 				_, err = fmt.Fprintln(stdout(opts), body)
 				return err
 			}
-			_, err = fmt.Fprint(stdout(opts), aboard.RecipeShowText(r))
+			_, err = fmt.Fprint(stdout(opts), aboard.RecipeShowText(r, opts.Invocation()))
 			return err
 		},
 	}
@@ -126,6 +127,7 @@ as an empty tab.`,
 // the declared command table, so adding a maintainer command never moves
 // capsHash.
 func newRecipesIndexCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	return &cobra.Command{
 		Use:    "index",
 		Short:  "Print the markdown index of the built-in recipes (repo maintenance)",
@@ -137,13 +139,13 @@ BUILT-IN recipes only, and deliberately: the file it generates ships inside a
 skill directory that gets copied between projects, so a table listing one
 project's own recipes would be wrong everywhere else it was copied. The
 paragraph underneath the table is what makes that harmless — it leads with
-` + "`aboard recipes list`" + `, which is the only complete answer.
+` + "`" + inv.Cmd("recipes list") + "`" + `, which is the only complete answer.
 
 Deterministic: sorted by name, no timestamps. Running it twice on an unchanged
 tree produces no diff.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			built, err := aboard.BuiltinRecipes()
+			built, err := aboard.BuiltinRecipes(opts.Invocation())
 			if err != nil {
 				return err
 			}

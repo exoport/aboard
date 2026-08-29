@@ -19,7 +19,7 @@ going to run anyway. A MISSING reference is not staleness; a project that never
 copied the skill has nothing to be out of date.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -28,7 +28,7 @@ copied the skill has nothing to be out of date.`,
 				return err
 			}
 			rep := aboard.Status(cmd.Context(), root, name, aboard.WebFS())
-			return renderOutput(stdout(opts), outputFormat, rep, rep.Human)
+			return renderOutput(stdout(opts), outputFormat, rep, func() string { return rep.Human(opts.Invocation()) })
 		},
 	}
 	cmd.Flags().StringVar(&outputFormat, "output-format", formatHuman, aboard.UsageOutputFormat)

@@ -9,6 +9,7 @@ import (
 )
 
 func newUploadsCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var (
 		prune        bool
 		yes          bool
@@ -24,9 +25,9 @@ its declared fields. An html widget's markup can name a file no spec knows
 about, and a scan over declared fields would call that file an orphan and offer
 to delete an image somebody is looking at.
 
-  aboard uploads                    list them, unreferenced ones marked *
-  aboard uploads --prune            show exactly what deleting them would remove
-  aboard uploads --prune --yes      delete them
+  ` + inv.Cmd("uploads") + `                    list them, unreferenced ones marked *
+  ` + inv.Cmd("uploads") + ` --prune            show exactly what deleting them would remove
+  ` + inv.Cmd("uploads") + ` --prune --yes      delete them
 
 --prune on its own prints and REFUSES: deletion is irreversible and .aboard/ is
 gitignored, so there is no copy anywhere to go back to.
@@ -38,7 +39,7 @@ board are printed as <board>:<tab>.
 
 Reads the state files directly, so it needs no server.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard uploads\n  aboard uploads --prune --yes",
+		Example: "  " + inv.Cmd("uploads") + "\n  " + inv.Cmd("uploads --prune --yes"),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err
@@ -46,16 +47,16 @@ Reads the state files directly, so it needs no server.`,
 			if yes && !prune {
 				return usageErr(errors.New("--yes only means something with --prune; there is nothing to confirm"))
 			}
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
-			rep, err := aboard.Uploads(root)
+			rep, err := aboard.Uploads(root, opts.Invocation())
 			if err != nil {
 				return err
 			}
 			if err := renderOutput(stdout(opts), outputFormat, rep,
-				func() string { return rep.Human(prune) }); err != nil {
+				func() string { return rep.Human(prune, opts.Invocation()) }); err != nil {
 				return err
 			}
 			if !prune || rep.Orphaned == 0 {

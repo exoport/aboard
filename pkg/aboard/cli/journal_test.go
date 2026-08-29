@@ -12,7 +12,7 @@ import (
 // server by design; the journal is an append-only FILE and needs one even less.
 func TestJournalReadsFromDiskWithNoBoardRunning(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 
@@ -34,7 +34,7 @@ func TestJournalReadsFromDiskWithNoBoardRunning(t *testing.T) {
 // something for jq to choke on.
 func TestJournalDiskNoticeIsHumanOnly(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 

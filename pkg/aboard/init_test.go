@@ -29,7 +29,7 @@ func readDoc(t *testing.T, path string) map[string]any {
 // know, reads `tabs` as an array, and allocates ids from `nextId`.
 func TestInitCreatesAWorkingBoard(t *testing.T) {
 	dir := t.TempDir()
-	res, err := Init(InitConfig{Dir: dir})
+	res, err := Init(InitConfig{Dir: dir}, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestInitCreatesAWorkingBoard(t *testing.T) {
 // cannot reconstruct, and there is deliberately no --force.
 func TestInitRefusesToOverwrite(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := Init(InitConfig{Dir: dir}); err != nil {
+	if _, err := Init(InitConfig{Dir: dir}, DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(Root(mustAbs(t, dir)).StateFile(""))
@@ -87,7 +87,7 @@ func TestInitRefusesToOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = Init(InitConfig{Dir: dir})
+	_, err = Init(InitConfig{Dir: dir}, DefaultInvocation)
 	if err == nil {
 		t.Fatal("a second init overwrote the board")
 	}
@@ -109,13 +109,13 @@ func TestInitRefusesToOverwrite(t *testing.T) {
 // exists" without a path sends the reader off to run `find`.
 func TestInitRefusesInsideAnExistingRoot(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := Init(InitConfig{Dir: dir}); err != nil {
+	if _, err := Init(InitConfig{Dir: dir}, DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	deep := filepath.Join(dir, "pkg", "thing")
 	mustMkdir(t, deep)
 
-	_, err := Init(InitConfig{Dir: deep})
+	_, err := Init(InitConfig{Dir: deep}, DefaultInvocation)
 	if err == nil {
 		t.Fatal("init created a nested root")
 	}
@@ -132,13 +132,13 @@ func TestInitRefusesInsideAnExistingRoot(t *testing.T) {
 // one case that proceeds.
 func TestInitNamedBoardJoinsTheExistingRoot(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := Init(InitConfig{Dir: dir}); err != nil {
+	if _, err := Init(InitConfig{Dir: dir}, DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	deep := filepath.Join(dir, "sub")
 	mustMkdir(t, deep)
 
-	res, err := Init(InitConfig{Dir: deep, Name: "review"})
+	res, err := Init(InitConfig{Dir: deep, Name: "review"}, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("a named board inside an existing root was refused: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestInitCompletesARootMissingItsDocument(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, DirName))
 
-	res, err := Init(InitConfig{Dir: dir})
+	res, err := Init(InitConfig{Dir: dir}, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("init refused to complete a root with no document: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestInitCompletesARootMissingItsDocument(t *testing.T) {
 // else's file.
 func TestInitGitignoreIsIdempotent(t *testing.T) {
 	dir := t.TempDir()
-	res, err := Init(InitConfig{Dir: dir, Gitignore: true})
+	res, err := Init(InitConfig{Dir: dir, Gitignore: true}, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestInitGitignoreIsIdempotent(t *testing.T) {
 	}
 
 	// A second board in the same project asks again; the line must not double.
-	res2, err := Init(InitConfig{Dir: dir, Name: "second", Gitignore: true})
+	res2, err := Init(InitConfig{Dir: dir, Name: "second", Gitignore: true}, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestGitignoreRecognisesExistingSpellings(t *testing.T) {
 // here is one a broken fixture would carry into every project that ran it.
 func TestInitExampleSeedsTheBoard(t *testing.T) {
 	dir := t.TempDir()
-	res, err := Init(InitConfig{Dir: dir, Example: true})
+	res, err := Init(InitConfig{Dir: dir, Example: true}, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestInitReportsWhatItCreatedWhenGitignoreFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := Init(InitConfig{Dir: dir, Gitignore: true})
+	res, err := Init(InitConfig{Dir: dir, Gitignore: true}, DefaultInvocation)
 	if err == nil {
 		t.Fatal("writing .gitignore over a directory succeeded")
 	}
@@ -404,7 +404,7 @@ func TestInitReportsWhatItCreatedWhenGitignoreFails(t *testing.T) {
 // at risk.
 func TestInitStillReportsCleanlyWhenGitignoreWorks(t *testing.T) {
 	dir := t.TempDir()
-	res, err := Init(InitConfig{Dir: dir, Gitignore: true})
+	res, err := Init(InitConfig{Dir: dir, Gitignore: true}, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 )
 
 func newRequestsCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var (
 		tab          string
 		all          bool
@@ -22,10 +23,10 @@ tab and say "this is wrong, fix it" — so it needs a channel an agent can find
 without being told to look, because by definition it arrives while nobody is
 watching.
 
-Run this at the start of a turn, next to ` + "`aboard status`" + ` (which prints the
+Run this at the start of a turn, next to ` + "`" + inv.Cmd("status") + "`" + ` (which prints the
 count). Then say you did one:
 
-  aboard requests done ab199 --by agent-1 --note "redrew the arrow"
+  ` + inv.Cmd("requests") + ` done ab199 --by agent-1 --note "redrew the arrow"
 
 Only the human writes these. An agent write that creates, edits, reorders or
 deletes one has it restored by the server; adding a done stamp is the one change
@@ -33,14 +34,14 @@ an agent may make, and the stamp is never cleared — the human deleting the who
 note is how it goes away.
 
 Needs no running board: it falls back to the state file. Stamping one does need
-the board, for the same reason ` + "`aboard apply`" + ` does.`,
+the board, for the same reason ` + "`" + inv.Cmd("apply") + "`" + ` does.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard requests\n  aboard requests --tab ab14 --all",
+		Example: "  " + inv.Cmd("requests") + "\n  " + inv.Cmd("requests --tab ab14 --all"),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err
 			}
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -48,12 +49,12 @@ the board, for the same reason ` + "`aboard apply`" + ` does.`,
 			if err != nil {
 				return err
 			}
-			list, err := aboard.ListRequests(cmd.Context(), root, name, tab, all)
+			list, err := aboard.ListRequests(cmd.Context(), root, name, tab, all, opts.Invocation())
 			if err != nil {
 				return err
 			}
 			return renderOutput(stdout(opts), outputFormat, list,
-				func() string { return aboard.RequestsHuman(list, tab, all, name) })
+				func() string { return aboard.RequestsHuman(list, tab, all, name, opts.Invocation()) })
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "include the ones already stamped done")
@@ -65,6 +66,7 @@ the board, for the same reason ` + "`aboard apply`" + ` does.`,
 }
 
 func newRequestDoneCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var by, note string
 	cmd := &cobra.Command{
 		Use:   "done <request-id>",
@@ -84,9 +86,9 @@ and writes nothing.
 --by human is refused: the stamp says which SESSION acted, and the human answers
 their own requests by deleting them.`,
 		Args:    cobra.ExactArgs(1),
-		Example: `  aboard requests done ab199 --by agent-1 --note "redrew the arrow"`,
+		Example: `  ` + inv.Cmd("requests") + ` done ab199 --by agent-1 --note "redrew the arrow"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -94,7 +96,7 @@ their own requests by deleting them.`,
 			if err != nil {
 				return err
 			}
-			return aboard.CompleteRequest(cmd.Context(), root, name, args[0], by, note, stdout(opts))
+			return aboard.CompleteRequest(cmd.Context(), root, name, args[0], by, note, stdout(opts), opts.Invocation())
 		},
 	}
 	cmd.Flags().StringVar(&by, "by", aboard.DefaultActor, "which session did it; shown beside the tick")

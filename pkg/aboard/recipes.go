@@ -204,13 +204,13 @@ func (r Recipe) Valid() bool { return r.Err == "" }
 // It does NOT return an empty document when there is no template: an empty
 // document handed to `aboard apply` is an empty tab on somebody's screen, which
 // is the silent-and-successful failure again.
-func (r Recipe) TemplateJSON() (string, error) {
+func (r Recipe) TemplateJSON(inv Invocation) (string, error) {
 	if r.Err != "" {
 		return "", errors.New(r.Err)
 	}
 	if !r.HasTemplate {
-		return "", fmt.Errorf("recipe %q has no %s block — run `aboard recipes show %s` and follow the body",
-			r.Name, TemplateFence, r.Name)
+		return "", fmt.Errorf("recipe %q has no %s block — run `%s recipes show %s` and follow the body",
+			r.Name, TemplateFence, inv, r.Name)
 	}
 	return r.Template, nil
 }
@@ -238,12 +238,12 @@ func recipeTiers(root Root) []recipeTier {
 // A missing directory is not an error — most projects have none of the three.
 // An unreadable one is: a directory that exists and cannot be read is a fact the
 // caller needs, not a silently empty tier.
-func DiscoverRecipes(root Root) ([]Recipe, error) {
+func DiscoverRecipes(root Root, inv Invocation) ([]Recipe, error) {
 	byName := map[string]Recipe{}
 	order := []string{}
 
 	for _, tier := range recipeTiers(root) {
-		found, err := readRecipeTier(tier)
+		found, err := readRecipeTier(tier, inv)
 		if err != nil {
 			return nil, err
 		}
@@ -276,8 +276,8 @@ func DiscoverRecipes(root Root) ([]Recipe, error) {
 // FindRecipe resolves one name through the same precedence. An unknown name is
 // an error listing what IS available, because the commonest cause is a near
 // miss and a bare "not found" makes the reader run a second command to find out.
-func FindRecipe(root Root, name string) (Recipe, error) {
-	all, err := DiscoverRecipes(root)
+func FindRecipe(root Root, name string, inv Invocation) (Recipe, error) {
+	all, err := DiscoverRecipes(root, inv)
 	if err != nil {
 		return Recipe{}, err
 	}
@@ -298,26 +298,26 @@ func FindRecipe(root Root, name string) (Recipe, error) {
 
 // BuiltinRecipes is the compiled-in set, in name order. Used by `recipes index`,
 // which documents the BINARY and must therefore not see a project's files.
-func BuiltinRecipes() ([]Recipe, error) {
-	return readRecipeTier(recipeTier{scope: ScopeBuiltin})
+func BuiltinRecipes(inv Invocation) ([]Recipe, error) {
+	return readRecipeTier(recipeTier{scope: ScopeBuiltin}, inv)
 }
 
-func readRecipeTier(tier recipeTier) ([]Recipe, error) {
+func readRecipeTier(tier recipeTier, inv Invocation) ([]Recipe, error) {
 	if tier.scope == ScopeBuiltin {
 		return readRecipeFS(builtinRecipes, builtinDir, ScopeBuiltin,
-			func(dir, name string) string { return path.Join(dir, name) })
+			func(dir, name string) string { return path.Join(dir, name) }, inv)
 	}
 	if info, err := os.Stat(tier.dir); err != nil || !info.IsDir() {
 		return nil, nil //nolint:nilerr // a tier that does not exist is the normal case
 	}
 	return readRecipeFS(os.DirFS(tier.dir), ".", tier.scope,
-		func(_, name string) string { return RecipeFile(tier.dir, name) })
+		func(_, name string) string { return RecipeFile(tier.dir, name) }, inv)
 }
 
 // readRecipeFS reads one directory of *.md. join builds the path REPORTED for a
 // file, which differs from the path read: a built-in reports its embedded path,
 // a disk recipe reports where a person would go to edit it.
-func readRecipeFS(fsys fs.FS, dir, scope string, join func(string, string) string) ([]Recipe, error) {
+func readRecipeFS(fsys fs.FS, dir, scope string, join func(string, string) string, inv Invocation) ([]Recipe, error) {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil, fmt.Errorf("reading recipes in %s: %w", scope, err)
@@ -375,7 +375,7 @@ func readRecipeFS(fsys fs.FS, dir, scope string, join func(string, string) strin
 			})
 			continue
 		}
-		out = append(out, parseRecipe(body, reportPath, scope))
+		out = append(out, parseRecipe(body, reportPath, scope, inv))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
@@ -401,7 +401,7 @@ func recipesInside(fsys fs.FS, dir string) int {
 // Recipe carrying the reason. That is the difference between a tool that says
 // "your recipe has no frontmatter" and one that behaves as though the file the
 // author is looking at does not exist.
-func parseRecipe(data []byte, reportPath, scope string) Recipe {
+func parseRecipe(data []byte, reportPath, scope string, inv Invocation) Recipe {
 	r := Recipe{Scope: scope, Path: reportPath}
 	stem := stemOf(reportPath)
 
@@ -428,7 +428,7 @@ func parseRecipe(data []byte, reportPath, scope string) Recipe {
 		// field they cannot see would send them hunting for a file that does not
 		// exist. The error names both, which is the fix they have to make.
 		r.Err = fmt.Sprintf("frontmatter name %q does not match the file stem %q — "+
-			"`aboard recipes show` takes the name, so the two must agree", r.Name, stem)
+			"`%s recipes show` takes the name, so the two must agree", r.Name, stem, inv)
 		r.Name = stem
 		return r
 	case strings.TrimSpace(r.Description) == "":
@@ -580,9 +580,9 @@ const descWidth = 64
 // indented line UNDER it rather than in a fourth column: where the file is, what
 // it shadowed, and why it will not parse. A row that is fine occupies one line;
 // a row with something wrong occupies two and says what.
-func RecipeListHuman(recipes []Recipe) string {
+func RecipeListHuman(recipes []Recipe, inv Invocation) string {
 	if len(recipes) == 0 {
-		return "no recipes found — this binary ships none, which should be impossible; run `aboard version`\n"
+		return fmt.Sprintf("no recipes found — this binary ships none, which should be impossible; run `%s version`\n", inv)
 	}
 
 	nameWidth, scopeWidth := len("name"), len("scope")
@@ -628,7 +628,7 @@ func RecipeListHuman(recipes []Recipe) string {
 	if shadowed > 0 {
 		fmt.Fprintf(&b, ", %d shadowed file(s)", shadowed)
 	}
-	b.WriteString(". `aboard recipes show <name>` prints one.\n")
+	fmt.Fprintf(&b, ". `%s recipes show <name>` prints one.\n", inv)
 	return b.String()
 }
 
@@ -638,7 +638,7 @@ func RecipeListHuman(recipes []Recipe) string {
 // The frontmatter is stripped: it is metadata for the list, and leaving it on
 // would put YAML at the top of something meant to be read as prose. The title
 // line replaces it with the same two facts in a form a reader wants.
-func RecipeShowText(r Recipe) string {
+func RecipeShowText(r Recipe, inv Invocation) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# %s — %s\n\n", r.Name, oneLine(r.Description))
 	if r.WhenToUse != "" {
@@ -653,7 +653,7 @@ func RecipeShowText(r Recipe) string {
 		b.WriteString("\n")
 	}
 	if r.HasTemplate {
-		fmt.Fprintf(&b, "\n(`aboard recipes show %s --template` prints just the tab skeleton.)\n", r.Name)
+		fmt.Fprintf(&b, "\n(`%s recipes show %s --template` prints just the tab skeleton.)\n", inv, r.Name)
 	}
 	return b.String()
 }

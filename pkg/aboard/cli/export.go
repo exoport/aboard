@@ -8,6 +8,7 @@ import (
 )
 
 func newExportCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var format string
 	cmd := &cobra.Command{
 		Use:   "export <tab|key>",
@@ -22,14 +23,14 @@ read out a conclusion.
 The strategy is not to promote early. It is to make LATE promotion cheap, and
 retyping was the cost that made it expensive.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  aboard export ab128\n  aboard export table-example --format csv",
+		Example: "  " + inv.Cmd("export ab128") + "\n  " + inv.Cmd("export table-example --format csv"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch format {
 			case "md", "csv":
 			default:
 				return usageErr(fmt.Errorf("--format must be md or csv, got %q", format))
 			}
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}

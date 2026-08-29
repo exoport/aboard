@@ -108,7 +108,7 @@ func TestAnExplicitPortStillRefusesADuplicate(t *testing.T) {
 	port := serverPort(t, stub.URL)
 
 	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
-	_, _, err := srv.listen(context.Background(), port, root, "")
+	_, _, err := srv.listen(context.Background(), port, root, "", DefaultInvocation)
 	if err == nil {
 		t.Fatal("--port started a second server for a project that already had one")
 	}
@@ -131,7 +131,7 @@ func TestAnExplicitPortHeldByAStrangerIsAPlainBindFailure(t *testing.T) {
 	defer stub.Close()
 
 	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
-	_, _, err := srv.listen(context.Background(), serverPort(t, stub.URL), root, "")
+	_, _, err := srv.listen(context.Background(), serverPort(t, stub.URL), root, "", DefaultInvocation)
 	if err == nil {
 		t.Fatal("binding a port somebody else holds succeeded")
 	}
@@ -250,7 +250,7 @@ func TestAFreeExplicitPortIsStillRefusedWhenThisProjectHasALiveBoard(t *testing.
 	freePort := aFreePort(t)
 
 	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
-	ln, _, err := srv.listen(context.Background(), freePort, root, "")
+	ln, _, err := srv.listen(context.Background(), freePort, root, "", DefaultInvocation)
 	if err == nil {
 		_ = ln.Close()
 		t.Fatal("a second server started on a free --port while this project's board was live")
@@ -261,7 +261,7 @@ func TestAFreeExplicitPortIsStillRefusedWhenThisProjectHasALiveBoard(t *testing.
 
 	// The named board of the same project is a different board, and must not be
 	// refused by the default board's record.
-	ln2, _, err := srv.listen(context.Background(), freePort, root, "review")
+	ln2, _, err := srv.listen(context.Background(), freePort, root, "review", DefaultInvocation)
 	if err != nil {
 		t.Fatalf("a named board was refused by the default board's record: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestAStaleRecordDoesNotStopANewBoard(t *testing.T) {
 	writeInstanceRecord(t, root, "", aFreePort(t), 999999)
 
 	srv := &server{opts: Options{Logger: log.New(io.Discard, "", 0)}, root: root}
-	ln, got, err := srv.listen(context.Background(), 0, root, "")
+	ln, got, err := srv.listen(context.Background(), 0, root, "", DefaultInvocation)
 	if err != nil {
 		t.Fatalf("a stale record stopped a new board: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestAStaleRecordDoesNotStopANewBoard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := RunningInstance(root, "")
+	rec, err := RunningInstance(root, "", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}

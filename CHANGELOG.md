@@ -1,5 +1,50 @@
 # CHANGELOG
 
+## v0.1.1 — 2026-08-28
+
+One user-visible change, and it is the last open item from
+`development/planning/plan-2_finish-line.md` §10: the board now names the command
+the reader actually has. It was gated on the `ape aboard` mount existing, because
+55 strings cannot be verified against a host that does not exist. That mount
+landed in ape on 2026-08-28, so this is the other half.
+
+- **Every message and every help example names the invocation the reader typed.**
+  Under `ape aboard` the board used to print `run \`aboard init\`` — a command that
+  user does not have — directly beneath a cobra `Usage:` line that was always
+  correct, because that one derives from the command path. `Options.Argv0`
+  already carried the right invocation and was already plumbed to the instance
+  record and `/health`; it simply never reached message text. It does now,
+  through a new `aboard.Invocation` type threaded to every site that names a
+  command. Standalone output is byte-for-byte what it was.
+  - **The measurement was low.** The recorded figure was 55 hardcoded
+    `aboard <cmd>` occurrences plus 12 cobra `Example:` fields. That grep only
+    matched double-quoted literals, so it never saw the `Long:` help written as
+    backtick raw strings — 16 more, including the root command's own "Start
+    with:" block, which is the first thing a new user reads. The real count was
+    71 sites in 34 functions.
+  - **16 of them deliberately do NOT change**, and that is the substance of the
+    fix rather than a shortcut. Anything that outlives the invocation which
+    produced it stays in the board's own words: the GENERATED artifacts
+    (`controls.generated.js`, the skill reference, the recipe index) because
+    `make caps` must produce the same bytes for everyone; `recipesReadme`
+    because it is written into `.aboard/recipes/` in a project either host may
+    drive afterwards; and the DECLARED command table in `commands.go`, which is
+    hashed into `capsHash` — a host-aware string there would give the two hosts
+    two different hashes and let an agent tell which one it reached, the one
+    thing [why-two-identities](docs/explanation/why-two-identities.md) says must
+    never be true. `capsHash` is unchanged at `207b5d93`, verified against a
+    real `ape aboard` build.
+  - **`aboard boards` keeps naming both spellings** in its help, because the
+    reason that scan reads `cmdline` rather than `comm` is that it must find an
+    `aboard serve` *and* an `ape aboard serve`. Naming both is the content of
+    the sentence.
+  - New guard, `TestNoNewHardcodedInvocations`: it walks the production tree and
+    fails on a new hardcoded `aboard <cmd>`, with an allow-list that carries the
+    reason for each of the 16. The original 71 accumulated because every one of
+    them reads perfectly right in the file it sits in — the defect is only
+    visible from a host that did not exist yet, so the tree is checked rather
+    than trusted.
+
 ## v0.1.0 — 2026-08-28
 
 The first release. Everything below closes

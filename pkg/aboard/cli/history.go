@@ -13,6 +13,7 @@ import (
 const defaultHistoryLimit = 20
 
 func newHistoryCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var (
 		at           int
 		limit        int
@@ -29,8 +30,8 @@ first, naming who replaced each one — and says plainly where the record ends,
 because rotation keeps one older generation and a listing that just stopped would
 read as "this tab has only ever been written twice".
 
-  aboard history ab133                          what it said, and when
-  aboard history ab133 --at 1 | aboard apply --by agent-1     put version 1 back
+  ` + inv.Cmd("history") + ` ab133                          what it said, and when
+  ` + inv.Cmd("history") + ` ab133 --at 1 | ` + inv.Cmd("apply") + ` --by agent-1     put version 1 back
 
 --at prints a WHOLE document with that one tab put back, not the tab on its own:
 a single-tab document is a document that deletes every other tab, and the server
@@ -50,7 +51,7 @@ Reads from the running board when there is one and from
 board, whose history is its own. The restore line the listing prints carries
 --name on both halves for exactly that reason.`,
 		Args:    cobra.ExactArgs(1),
-		Example: "  aboard history ab133\n  aboard history ab133 --at 1 | aboard apply --by agent-1",
+		Example: "  " + inv.Cmd("history ab133") + "\n  " + inv.Cmd("history ab133 --at 1") + " | " + inv.Cmd("apply --by agent-1"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := checkOutputFormat(outputFormat); err != nil {
 				return err
@@ -58,7 +59,7 @@ board, whose history is its own. The restore line the listing prints carries
 			if at < 0 {
 				return usageErr(fmt.Errorf("--at must be 1 or more (1 is the most recent recorded version), got %d", at))
 			}
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -70,9 +71,9 @@ board, whose history is its own. The restore line the listing prints carries
 				// A document on stdout and nothing else: this is meant to be piped
 				// into `aboard apply`, so --output-format has nothing to say about
 				// it and any prose here would corrupt the pipe.
-				return aboard.Restore(cmd.Context(), root, name, args[0], at, stdout(opts))
+				return aboard.Restore(cmd.Context(), root, name, args[0], at, stdout(opts), opts.Invocation())
 			}
-			got, err := aboard.History(cmd.Context(), root, name, args[0], limit)
+			got, err := aboard.History(cmd.Context(), root, name, args[0], limit, opts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -84,7 +85,7 @@ board, whose history is its own. The restore line the listing prints carries
 					fmt.Fprintf(stderr(opts), "(from disk: %s — the recorded board is not answering; the instance record is stale)\n", root.JournalFile(name))
 				}
 			}
-			return renderOutput(stdout(opts), outputFormat, got, got.Human)
+			return renderOutput(stdout(opts), outputFormat, got, func() string { return got.Human(opts.Invocation()) })
 		},
 	}
 	cmd.Flags().IntVar(&at, "at", 0, "print the document that restores version N instead of listing (1 is the most recent)")

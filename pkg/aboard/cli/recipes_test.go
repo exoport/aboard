@@ -193,7 +193,7 @@ func TestALibraryRecipeIsDiscoveredWhenCopiedIn(t *testing.T) {
 	// A scratch project, seeded the way `aboard init` seeds one. Never a board
 	// anybody is using: this writes a file into .aboard/recipes/.
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	recipes := aboard.Root(dir).RecipesDir()

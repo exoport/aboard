@@ -332,7 +332,7 @@ func TestStampRequestFindsAndMarksOne(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tabID, already, err := stampRequest(doc, "ab9", "agent-1", "flipped it")
+	tabID, already, err := stampRequest(doc, "ab9", "agent-1", "flipped it", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestStampRequestFindsAndMarksOne(t *testing.T) {
 	}
 
 	// Idempotent: a second run says so and writes nothing new.
-	_, already, err = stampRequest(doc, "ab9", "agent-2", "me too")
+	_, already, err = stampRequest(doc, "ab9", "agent-2", "me too", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestStampRequestFindsAndMarksOne(t *testing.T) {
 		t.Errorf("re-stamping did not report the first stamp: %+v", already)
 	}
 
-	if _, _, err := stampRequest(doc, "ab404", "agent-1", ""); err == nil {
+	if _, _, err := stampRequest(doc, "ab404", "agent-1", "", DefaultInvocation); err == nil {
 		t.Error("an unknown request id was accepted")
 	}
 }
@@ -469,11 +469,11 @@ func TestStatusCountsPendingRequests(t *testing.T) {
 	if rep.Requests != 2 {
 		t.Fatalf("status reports %d pending requests, want 2 (the third is stamped)", rep.Requests)
 	}
-	if !strings.Contains(rep.Human(), "2 requests waiting") {
-		t.Errorf("the human form says nothing about them:\n%s", rep.Human())
+	if !strings.Contains(rep.Human(DefaultInvocation), "2 requests waiting") {
+		t.Errorf("the human form says nothing about them:\n%s", rep.Human(DefaultInvocation))
 	}
-	if !strings.Contains(rep.Human(), "aboard requests") {
-		t.Errorf("the human form does not say how to read them:\n%s", rep.Human())
+	if !strings.Contains(rep.Human(DefaultInvocation), "aboard requests") {
+		t.Errorf("the human form does not say how to read them:\n%s", rep.Human(DefaultInvocation))
 	}
 }
 
@@ -489,7 +489,7 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 		              "done":{"by":"agent-1","at":"T","note":"did it"}}]}
 	]}`)
 
-	got, err := ListRequests(t.Context(), srv.root, "", "", false)
+	got, err := ListRequests(t.Context(), srv.root, "", "", false, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -503,7 +503,7 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 		t.Errorf("a request must name its tab as well as its id: %+v", got[0])
 	}
 
-	all, err := ListRequests(t.Context(), srv.root, "", "", true)
+	all, err := ListRequests(t.Context(), srv.root, "", "", true, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +511,7 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 		t.Errorf("--all has %d entries, want 3", len(all))
 	}
 
-	one, err := ListRequests(t.Context(), srv.root, "", "ab2", true)
+	one, err := ListRequests(t.Context(), srv.root, "", "ab2", true, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +520,7 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 	}
 
 	// By name too, because that is what a human says out loud.
-	byName, err := ListRequests(t.Context(), srv.root, "", "Screen", true)
+	byName, err := ListRequests(t.Context(), srv.root, "", "Screen", true, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +532,7 @@ func TestListRequestsIsOldestFirstAndPendingByDefault(t *testing.T) {
 // Nothing pending is an ANSWER, not an empty response — the same posture
 // `aboard boards` takes about finding no board.
 func TestRequestsHumanSaysNothingPendingOutLoud(t *testing.T) {
-	got := RequestsHuman(nil, "", false, "")
+	got := RequestsHuman(nil, "", false, "", DefaultInvocation)
 	if !strings.Contains(got, "nothing pending") {
 		t.Errorf("an empty listing printed %q", got)
 	}
@@ -543,10 +543,10 @@ func TestRequestsHumanSaysNothingPendingOutLoud(t *testing.T) {
 // right board and writes the wrong one.
 func TestRequestsHumanSplicesTheBoardName(t *testing.T) {
 	list := []Request{{ID: "ab8", Tab: "ab1", TabName: "Plan", At: "T", Text: "fix it"}}
-	if got := RequestsHuman(list, "", false, "review"); !strings.Contains(got, "--name review") {
+	if got := RequestsHuman(list, "", false, "review", DefaultInvocation); !strings.Contains(got, "--name review") {
 		t.Errorf("a named board's listing prints an unqualified command:\n%s", got)
 	}
-	if got := RequestsHuman(list, "", false, ""); strings.Contains(got, "--name") {
+	if got := RequestsHuman(list, "", false, "", DefaultInvocation); strings.Contains(got, "--name") {
 		t.Errorf("the default board's listing invented a --name:\n%s", got)
 	}
 }
@@ -554,7 +554,7 @@ func TestRequestsHumanSplicesTheBoardName(t *testing.T) {
 func TestCompleteRequestRefusesToActAsTheHuman(t *testing.T) {
 	srv := testServer(t, `{"version":1,"rev":1,"nextId":9,"tabs":[]}`)
 	var out bytes.Buffer
-	err := CompleteRequest(t.Context(), srv.root, "", "ab8", actorHuman, "", &out)
+	err := CompleteRequest(t.Context(), srv.root, "", "ab8", actorHuman, "", &out, DefaultInvocation)
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("--by human was accepted: %v", err)
 	}
@@ -644,7 +644,7 @@ func TestARestoreDoesNotResurrectTheHumansRequests(t *testing.T) {
 	// helper: that one has a single caller by design, and a second one with the
 	// same arguments turns it into a function with a constant parameter.
 	var printed strings.Builder
-	if err := Restore(t.Context(), root, "", "ab2", 1, &printed); err != nil {
+	if err := Restore(t.Context(), root, "", "ab2", 1, &printed, DefaultInvocation); err != nil {
 		t.Fatalf("the restore failed: %v", err)
 	}
 	out, err := decodeDocument([]byte(printed.String()))

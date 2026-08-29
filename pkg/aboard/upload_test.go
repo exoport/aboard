@@ -167,7 +167,7 @@ func TestUploadsFindsAFileNamedOnlyInAWidgetsMarkup(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
 
-	rep, err := Uploads(root)
+	rep, err := Uploads(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestPruneRemovesOnlyTheUnreferencedFiles(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "kept.png", "in-a-widget.png", "orphan.png")
 
-	rep, err := Uploads(root)
+	rep, err := Uploads(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestPruneRemovesOnlyTheUnreferencedFiles(t *testing.T) {
 // image has simply never been pasted into it.
 func TestUploadsOnABoardThatHasNeverHadOne(t *testing.T) {
 	root := uploadBoardRoot(t)
-	rep, err := Uploads(root)
+	rep, err := Uploads(root, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("a board with no uploads directory must not be an error: %v", err)
 	}
@@ -235,11 +235,11 @@ func TestUploadsOnABoardThatHasNeverHadOne(t *testing.T) {
 func TestTheUploadsListingSaysHowItDecided(t *testing.T) {
 	root := uploadBoardRoot(t)
 	seedUploads(t, root, "orphan.png")
-	rep, err := Uploads(root)
+	rep, err := Uploads(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := rep.Human(false)
+	got := rep.Human(false, DefaultInvocation)
 	if !strings.Contains(got, "text search") {
 		t.Errorf("the listing must say the scan is textual:\n%s", got)
 	}
@@ -264,7 +264,7 @@ func TestUploadsSeesEveryBoardInTheProject(t *testing.T) {
 	}
 	seedUploads(t, root, "kept.png", "in-a-widget.png", "only-on-review.png", "orphan.png")
 
-	rep, err := Uploads(root)
+	rep, err := Uploads(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,8 +285,8 @@ func TestUploadsSeesEveryBoardInTheProject(t *testing.T) {
 	if got := byName["kept.png"].Tabs; len(got) != 1 || got[0] != "ab1" {
 		t.Errorf("the default board's ids stay bare: %v", got)
 	}
-	if rep.Orphaned != 1 || !strings.Contains(rep.Human(true), "aboard.review.json") {
-		t.Errorf("orphaned = %d, and the listing must say which documents it scanned:\n%s", rep.Orphaned, rep.Human(true))
+	if rep.Orphaned != 1 || !strings.Contains(rep.Human(true, DefaultInvocation), "aboard.review.json") {
+		t.Errorf("orphaned = %d, and the listing must say which documents it scanned:\n%s", rep.Orphaned, rep.Human(true, DefaultInvocation))
 	}
 
 	// And the prune agrees with the listing, which is the half that deletes.

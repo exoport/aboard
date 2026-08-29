@@ -53,10 +53,10 @@ func TestNameIsAcceptedByEveryBoardCommand(t *testing.T) {
 // --name selects the DOCUMENT, and status has to report the named one.
 func TestStatusReportsTheNamedBoard(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: "review"}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: "review"}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 
@@ -74,7 +74,7 @@ func TestStatusReportsTheNamedBoard(t *testing.T) {
 // manifest, and capsHash would move when somebody exported a variable.
 func TestBoardNameFallsBackToTheEnvironment(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: "review"}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Name: "review"}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ABOARD_NAME", "review")

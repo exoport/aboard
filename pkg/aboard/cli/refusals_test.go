@@ -30,7 +30,7 @@ func exitOf(t *testing.T, args ...string) (code int, stdout, stderr string) {
 // could not find the tab. The manifest advertises 2 for exactly this.
 func TestArgumentCountErrorsExitUsage(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestArgumentCountErrorsExitUsage(t *testing.T) {
 // instead of from the one it read.
 func TestApplyWithNoBaseExitsUsage(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	doc := `{"version":1,"nextId":2,"tabs":[{"id":"ab1","name":"Plan","type":"notes"}]}`
@@ -89,7 +89,7 @@ func TestApplyWithNoBaseExitsUsage(t *testing.T) {
 // refusal has to come before any path is joined, which makes it a usage error.
 func TestAnEscapingBoardNameIsRefusedBeforeAnythingIsWritten(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	escape := filepath.Join(dir, "..", "escaped")
@@ -141,7 +141,7 @@ func TestInitValidatesOutputFormatBeforeWritingAnything(t *testing.T) {
 // port and exited 1 while journal.jsonl sat readable beside it.
 func TestJournalFallsBackWhenTheRecordedBoardIsDead(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 	root, err := aboard.FindRoot(dir)
@@ -254,7 +254,7 @@ func TestEveryOutputStructAgreesInJSONAndYAML(t *testing.T) {
 // have told you.
 func TestRecipesListYAMLCarriesWhatTheCommandExistsToReport(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 

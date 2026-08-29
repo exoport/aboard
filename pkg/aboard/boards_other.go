@@ -24,6 +24,6 @@ const procDir = ""
 // built in boards.go, where it is compiled and tested on Linux too — a refusal
 // that only exists on the platforms nobody develops on is a refusal nobody ever
 // reads before a user does.
-func scanBoards(context.Context, string) (BoardsReport, error) {
-	return BoardsReport{}, noProcessTable(runtime.GOOS)
+func scanBoards(_ context.Context, _ string, inv Invocation) (BoardsReport, error) {
+	return BoardsReport{}, noProcessTable(runtime.GOOS, inv)
 }

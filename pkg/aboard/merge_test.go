@@ -109,7 +109,7 @@ func applyDoc(t *testing.T, root Root, doc map[string]any, by string) (stdout, s
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	err = Apply(t.Context(), root, "", ApplyOptions{By: by}, web.FS, bytes.NewReader(body), &out, &errOut)
+	err = Apply(t.Context(), root, "", ApplyOptions{By: by}, web.FS, bytes.NewReader(body), &out, &errOut, DefaultInvocation)
 	return out.String(), errOut.String(), err
 }
 
@@ -367,7 +367,7 @@ func TestForceStillWritesWithoutCompareAndSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if err := Apply(t.Context(), root, "", ApplyOptions{By: "agent-1", Force: true}, web.FS, bytes.NewReader(body), &out, &errOut); err != nil {
+	if err := Apply(t.Context(), root, "", ApplyOptions{By: "agent-1", Force: true}, web.FS, bytes.NewReader(body), &out, &errOut, DefaultInvocation); err != nil {
 		t.Fatalf("--force must write over a stale document: %v (stderr %s)", err, errOut.String())
 	}
 	if got := tabText(t, root, "ab1"); got != "mine" {
@@ -403,7 +403,7 @@ func TestAMergedWriteKeepsTheLabelOfTheWriteItRedoes(t *testing.T) {
 	}
 	var out, errOut bytes.Buffer
 	options := ApplyOptions{By: "agent-1", Label: "restating ab1 after review"}
-	if err := Apply(t.Context(), root, "", options, web.FS, bytes.NewReader(body), &out, &errOut); err != nil {
+	if err := Apply(t.Context(), root, "", options, web.FS, bytes.NewReader(body), &out, &errOut, DefaultInvocation); err != nil {
 		t.Fatalf("the merge should have rescued this write: %v (stderr %s)", err, errOut.String())
 	}
 	if !strings.Contains(out.String(), "merged") {
@@ -635,7 +635,7 @@ func boardWithARequest(t *testing.T) (Root, *server) {
 
 func stampFirstRequest(t *testing.T, doc map[string]any, by string) {
 	t.Helper()
-	if _, _, err := stampRequest(doc, "ab8", by, "flipped it"); err != nil {
+	if _, _, err := stampRequest(doc, "ab8", by, "flipped it", DefaultInvocation); err != nil {
 		t.Fatal(err)
 	}
 }

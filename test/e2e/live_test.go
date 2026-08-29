@@ -146,7 +146,7 @@ func startDevBoard(t *testing.T) devBoard {
 	t.Helper()
 
 	dir := t.TempDir()
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true}, aboard.DefaultInvocation); err != nil {
 		t.Fatalf("seeding the dev board: %v", err)
 	}
 	if err := applyFixture(aboard.Root(dir).StateFile("")); err != nil {

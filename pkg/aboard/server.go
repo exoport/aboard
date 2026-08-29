@@ -348,7 +348,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 		// it, and "no such file" without the path sends the reader to grep the
 		// source; a path without a command sends them to write the JSON by hand,
 		// which is how a document with the wrong `version` gets into a board.
-		hint := "aboard init"
+		hint := opts.Invocation().Cmd("init")
 		if cfg.Name != "" {
 			hint += " --name " + cfg.Name
 		}
@@ -401,7 +401,7 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 	// fetched, which is the only way there is no flash of the built-in palette.
 	srv.reloadTheme()
 
-	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name)
+	listener, chosen, err := srv.listen(ctx, cfg.Port, cfg.Root, cfg.Name, opts.Invocation())
 	if err != nil {
 		return err
 	}
@@ -475,13 +475,13 @@ func Serve(ctx context.Context, opts Options, cfg ServeConfig) error {
 // reporting no board while the first one served on. Two write locks that cannot
 // see each other, and a discovery record naming whichever of them wrote last.
 // A duplicate does not care how its port was picked, so neither does the check.
-func (s *server) listen(ctx context.Context, want int, root Root, name string) (net.Listener, int, error) {
+func (s *server) listen(ctx context.Context, want int, root Root, name string, inv Invocation) (net.Listener, int, error) {
 	var lc net.ListenConfig
-	if err := s.refuseRecordedBoard(ctx, root, name); err != nil {
+	if err := s.refuseRecordedBoard(ctx, root, name, inv); err != nil {
 		return nil, 0, err
 	}
 	if want != 0 {
-		if err := s.refuseDuplicate(ctx, root, name, want); err != nil {
+		if err := s.refuseDuplicate(ctx, root, name, want, inv); err != nil {
 			return nil, 0, err
 		}
 		ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", want))
@@ -498,7 +498,7 @@ func (s *server) listen(ctx context.Context, want int, root Root, name string) (
 		if err == nil {
 			return ln, p, nil
 		}
-		if err := s.refuseDuplicate(ctx, root, name, p); err != nil {
+		if err := s.refuseDuplicate(ctx, root, name, p, inv); err != nil {
 			return nil, 0, err
 		}
 		s.opts.Log().Printf("port %d busy, trying %d", p, portBase+((first-portBase+i+1)%portSpan))
@@ -523,11 +523,11 @@ func (s *server) listen(ctx context.Context, want int, root Root, name string) (
 // for a record whose port has been taken over by a different project's board —
 // it answers, but not as us. Both cases proceed, and writeInstance overwrites the
 // record on the way up.
-func (s *server) refuseRecordedBoard(ctx context.Context, root Root, name string) error {
+func (s *server) refuseRecordedBoard(ctx context.Context, root Root, name string, inv Invocation) error {
 	// A bool rather than an early `if err != nil { return nil }`: an absent or
 	// unreadable record is not a failure to report here, it is the ordinary case
 	// of a project whose board is not running.
-	rec, recErr := RunningInstance(root, name)
+	rec, recErr := RunningInstance(root, name, inv)
 	if recorded := recErr == nil && rec.Port != 0; !recorded {
 		return nil
 	}
@@ -549,8 +549,8 @@ func (s *server) refuseRecordedBoard(ctx context.Context, root Root, name string
 // record was deleted while it ran — `rm -rf .aboard/run`, a stopped board's
 // cleanup racing a restart — is invisible to the record check and still very much
 // listening. This one recognises it by asking the port itself.
-func (s *server) refuseDuplicate(ctx context.Context, root Root, name string, port int) error {
-	other := probeOccupant(ctx, root, name, port)
+func (s *server) refuseDuplicate(ctx context.Context, root Root, name string, port int, inv Invocation) error {
+	other := probeOccupant(ctx, root, name, port, inv)
 	if other == nil || other.Project != root.String() || other.Name != name {
 		return nil
 	}
@@ -607,11 +607,11 @@ func ProbeBoard(ctx context.Context, port int, base string) *Instance {
 // record names. Without the second try a prefixed board fails to recognise
 // ITSELF on restart and quietly starts a duplicate one port along, which is the
 // exact failure the recognition exists to prevent.
-func probeOccupant(ctx context.Context, root Root, name string, port int) *Instance {
+func probeOccupant(ctx context.Context, root Root, name string, port int, inv Invocation) *Instance {
 	if inst := ProbeBoard(ctx, port, ""); inst != nil {
 		return inst
 	}
-	rec, err := RunningInstance(root, name)
+	rec, err := RunningInstance(root, name, inv)
 	if err != nil || rec.Port != port || rec.Base == "" {
 		return nil
 	}
@@ -661,12 +661,12 @@ func (s *server) removeInstance() {
 
 // RunningInstance finds the board every client-side command talks to. One
 // lookup, so they all fail the same recognisable way when nothing is running.
-func RunningInstance(root Root, name string) (Instance, error) {
+func RunningInstance(root Root, name string, inv Invocation) (Instance, error) {
 	var inst Instance
 	p := root.InstanceFile(name)
 	rec, err := os.ReadFile(p)
 	if err != nil {
-		return inst, fmt.Errorf("no running board found (%s); start it with `aboard serve`", p)
+		return inst, fmt.Errorf("no running board found (%s); start it with `%s serve`", p, inv)
 	}
 	if err := json.Unmarshal(rec, &inst); err != nil {
 		return inst, fmt.Errorf("unreadable instance file %s", p)

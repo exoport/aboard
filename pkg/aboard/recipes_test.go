@@ -36,7 +36,7 @@ func recipeByName(t *testing.T, list []Recipe, name string) Recipe {
 // documents. Asserted on the file that actually won, not on the scope label,
 // because a scope constant could be right while the wrong body was read.
 func TestRecipePrecedence(t *testing.T) {
-	found, err := DiscoverRecipes(fixtureRoot(t))
+	found, err := DiscoverRecipes(fixtureRoot(t), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRecipePrecedence(t *testing.T) {
 // wonder why their edit did nothing is the winner's, so that is where the losers
 // are named.
 func TestRecipeShadowReport(t *testing.T) {
-	found, err := DiscoverRecipes(fixtureRoot(t))
+	found, err := DiscoverRecipes(fixtureRoot(t), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestRecipeShadowReport(t *testing.T) {
 	}
 
 	// And the human table says so, which is the form anybody actually reads.
-	human := RecipeListHuman(found)
+	human := RecipeListHuman(found, DefaultInvocation)
 	if !strings.Contains(human, "shadows ") {
 		t.Errorf("the human listing never mentions shadowing:\n%s", human)
 	}
@@ -96,7 +96,7 @@ func TestRecipeShadowReport(t *testing.T) {
 // the failure this whole package is written against: the author is looking at
 // the file, and the tool behaves as though it is not there.
 func TestInvalidRecipesAreReportedNotSkipped(t *testing.T) {
-	found, err := DiscoverRecipes(fixtureRoot(t))
+	found, err := DiscoverRecipes(fixtureRoot(t), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestInvalidRecipesAreReportedNotSkipped(t *testing.T) {
 		}
 	}
 
-	human := RecipeListHuman(found)
+	human := RecipeListHuman(found, DefaultInvocation)
 	if !strings.Contains(human, "INVALID") {
 		t.Errorf("the human listing does not mark the invalid rows:\n%s", human)
 	}
@@ -126,7 +126,7 @@ func TestInvalidRecipesAreReportedNotSkipped(t *testing.T) {
 	// `show` on a broken file must fail with the reason rather than print
 	// half a document.
 	broken := recipeByName(t, found, "no-frontmatter")
-	if _, err := broken.TemplateJSON(); err == nil {
+	if _, err := broken.TemplateJSON(DefaultInvocation); err == nil {
 		t.Error("TemplateJSON on an invalid recipe returned no error")
 	}
 }
@@ -136,14 +136,14 @@ func TestInvalidRecipesAreReportedNotSkipped(t *testing.T) {
 func TestRecipeTemplateExtraction(t *testing.T) {
 	root := fixtureRoot(t)
 
-	r, err := FindRecipe(root, "with-template")
+	r, err := FindRecipe(root, "with-template", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !r.HasTemplate {
 		t.Fatal("with-template reports no template")
 	}
-	body, err := r.TemplateJSON()
+	body, err := r.TemplateJSON(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,11 +158,11 @@ func TestRecipeTemplateExtraction(t *testing.T) {
 	// A recipe with no template must FAIL rather than print an empty document —
 	// an empty document handed to `aboard apply` is an empty tab on the human's
 	// screen, which is the silent-and-successful failure again.
-	plain, err := FindRecipe(root, "project-only")
+	plain, err := FindRecipe(root, "project-only", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := plain.TemplateJSON(); err == nil {
+	if _, err := plain.TemplateJSON(DefaultInvocation); err == nil {
 		t.Error("a recipe with no template produced one")
 	} else if !strings.Contains(err.Error(), "project-only") {
 		t.Errorf("the error does not name the recipe: %v", err)
@@ -175,7 +175,7 @@ func TestRecipeTemplateExtraction(t *testing.T) {
 	// Read from there rather than from a second copy, because two copies of one
 	// document are two documents that can disagree.
 	wizard := libraryRecipe(t, "decision-wizard-with-live-summary")
-	got, err := wizard.TemplateJSON()
+	got, err := wizard.TemplateJSON(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func libraryRecipes(t *testing.T) []Recipe {
 	t.Helper()
 	dir := libraryDir(t)
 	found, err := readRecipeFS(os.DirFS(dir), ".", "library",
-		func(_, name string) string { return RecipeFile(dir, name) })
+		func(_, name string) string { return RecipeFile(dir, name) }, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func libraryRecipe(t *testing.T, name string) Recipe {
 // requires.min_schema marks a recipe rather than hiding it: the reader can still
 // open it and see what they are missing.
 func TestRecipeMinSchema(t *testing.T) {
-	r, err := FindRecipe(fixtureRoot(t), "future-schema")
+	r, err := FindRecipe(fixtureRoot(t), "future-schema", DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestRecipeMinSchema(t *testing.T) {
 	if !r.Valid() {
 		t.Errorf("needing a newer schema made the recipe invalid: %s", r.Err)
 	}
-	if !strings.Contains(RecipeListHuman([]Recipe{r}), "needs schema 99") {
+	if !strings.Contains(RecipeListHuman([]Recipe{r}, DefaultInvocation), "needs schema 99") {
 		t.Error("the human listing does not say the recipe needs a newer schema")
 	}
 }
@@ -242,7 +242,7 @@ func TestRecipeMinSchema(t *testing.T) {
 // every project the binary reaches and there is no file for anyone to fix
 // locally.
 func TestBuiltinRecipesAllParse(t *testing.T) {
-	built, err := BuiltinRecipes()
+	built, err := BuiltinRecipes(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestBuiltinRecipesAllParse(t *testing.T) {
 // `aboard recipes list` has to work from a copied binary in a project that has
 // never held a board, which is the same property `capabilities` has.
 func TestRecipesAnswerWithNoProject(t *testing.T) {
-	found, err := DiscoverRecipes(Root(t.TempDir()))
+	found, err := DiscoverRecipes(Root(t.TempDir()), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestRecipesAnswerWithNoProject(t *testing.T) {
 // An unknown name lists what IS available. A bare "not found" makes the reader
 // run a second command, and the commonest cause is a near miss.
 func TestFindRecipeUnknown(t *testing.T) {
-	_, err := FindRecipe(fixtureRoot(t), "no-such-recipe")
+	_, err := FindRecipe(fixtureRoot(t), "no-such-recipe", DefaultInvocation)
 	if err == nil {
 		t.Fatal("an unknown recipe name returned no error")
 	}
@@ -296,7 +296,7 @@ func TestFindRecipeUnknown(t *testing.T) {
 // must be byte-identical between two runs: anything that moves turns every
 // regeneration into a diff and the file stops being read.
 func TestRecipeIndexIsStable(t *testing.T) {
-	built, err := BuiltinRecipes()
+	built, err := BuiltinRecipes(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestRecipeIndexIsStable(t *testing.T) {
 	}
 
 	// Regenerated from a fresh read, which is what `make caps` actually does.
-	again, err := BuiltinRecipes()
+	again, err := BuiltinRecipes(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestTwoTemplateBlocksIsAnError(t *testing.T) {
 	src := "---\nname: two\ndescription: \"d\"\nwhen_to_use: \"w\"\n---\n\n" +
 		"```" + TemplateFence + "\n{\"a\":1}\n```\n\n" +
 		"```" + TemplateFence + "\n{\"b\":2}\n```\n"
-	r := parseRecipe([]byte(src), "two.md", ScopeDotAboard)
+	r := parseRecipe([]byte(src), "two.md", ScopeDotAboard, DefaultInvocation)
 	if r.Valid() {
 		t.Fatal("two template blocks parsed cleanly")
 	}
@@ -396,7 +396,7 @@ func TestTwoTemplateBlocksIsAnError(t *testing.T) {
 func TestInvalidTemplateJSONIsReported(t *testing.T) {
 	src := "---\nname: bad\ndescription: \"d\"\nwhen_to_use: \"w\"\n---\n\n" +
 		"```" + TemplateFence + "\n{ \"trailing\": \"comma\", }\n```\n"
-	r := parseRecipe([]byte(src), "bad.md", ScopeDotAboard)
+	r := parseRecipe([]byte(src), "bad.md", ScopeDotAboard, DefaultInvocation)
 	if r.Valid() {
 		t.Fatal("an invalid template block parsed cleanly")
 	}
@@ -417,7 +417,7 @@ func TestRequiredFrontmatterFields(t *testing.T) {
 		{"no description", "name: r\nwhen_to_use: \"w\"", "description"},
 		{"no when_to_use", "name: r\ndescription: \"d\"", "when_to_use"},
 	} {
-		r := parseRecipe([]byte("---\n"+tc.fm+"\n---\nbody\n"), "r.md", ScopeDotAboard)
+		r := parseRecipe([]byte("---\n"+tc.fm+"\n---\nbody\n"), "r.md", ScopeDotAboard, DefaultInvocation)
 		if r.Valid() {
 			t.Errorf("%s: parsed cleanly", tc.name)
 			continue
@@ -432,7 +432,7 @@ func TestRequiredFrontmatterFields(t *testing.T) {
 // it as a broken one on every listing would be the noise that teaches people to
 // ignore the INVALID marker, which is where the real failures show up.
 func TestRecipesReadmeIsNotARecipe(t *testing.T) {
-	found, err := DiscoverRecipes(fixtureRoot(t))
+	found, err := DiscoverRecipes(fixtureRoot(t), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func TestDiscoverySurvivesAnUnreadableRecipe(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := DiscoverRecipes(root)
+	found, err := DiscoverRecipes(root, DefaultInvocation)
 	if err != nil {
 		t.Fatalf("one unreadable file aborted discovery: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestDiscoverySurvivesAnUnreadableRecipe(t *testing.T) {
 	if r := recipeByName(t, found, "apply-a-write"); !r.Valid() {
 		t.Error("a built-in recipe was lost to an unreadable project file")
 	}
-	if !strings.Contains(RecipeListHuman(found), "INVALID") {
+	if !strings.Contains(RecipeListHuman(found, DefaultInvocation), "INVALID") {
 		t.Error("the human listing does not mark the unreadable row")
 	}
 }
@@ -508,7 +508,7 @@ func TestANestedRecipeDirectoryIsReportedNotDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := DiscoverRecipes(root)
+	found, err := DiscoverRecipes(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,7 +542,7 @@ func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	found, err := DiscoverRecipes(root)
+	found, err := DiscoverRecipes(root, DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -577,7 +577,7 @@ func TestAnEmptyDirectoryInARecipesTierIsNotReported(t *testing.T) {
 // the two files out: they were covered when they were built-ins, and a move that
 // silently dropped their only check is the failure this repo keeps having.
 func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
-	built, err := BuiltinRecipes()
+	built, err := BuiltinRecipes(DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -611,7 +611,7 @@ func TestBuiltinTemplatesAreCleanTabSkeletons(t *testing.T) {
 			}
 			withTemplate[r.Name] = true
 
-			tmpl, err := r.TemplateJSON()
+			tmpl, err := r.TemplateJSON(DefaultInvocation)
 			if err != nil {
 				t.Errorf("%s %s: %v", src.where, r.Name, err)
 				continue
@@ -689,7 +689,7 @@ func TestTheLibraryIsNotADiscoveryTier(t *testing.T) {
 		}
 	}
 
-	found, err := DiscoverRecipes(Root(dir))
+	found, err := DiscoverRecipes(Root(dir), DefaultInvocation)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -710,7 +710,7 @@ func TestTheLibraryIsNotADiscoveryTier(t *testing.T) {
 	// And the generated index cannot carry them either: it is written into a
 	// skill directory that is copied between projects, where a path into
 	// aboard's own checkout names nothing.
-	index := RecipeIndexMarkdown(func() []Recipe { r, _ := BuiltinRecipes(); return r }())
+	index := RecipeIndexMarkdown(func() []Recipe { r, _ := BuiltinRecipes(DefaultInvocation); return r }())
 	for _, name := range []string{"decision-wizard-with-live-summary", "human-checklist"} {
 		if strings.Contains(index, "| `"+name+"` |") {
 			t.Errorf("the generated index has a table row for the library recipe %s", name)

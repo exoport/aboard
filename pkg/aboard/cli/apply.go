@@ -8,6 +8,7 @@ import (
 )
 
 func newApplyCmd(cliOpts Options) *cobra.Command {
+	inv := cliOpts.Invocation()
 	var opts aboard.ApplyOptions
 	cmd := &cobra.Command{
 		Use:   "apply",
@@ -41,9 +42,9 @@ The compare-and-set base is the ` + "`rev`" + ` inside the document you submit â
 you read. A document with no ` + "`rev`" + ` is refused (exit 2) rather than written
 unconditionally; --force writes it anyway and says so on stderr.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard apply --by agent-1 < next.json",
+		Example: "  " + inv.Cmd("apply --by agent-1") + " < next.json",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, cliOpts.Invocation())
 			if err != nil {
 				return err
 			}
@@ -52,7 +53,7 @@ unconditionally; --force writes it anyway and says so on stderr.`,
 				return err
 			}
 			if err := aboard.Apply(cmd.Context(), root, name, opts, aboard.WebFS(),
-				stdin(cliOpts), stdout(cliOpts), stderr(cliOpts)); err != nil {
+				stdin(cliOpts), stdout(cliOpts), stderr(cliOpts), cliOpts.Invocation()); err != nil {
 				// A document with no base is a USAGE refusal: nothing was
 				// contacted, and the fix is to the document rather than to the
 				// board. Exit 2 is what the declared table promises for that.

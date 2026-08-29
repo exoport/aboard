@@ -32,6 +32,7 @@ type Options = aboard.Options
 
 // NewRootCmd builds the board command tree.
 func NewRootCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	root := &cobra.Command{
 		Use:   "aboard",
 		Short: "A shared visual board for a human and one or more agent sessions",
@@ -47,9 +48,9 @@ same every time and two checkouts never collide.
 
 Start with:
 
-  aboard serve            run the server for this project
-  aboard status           what is running here, and on which port
-  aboard capabilities     what this board can do (no server needed)`,
+  ` + inv.Cmd("serve") + `            run the server for this project
+  ` + inv.Cmd("status") + `           what is running here, and on which port
+  ` + inv.Cmd("capabilities") + `     what this board can do (no server needed)`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       aboard.VersionString(),
@@ -204,7 +205,7 @@ func startDir(cmd *cobra.Command) (string, error) {
 // FAILURE with a message that names what was looked for, not a silent fallback
 // to the working directory: writing a board into whatever directory you happened
 // to be in is how the spike ended up with two of them.
-func projectRoot(cmd *cobra.Command) (aboard.Root, error) {
+func projectRoot(cmd *cobra.Command, inv aboard.Invocation) (aboard.Root, error) {
 	start, err := startDir(cmd)
 	if err != nil {
 		return "", err
@@ -212,8 +213,8 @@ func projectRoot(cmd *cobra.Command) (aboard.Root, error) {
 	root, err := aboard.FindRoot(start)
 	if err != nil {
 		if errors.Is(err, aboard.ErrNoRoot) {
-			return "", fmt.Errorf("no %s/ here — run `aboard init` in the project you want a board for%s",
-				aboard.DirName, legacyBoardHint(start))
+			return "", fmt.Errorf("no %s/ here — run `%s init` in the project you want a board for%s",
+				aboard.DirName, inv, legacyBoardHint(start))
 		}
 		return "", err
 	}

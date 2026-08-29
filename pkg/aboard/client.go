@@ -75,7 +75,7 @@ type ApplyOptions struct {
 // minimal shape in the docs overwrote everything written since it was read, exit
 // 0, nothing on stderr. It is refused now, and --force is the way to say you
 // meant it.
-func Apply(ctx context.Context, root Root, name string, options ApplyOptions, assets fs.FS, in io.Reader, out, errOut io.Writer) error {
+func Apply(ctx context.Context, root Root, name string, options ApplyOptions, assets fs.FS, in io.Reader, out, errOut io.Writer, inv Invocation) error {
 	by, force := options.By, options.Force
 	if by == actorHuman {
 		// The human acts in the browser, and the guarantees in tabs.go key off
@@ -190,7 +190,7 @@ func Apply(ctx context.Context, root Root, name string, options ApplyOptions, as
 		return nil
 	}
 
-	inst, err := RunningInstance(root, name)
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,7 @@ func Status(ctx context.Context, root Root, name string, assets fs.FS) StatusRep
 }
 
 // Human renders the report the way the terminal has always shown it.
-func (r StatusReport) Human() string {
+func (r StatusReport) Human(inv Invocation) string {
 	var b strings.Builder
 	// A named board says its name in every line that names the project. With two
 	// boards in one directory, "no board recorded for /path" is ambiguous exactly
@@ -464,7 +464,7 @@ func (r StatusReport) Human() string {
 		fmt.Fprintf(&b, "it would use port %d\n", r.WouldUsePort)
 	case !r.Running:
 		fmt.Fprintf(&b, "stale record: %s (pid %d) is not answering\n", r.URL, r.PID)
-		fmt.Fprintf(&b, "start a fresh one with `aboard serve`\n")
+		fmt.Fprintf(&b, "start a fresh one with `%s serve`\n", inv)
 	default:
 		fmt.Fprintf(&b, "aboard running at %s\n", r.URL)
 		fmt.Fprintf(&b, "  project %s\n  state   %s\n  pid     %d\n  since   %s\n",
@@ -479,8 +479,8 @@ func (r StatusReport) Human() string {
 	// and a week away, and the session most likely to have missed it is the one
 	// that finds no board running.
 	if r.Requests > 0 {
-		fmt.Fprintf(&b, "  asked   %d request%s waiting — `aboard requests%s`\n",
-			r.Requests, plural(r.Requests), nameFlagFor(r.Name))
+		fmt.Fprintf(&b, "  asked   %d request%s waiting — `%s requests%s`\n",
+			r.Requests, plural(r.Requests), inv, nameFlagFor(r.Name))
 	}
 	// A house style, when the project has one. Before the caps beacon and after
 	// the requests, in the same column as everything else: it is a fact about the

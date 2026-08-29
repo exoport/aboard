@@ -8,6 +8,7 @@ import (
 )
 
 func newServeCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var (
 		state    string
 		devDir   string
@@ -31,7 +32,7 @@ shell, so every fetch, the SSE stream and an html tab's iframe all build from it
 Because it is injected, it is also validated: one or more /segments of letters,
 digits, dot, underscore, tilde or hyphen. Anything else is a usage error.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard serve\n  aboard serve --dev\n  aboard serve --base-path /aboard",
+		Example: "  " + inv.Cmd("serve") + "\n  " + inv.Cmd("serve --dev") + "\n  " + inv.Cmd("serve --base-path /aboard"),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Before the root is even resolved: the declared table says exit 2
 			// means "detected before anything was contacted", and a base path
@@ -40,7 +41,7 @@ digits, dot, underscore, tilde or hyphen. Anything else is a usage error.`,
 			if err := aboard.ValidateBasePath(basePath); err != nil {
 				return usageErr(err)
 			}
-			root, err := projectRoot(cmd)
+			root, err := projectRoot(cmd, opts.Invocation())
 			if err != nil {
 				return err
 			}

@@ -24,6 +24,7 @@ package aboard
 import (
 	"io"
 	"log"
+	"path/filepath"
 )
 
 // AppName is what the board calls ITSELF, in the capability manifest and in
@@ -81,4 +82,55 @@ func (o Options) Log() *log.Logger {
 		return o.Logger
 	}
 	return log.Default()
+}
+
+// Invocation is how a reader reaches this board's commands: `aboard` when the
+// binary is its own program, `ape aboard` when a host mounts the tree. It is
+// the prefix, never a whole command line — a message writes "`%s init`" and
+// gets the one the reader can actually type.
+//
+// This exists because every sentence the board prints that names a command was
+// a sentence naming a command the hosted user does not have. Cobra's own
+// `Usage:` line was always right (it derives from the command path), which made
+// the defect visible inside a single output: an error saying `aboard init`
+// directly above a usage line saying `ape aboard init`.
+//
+// A type rather than a bare string so the zero value is usable and means
+// standalone: a function that forgot to be given one still prints something a
+// standalone reader can type, which is the safer of the two wrong answers.
+type Invocation string
+
+// DefaultInvocation is the standalone prefix. Named rather than written as ""
+// at call sites so a GENERATED artifact can say out loud that it is host-independent.
+const DefaultInvocation Invocation = AppName
+
+// String renders the invocation, defaulting to AppName when unset.
+func (i Invocation) String() string {
+	if i == "" {
+		return AppName
+	}
+	return string(i)
+}
+
+// Cmd renders one whole command, for the places that build a hint in a variable
+// rather than inside a format string.
+func (i Invocation) Cmd(rest string) string {
+	if rest == "" {
+		return i.String()
+	}
+	return i.String() + " " + rest
+}
+
+// Invocation derives the command prefix from Argv0.
+//
+// Base, because a standalone binary's Argv0 is os.Args[0] — which is whatever
+// path the shell resolved, and "run `/usr/local/bin/aboard init`" is not what
+// anybody types. A host passes a bare "ape aboard", which has no separator and
+// so survives unchanged. Empty falls back to AppName rather than printing an
+// empty prefix.
+func (o Options) Invocation() Invocation {
+	if o.Argv0 == "" {
+		return Invocation(AppName)
+	}
+	return Invocation(filepath.Base(o.Argv0))
 }

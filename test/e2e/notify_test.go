@@ -37,7 +37,7 @@ func TestTheNotifyButtonReleasesAWaitingSession(t *testing.T) {
 
 	done := make(chan waitResult, 1)
 	go func() {
-		code, err := aboard.Wait(ctx, board, "", who, "poke", why, 30*time.Second, &out)
+		code, err := aboard.Wait(ctx, board, "", who, "poke", why, 30*time.Second, &out, aboard.DefaultInvocation)
 		done <- waitResult{code: code, err: err}
 	}()
 	// Whatever happens, do not leave a waiter parked for the tests that follow:

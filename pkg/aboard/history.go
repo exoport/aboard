@@ -203,8 +203,8 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 // JournalEntries makes, and for the same reason: reading an append-only file
 // needs no server, and a session resuming into a stopped board still has to be
 // able to ask what happened.
-func History(ctx context.Context, root Root, name, tab string, limit int) (TabHistory, error) {
-	entries, source, err := JournalEntries(ctx, root, name, historyScan)
+func History(ctx context.Context, root Root, name, tab string, limit int, inv Invocation) (TabHistory, error) {
+	entries, source, err := JournalEntries(ctx, root, name, historyScan, inv)
 	if err != nil {
 		return TabHistory{}, err
 	}
@@ -222,7 +222,7 @@ func History(ctx context.Context, root Root, name, tab string, limit int) (TabHi
 // "nothing". A bare empty list reads as "this tab has never changed", which is
 // indistinguishable from "everything about it has rotated away", and those call
 // for opposite next moves.
-func (h TabHistory) Human() string {
+func (h TabHistory) Human(inv Invocation) string {
 	var b strings.Builder
 	if len(h.Versions) == 0 {
 		fmt.Fprintf(&b, "no recorded history for %s\n", h.Tab)
@@ -244,8 +244,8 @@ func (h TabHistory) Human() string {
 			}
 			fmt.Fprintf(&b, "  %2d  %s  replaced by %-16s %6d bytes%s\n", v.N, v.At, v.By, v.Bytes, label)
 		}
-		fmt.Fprintf(&b, "\nrestore one with:  aboard history %s --at 1%s | aboard apply%s --by agent-1\n",
-			h.Tab, h.nameFlag(), h.nameFlag())
+		fmt.Fprintf(&b, "\nrestore one with:  %s history %s --at 1%s | %s apply%s --by agent-1\n",
+			inv, h.Tab, h.nameFlag(), inv, h.nameFlag())
 	}
 	fmt.Fprintf(&b, "\n%s\n", h.EndsAt())
 	return b.String()
@@ -290,8 +290,8 @@ var ErrNoSuchVersion = errors.New("no such version")
 // the human owns. The restore is a normal write of a normal document
 // with one field different, and it carries the fresh document's `rev`, so it is
 // refused rather than clobbering if somebody wrote while you were reading.
-func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Writer) error {
-	got, err := History(ctx, root, name, tab, 0)
+func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Writer, inv Invocation) error {
+	got, err := History(ctx, root, name, tab, 0, inv)
 	if err != nil {
 		return err
 	}
@@ -301,7 +301,7 @@ func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Wr
 	}
 	want := got.Versions[at-1]
 
-	raw, err := currentDocument(ctx, root, name)
+	raw, err := currentDocument(ctx, root, name, inv)
 	if err != nil {
 		return err
 	}
@@ -373,8 +373,8 @@ func restoreOnto(t *docTab, want HistoryVersion) {
 // a complete but superseded copy. Either way the restore carries a `rev` and a
 // stale one is refused by compare-and-set, so the fallback is safe rather than
 // merely convenient.
-func currentDocument(ctx context.Context, root Root, name string) ([]byte, error) {
-	if inst, err := RunningInstance(root, name); err == nil {
+func currentDocument(ctx context.Context, root Root, name string, inv Invocation) ([]byte, error) {
+	if inst, err := RunningInstance(root, name, inv); err == nil {
 		if body, err := fetchDocument(ctx, inst.URL); err == nil {
 			return body, nil
 		}

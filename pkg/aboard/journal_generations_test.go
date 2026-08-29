@@ -165,11 +165,11 @@ func TestAPreSchemaEntryIsReadAsABareState(t *testing.T) {
 	if out := JournalHuman([]JournalEntry{e}); !strings.Contains(out, "ab1 (Plan renamed)") {
 		t.Errorf("the journal listing does not print a generation-1 entry: %q", out)
 	}
-	if out := got.Human(); !strings.Contains(out, "replaced by agent-1") {
+	if out := got.Human(DefaultInvocation); !strings.Contains(out, "replaced by agent-1") {
 		t.Errorf("the history listing does not print a generation-1 version: %q", out)
 	}
 
-	// Restore(): the state moves and nothing else does. A narrow record has no
+	// Restore(DefaultInvocation): the state moves and nothing else does. A narrow record has no
 	// name to put back, and inventing "" would blank the tab's name.
 	root := Root(t.TempDir())
 	writeBoardFile(t, root)
@@ -332,7 +332,7 @@ func TestACorruptSchema2RecordIsNotReadAsAState(t *testing.T) {
 func restoreDocument(t *testing.T, root Root, tab string, at int) *stateDoc {
 	t.Helper()
 	var out strings.Builder
-	if err := Restore(t.Context(), root, "", tab, at, &out); err != nil {
+	if err := Restore(t.Context(), root, "", tab, at, &out, DefaultInvocation); err != nil {
 		t.Fatalf("the restore failed: %v", err)
 	}
 	doc, err := decodeDocument([]byte(out.String()))

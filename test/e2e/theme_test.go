@@ -216,7 +216,7 @@ func startThemedBoard(t *testing.T, themeJSON string) string {
 func startThemedBoardIn(t *testing.T, dir, themeJSON string) string {
 	t.Helper()
 
-	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true}); err != nil {
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir, Example: true}, aboard.DefaultInvocation); err != nil {
 		t.Fatalf("seeding the themed board: %v", err)
 	}
 	root := aboard.Root(dir)

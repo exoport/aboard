@@ -77,8 +77,8 @@ type requestDoc struct {
 // default is PENDING ONLY, because the question this command answers is "is
 // anything waiting on me" and a list that grows for ever answers it worse every
 // week.
-func ListRequests(ctx context.Context, root Root, name, tab string, all bool) ([]Request, error) {
-	body, err := currentDocument(ctx, root, name)
+func ListRequests(ctx context.Context, root Root, name, tab string, all bool, inv Invocation) ([]Request, error) {
+	body, err := currentDocument(ctx, root, name, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func PendingRequests(root Root, name string) int {
 // Two lines per note, the text on its own: a request is a SENTENCE the human
 // wrote, and squeezing it into a column beside four other fields is how it ends
 // up truncated in the one command whose job is to deliver it.
-func RequestsHuman(list []Request, tab string, all bool, name string) string {
+func RequestsHuman(list []Request, tab string, all bool, name string, inv Invocation) string {
 	if len(list) == 0 {
 		where := "on this board"
 		if tab != "" {
@@ -189,8 +189,8 @@ func RequestsHuman(list []Request, tab string, all bool, name string) string {
 		// the same reason the change banner's restore line is: the left half reads
 		// one board and the right half writes whichever it was told about, so a
 		// half-qualified line stamps the right note on the wrong board.
-		fmt.Fprintf(&b, "\nsay you did one with:  aboard requests done %s%s --by agent-1 --note \"what you did\"\n",
-			firstPending(list), nameFlagFor(name))
+		fmt.Fprintf(&b, "\nsay you did one with:  %s requests done %s%s --by agent-1 --note \"what you did\"\n",
+			inv, firstPending(list), nameFlagFor(name))
 	}
 	return b.String()
 }
@@ -231,7 +231,7 @@ func nameFlagFor(name string) string {
 // `rev` it came with. It does NOT merge on a 409 — that path exists for a caller
 // who built a document and can rebuild it, and this one can simply be run again,
 // which is a better answer than a merge nobody asked for.
-func CompleteRequest(ctx context.Context, root Root, name, id, by, note string, out io.Writer) error {
+func CompleteRequest(ctx context.Context, root Root, name, id, by, note string, out io.Writer, inv Invocation) error {
 	if by == actorHuman {
 		// The same refusal `apply` makes, and for the same reason: "human" is the
 		// key every guarantee turns on, and a request the human stamped for
@@ -239,7 +239,7 @@ func CompleteRequest(ctx context.Context, root Root, name, id, by, note string, 
 		return errors.New(`--by human is refused: a done stamp says which SESSION acted on the note, and the human answers their own requests by deleting them. Use agent-1, agent-2 or agent-<role>`)
 	}
 
-	inst, err := RunningInstance(root, name)
+	inst, err := RunningInstance(root, name, inv)
 	if err != nil {
 		return err
 	}
@@ -252,7 +252,7 @@ func CompleteRequest(ctx context.Context, root Root, name, id, by, note string, 
 		return fmt.Errorf("the board document could not be read: %w", err)
 	}
 
-	tabID, already, err := stampRequest(doc, id, by, note)
+	tabID, already, err := stampRequest(doc, id, by, note, inv)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func CompleteRequest(ctx context.Context, root Root, name, id, by, note string, 
 // posts back everything it read, and decoding through the engine's own structs
 // would drop any root key or tab field they do not know about — which is exactly
 // the shape of bug that makes a small command dangerous on someone else's board.
-func stampRequest(doc map[string]any, id, by, note string) (tabID string, already *RequestStamp, err error) {
+func stampRequest(doc map[string]any, id, by, note string, inv Invocation) (tabID string, already *RequestStamp, err error) {
 	tabs, _ := doc[keyTabs].([]any)
 	for _, raw := range tabs {
 		tab, ok := raw.(map[string]any)
@@ -318,5 +318,5 @@ func stampRequest(doc map[string]any, id, by, note string) (tabID string, alread
 			return owner, nil, nil
 		}
 	}
-	return "", nil, fmt.Errorf("no request %q on this board — `aboard requests --all` lists them, and the id is the one printed beside the note", id)
+	return "", nil, fmt.Errorf("no request %q on this board — `%s requests --all` lists them, and the id is the one printed beside the note", id, inv)
 }

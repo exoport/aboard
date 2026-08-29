@@ -123,7 +123,7 @@ const (
 //     `serve` tells the reader to run `aboard init` when the document is gone,
 //     and a blanket refusal would make that instruction impossible to follow.
 //  5. Otherwise → create `.aboard/` where you stand.
-func Init(cfg InitConfig) (InitResult, error) {
+func Init(cfg InitConfig, inv Invocation) (InitResult, error) {
 	dir, err := filepath.Abs(cfg.Dir)
 	if err != nil {
 		return InitResult{}, fmt.Errorf("resolve %s: %w", cfg.Dir, err)
@@ -149,8 +149,8 @@ func Init(cfg InitConfig) (InitResult, error) {
 		if found.String() != dir && cfg.Name == "" {
 			return InitResult{}, fmt.Errorf(
 				"a board root already exists at %s (%s) — init does not walk up, and a second root here would be invisible from there. "+
-					"Run `aboard init` from that directory, or add a second board to it with `aboard init --name <name>`",
-				found, found.Dir(),
+					"Run `%[3]s init` from that directory, or add a second board to it with `%[3]s init --name <name>`",
+				found, found.Dir(), inv,
 			)
 		}
 		root = found
@@ -169,7 +169,7 @@ func Init(cfg InitConfig) (InitResult, error) {
 	if _, err := os.Stat(res.StateFile); err == nil {
 		hint := "delete it first if you mean to start over"
 		if cfg.Name == "" {
-			hint += ", or open a second board beside it with `aboard init --name <name>`"
+			hint += fmt.Sprintf(", or open a second board beside it with `%s init --name <name>`", inv)
 		}
 		return InitResult{}, fmt.Errorf("a board already exists at %s — %s", res.StateFile, hint)
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 func newInitCmd(opts Options) *cobra.Command {
+	inv := opts.Invocation()
 	var example, gitignore bool
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -20,7 +21,7 @@ document, an uploads directory, a recipes directory and the run directory.
 This is the ONE command that does not walk up. Every other command finds the
 project root by climbing from --cwd, because a board belongs to a project rather
 than to whichever subdirectory you happened to be in — but there is nothing to
-find yet, and climbing would mean ` + "`aboard init`" + ` in a subdirectory quietly doing
+find yet, and climbing would mean ` + "`" + inv.Cmd("init") + "`" + ` in a subdirectory quietly doing
 nothing while reporting success. So it creates a root where you stand, and
 refuses when that would make a second one, naming the root it found.
 
@@ -36,7 +37,7 @@ LOCAL, persistent, non-authoritative channel: several developers on one repo eac
 get their own, and a committed one is a whole-file JSON conflict on every merge
 over a conversation that was never theirs.`,
 		Args:    cobra.NoArgs,
-		Example: "  aboard init\n  aboard init --example --gitignore\n  aboard init --name review",
+		Example: "  " + inv.Cmd("init") + "\n  " + inv.Cmd("init --example --gitignore") + "\n  " + inv.Cmd("init --name review"),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Before the side effect, not after it: this command CREATES things,
 			// and a usage error discovered on the way out has already made them.
@@ -56,7 +57,7 @@ over a conversation that was never theirs.`,
 				Name:      name,
 				Example:   example,
 				Gitignore: gitignore,
-			})
+			}, opts.Invocation())
 			// A failure AFTER something was created still reports what exists.
 			// `init --gitignore` failing at its last step used to print total
 			// failure over a board that had just been written, so the corrected
@@ -65,11 +66,11 @@ over a conversation that was never theirs.`,
 			// failed, because something the user asked for did not happen.
 			if err != nil {
 				if len(res.Created) > 0 {
-					_ = renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res) })
+					_ = renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res, inv) })
 				}
 				return err
 			}
-			return renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res) })
+			return renderOutput(stdout(opts), outputFormatOf(cmd), res, func() string { return initHuman(res, inv) })
 		},
 	}
 	cmd.Flags().BoolVar(&example, "example", false, "seed the board with the example tabs compiled into this binary")
@@ -89,7 +90,7 @@ over a conversation that was never theirs.`,
 // announced a board that does not exist to a reader whose next line is an error
 // saying so — the same self-contradiction the partial result was added to end,
 // moved one step earlier. Only what is actually in res.Created is claimed.
-func initHuman(res aboard.InitResult) string {
+func initHuman(res aboard.InitResult, inv aboard.Invocation) string {
 	var b strings.Builder
 	made := slices.Contains(res.Created, res.StateFile)
 	what := "empty board"
@@ -125,7 +126,7 @@ func initHuman(res aboard.InitResult) string {
 		fmt.Fprintf(&b, "\nadd this to .gitignore (or re-run with --gitignore):\n  %s\n", res.GitignoreLine)
 	}
 
-	start := "aboard serve"
+	start := inv.Cmd("serve")
 	if res.Name != "" {
 		start += " --name " + res.Name
 	}
