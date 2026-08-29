@@ -70,6 +70,44 @@ func TestWriteWarningsPerDetector(t *testing.T) {
 			want: `ab1 (ui): root.pairs[0].k is not read — a kv pairs item is { key, value }`,
 		},
 		{
+			// The write that started this check, verbatim, on 2026-08-29: a
+			// stats row with `gap: "lg"`. Applied clean, exit 0, no warning —
+			// and rendered as "v0.0.56v0.1.2v0.1.2207b5d93", because the value
+			// goes into --uic-gap as-is, an invalid substitution makes the
+			// declaration guaranteed-invalid, and a flex row closes to zero.
+			name: "a size token where a CSS length was wanted",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"row","gap":"lg","children":[]}}}]}`,
+			want: `ab1 (ui): root.gap = "lg" is not a CSS length`,
+		},
+		{
+			// JSON has one number type and the renderer stringifies it, so `12`
+			// reaches CSS as `12` — no unit, equally invalid, and much easier to
+			// write than "lg".
+			name: "a unitless number is not a length either",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"col","gap":12,"children":[]}}}]}`,
+			want: `root.gap = "12" is not a CSS length`,
+		},
+		{
+			name: "a spacer size that is not a CSS length",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"col","children":[{"type":"spacer","size":"large"}]}}}]}`,
+			want: `root.children[0].size = "large" is not a CSS length`,
+		},
+		{
+			name: "a grid column count that is not a number",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"grid","columns":"three","children":[]}}}]}`,
+			want: `ab1 (ui): root.columns = "three" is not a number — the grid will silently draw 2 columns`,
+		},
+		{
+			name: "a grid column count above the renderer's clamp",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"grid","columns":9,"children":[]}}}]}`,
+			want: `is above the 6-column maximum`,
+		},
+		{
 			name: "a ui tree nested inside a stack block is checked too",
 			doc: `{"tabs":[{"id":"ab1","type":"stack","state":{"blocks":[
 				{"id":"ab2","type":"ui","state":{"root":{"type":"stat","value":"3","caption":"x"}}}]}}]}`,
@@ -126,6 +164,38 @@ func TestWriteWarningsStaysQuietOnCorrectDocuments(t *testing.T) {
 			name: "actions and intents are shell-level and every renderer may carry them",
 			doc: `{"tabs":[{"id":"ab1","type":"kanban","state":{
 				"nodes":[],"columns":[],"actions":[{"id":"ab2","label":"go"}],"intents":[]}}]}`,
+		},
+		{
+			// The length check must not become the noise it was added to
+			// prevent. Every one of these is legal CSS: two-value gap (row then
+			// column), a decimal, unitless zero, `normal`, and calc().
+			name: "the CSS lengths a layout node may legitimately carry",
+			doc: `{"tabs":[
+				{"id":"ab1","type":"ui","state":{"root":{"type":"row","gap":"12px","children":[]}}},
+				{"id":"ab2","type":"ui","state":{"root":{"type":"col","gap":"1.5rem","children":[]}}},
+				{"id":"ab3","type":"ui","state":{"root":{"type":"row","gap":"8px 14px","children":[]}}},
+				{"id":"ab4","type":"ui","state":{"root":{"type":"col","gap":0,"children":[]}}},
+				{"id":"ab5","type":"ui","state":{"root":{"type":"row","gap":"normal","children":[]}}},
+				{"id":"ab6","type":"ui","state":{"root":{"type":"col","gap":"calc(1rem + 2px)","children":[]}}},
+				{"id":"ab7","type":"ui","state":{"root":{"type":"row","gap":"var(--uic-gap)","children":[]}}}
+			]}`,
+		},
+		{
+			// A gap resolved at render time cannot be judged at write time, and
+			// guessing would fire on every correct one. checkBind covers whether
+			// the path resolves at all.
+			name: "a bound gap is left to checkBind",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"data":{"g":"10px"},
+				"root":{"type":"row","gap":{"bind":"g"},"children":[]}}}]}`,
+		},
+		{
+			name: "grid column counts the renderer will actually honour",
+			doc: `{"tabs":[
+				{"id":"ab1","type":"ui","state":{"root":{"type":"grid","columns":3,"children":[]}}},
+				{"id":"ab2","type":"ui","state":{"root":{"type":"grid","columns":"4","children":[]}}},
+				{"id":"ab3","type":"ui","state":{"root":{"type":"grid","columns":6,"gap":"10px","children":[]}}}
+			]}`,
 		},
 		{
 			name: "a well-formed kv with both literal and bound values",

@@ -45,6 +45,9 @@ const (
 	keyBy        = "by"
 	keyAt        = "at"
 	keyReason    = "reason"
+
+	// `ui` node props whose VALUE is checked at write time, not just its name.
+	keySize = "size"
 )
 
 // Keys of the HTTP API's own JSON: what a reply is made of, the fields of the two

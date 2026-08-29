@@ -118,7 +118,7 @@ func (s *server) handleLogGet(w http.ResponseWriter, r *http.Request) {
 
 	f, err := os.Open(path) //nolint:gosec // see the path-traversal note above
 	if err != nil {
-		s.writeJSON(w, http.StatusOK, map[string]any{"lines": []string{}, "size": 0, "missing": true})
+		s.writeJSON(w, http.StatusOK, map[string]any{"lines": []string{}, keySize: 0, "missing": true})
 		return
 	}
 	defer func() { _ = f.Close() }()

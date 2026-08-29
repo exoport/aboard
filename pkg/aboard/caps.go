@@ -42,8 +42,10 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 )
@@ -957,6 +959,20 @@ func checkUITree(spec typeSpec, where string, node any, data map[string]any, nod
 		if key == "tone" {
 			out = append(out, checkPalette(where, propPath, obj[key], spec.Tones, "tone")...)
 		}
+		// Value checks, where the prop name is right and the value still draws
+		// nothing. Keyed off the prop rather than the component: `gap` means the
+		// same thing on every layout node that takes it.
+		if key == "gap" {
+			out = append(out, checkCSSLength(where, propPath, obj[key], "gap")...)
+		}
+		// `spacer.size` is declared as "any CSS length" and reaches the
+		// stylesheet the same way, so it fails the same way.
+		if key == keySize && typeName == "spacer" {
+			out = append(out, checkCSSLength(where, propPath, obj[key], "size")...)
+		}
+		if key == "columns" && typeName == "grid" {
+			out = append(out, checkGridColumns(where, propPath, obj[key])...)
+		}
 		out = append(out, checkItemShape(where, obj, key, typeName, propPath, component, data)...)
 	}
 
@@ -1102,6 +1118,108 @@ func checkPalette(where, at string, value any, allowed []string, kind string) []
 	return []string{fmt.Sprintf("%s: %s = %q is not a %s this board has — it will draw the default. Available: %s",
 		where, at, name, kind, strings.Join(allowed, ", "))}
 }
+
+// cssLength matches the length forms a layout prop may carry. Deliberately
+// permissive about units and strict about shape: the failure being caught is a
+// SIZE TOKEN where CSS was wanted (`"lg"`, `"md"`, `"tight"`), not an exotic
+// unit somebody looked up.
+var cssLength = regexp.MustCompile(`^[+-]?(?:\d+\.?\d*|\.\d+)(?:px|rem|em|%|ch|ex|vh|vw|vmin|vmax|cm|mm|in|pt|pc|q|lh|rlh)$`)
+
+// cssZero is the one number CSS takes without a unit.
+var cssZero = regexp.MustCompile(`^[+-]?0(?:\.0+)?$`)
+
+// cssFuncs open a value this check will not try to evaluate: calc() and the
+// comparison functions are legal here, and validating them properly means
+// parsing CSS, which is not this file's job.
+//
+// Tested against the WHOLE value before it is split on whitespace, because
+// `calc(1rem + 2px)` contains spaces — tokenising first turns one legal value
+// into three nonsense ones and reports the correct write as a mistake.
+var cssFuncs = []string{"calc(", "var(", "min(", "max(", "clamp("}
+
+// checkCSSLength catches a layout value that is not a CSS length.
+//
+// The failure it exists for, from a real write on 2026-08-29: a `row` with
+// `gap: "lg"` applied clean, exit 0, no warning — and rendered as one
+// run-together string, because the renderers put this value straight into a
+// custom property (`--uic-gap`). An invalid substitution makes the whole
+// declaration guaranteed-invalid, `gap` falls back to its initial value, and a
+// flex row closes to zero. The tab looked like a styling problem rather than a
+// wrong write.
+//
+// It is the same class as the unknown-prop warning already here and needs its
+// own check for a reason worth stating: the prop NAME is right. Only the value
+// is wrong, so every name-based check passes it.
+//
+// A bare JSON number is included on purpose — `12` becomes the string "12",
+// which is not a CSS length either. Zero is the exception CSS itself makes.
+func checkCSSLength(where, at string, value any, prop string) []string {
+	var text string
+	switch v := value.(type) {
+	case string:
+		text = strings.TrimSpace(v)
+	case float64:
+		// JSON has one number type; render it the way the browser will.
+		text = strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%f", v), "0"), ".")
+	default:
+		// A {bind} resolves at render time, and anything else is not a value
+		// this check can reason about. checkBind covers the former.
+		return nil
+	}
+	if text == "" || text == "normal" {
+		return nil
+	}
+	for _, fn := range cssFuncs {
+		if strings.Contains(text, fn) {
+			return nil
+		}
+	}
+	// `gap` takes one or two lengths — row then column.
+	for token := range strings.FieldsSeq(text) {
+		if cssZero.MatchString(token) || cssLength.MatchString(token) {
+			continue
+		}
+		return []string{fmt.Sprintf(
+			"%s (ui): %s = %q is not a CSS length — %s is written into the stylesheet as-is, so this "+
+				"draws with no %s at all rather than a default. Use a unit: \"12px\", \"1.5rem\", or 0.",
+			where, at, text, prop, prop)}
+	}
+	return nil
+}
+
+// checkGridColumns catches a `grid` column count the renderer will silently
+// replace. It coerces with Number() and falls back to 2 on anything that is not
+// a positive finite number, then clamps to 6 — so both mistakes produce a grid
+// that is merely the wrong shape, which is the hardest kind of wrong to notice.
+func checkGridColumns(where, at string, value any) []string {
+	var n float64
+	switch v := value.(type) {
+	case float64:
+		n = v
+	case string:
+		text := strings.TrimSpace(v)
+		parsed, err := strconv.ParseFloat(text, 64)
+		if err != nil {
+			return []string{fmt.Sprintf("%s (ui): %s = %q is not a number — the grid will silently draw 2 columns.",
+				where, at, text)}
+		}
+		n = parsed
+	default:
+		return nil
+	}
+	if n <= 0 {
+		return []string{fmt.Sprintf("%s (ui): %s = %v is not a positive column count — the grid will silently draw 2 columns.",
+			where, at, value)}
+	}
+	if n > uiGridMaxColumns {
+		return []string{fmt.Sprintf("%s (ui): %s = %v is above the %d-column maximum — the grid will silently draw %d.",
+			where, at, value, uiGridMaxColumns, uiGridMaxColumns)}
+	}
+	return nil
+}
+
+// uiGridMaxColumns mirrors the clamp in the grid renderer (views/ui.js).
+const uiGridMaxColumns = 6
 
 func catalogHint(spec typeSpec) string {
 	names := make([]string, 0, len(spec.Components))
