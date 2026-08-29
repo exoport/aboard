@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## v0.1.3 — 2026-08-29
+
+One new write-time check, for the half of a `ui` mistake the existing ones could
+not see. `capsHash` is unchanged at `207b5d93` — this is validation logic, not
+described surface, so a skill reference generated against v0.1.1 stays current.
+
+- **`apply --check` now reads the VALUE of a layout prop, not only its name.**
+  Every check here until now asked whether a prop exists. These three mistakes
+  pass that test and still draw wrong:
+  - **`gap`** goes into the stylesheet as-is, through `--uic-gap`. A size token
+    (`"lg"`, `"md"`) is not CSS, an invalid substitution makes the whole
+    declaration guaranteed-invalid, `gap` falls back to its initial value, and a
+    flex row closes to **zero** — so four stats render as
+    `v0.0.56v0.1.2v0.1.2207b5d93` and it reads as a styling bug rather than a
+    wrong write. A bare number is caught for the same reason: JSON `12` reaches
+    CSS as `12`, with no unit. Accepted: any length with a unit, `0`, `normal`,
+    two values (row then column), `calc()`/`var()`/`min()`/`max()`/`clamp()`,
+    and a `{bind}`, which `checkBind` already covers.
+  - **`grid.columns`** is coerced with `Number()` and silently falls back to 2 on
+    anything that is not a positive number, then clamps to 6. Both ends warn now,
+    because a grid of the wrong shape is the hardest kind of wrong to notice.
+  - **`spacer.size`** is declared as "any CSS length" and reaches the stylesheet
+    the same way, so it fails the same way.
+  - Found by writing a tab, applying it clean with exit 0, and then looking at a
+    screenshot — the loop the skill already prescribes, and the reason it says the
+    warnings cannot see a layout that is legal and still unreadable. This moves
+    one more of those back to the write.
+  - The negative case is the load-bearing test: `calc(1rem + 2px)` contains
+    spaces, and tokenising before testing for a function turned one legal value
+    into three nonsense ones and reported a correct write as a mistake. Seven
+    legitimate spellings are asserted quiet, because a checker that cries wolf is
+    the noise that teaches people to skip stderr.
+
 ## v0.1.2 — 2026-08-29
 
 A crash fix and the skill lesson that a real session paid for. `capsHash` is
