@@ -639,18 +639,40 @@ func orDash(s string) string {
 // stampedHash is the capsHash the committed reference was generated for, or ""
 // when there is no reference to compare against. Never fails: a missing file is
 // a normal state, not an error.
+//
+// "Never fails" is the whole contract, and both bounds below are load-bearing
+// to it. The file is somebody's copied reference — truncated, hand-edited or
+// half-written by an interrupted redirect — and every caller treats a "" as the
+// ordinary absent case. A panic here takes down `status` and `doctor`, which
+// are the two commands a person runs precisely when something is already wrong.
 func stampedHash(root Root) string {
 	body, err := os.ReadFile(root.SkillReference())
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(body), "\n")[:6] {
+	// The stamp is in the file's header; the cap is to avoid scanning a long
+	// document for a token that may legitimately appear in its body.
+	lines := strings.Split(string(body), "\n")
+	if len(lines) > stampedHashScanLines {
+		lines = lines[:stampedHashScanLines]
+	}
+	for _, line := range lines {
 		if _, after, found := strings.Cut(line, "capsHash:"); found {
-			return strings.TrimSpace(strings.Fields(after)[0])
+			fields := strings.Fields(after)
+			if len(fields) == 0 {
+				// A bare "capsHash:" with nothing after it. Keep looking
+				// rather than indexing into an empty slice.
+				continue
+			}
+			return fields[0]
 		}
 	}
 	return ""
 }
+
+// stampedHashScanLines is how far into a copied reference the capsHash stamp is
+// looked for. The generated file carries it in the first few lines.
+const stampedHashScanLines = 6
 
 func (s *server) handleCapabilities(w http.ResponseWriter, _ *http.Request) {
 	m, err := buildManifest(s.assets)

@@ -380,3 +380,41 @@ func TestTheShellAgreesWithTheDeclaredSchemaVersion(t *testing.T) {
 			"every board would come up with an empty tab strip and no error", got, SchemaVersion)
 	}
 }
+
+// stampedHash promises never to fail, and its callers rely on it: Status treats
+// "" as the ordinary "no reference copied here" case. Both of these panicked
+// before — a short file on the [:6] slice, a bare stamp on Fields(...)[0] — and
+// they took `status` and `ape doctor` down with them, the two commands someone
+// runs when something is already wrong.
+func TestStampedHashSurvivesAMalformedReference(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, body, want string
+	}{
+		{"empty", "", ""},
+		{"one line, no stamp", "# reference\n", ""},
+		{"shorter than the scan window", "a\nb\n", ""},
+		{"short but stamped", "capsHash: abc123\n", "abc123"},
+		{"bare stamp, nothing after it", "capsHash:\n", ""},
+		// The repetition is the point: a bare stamp must be skipped rather
+		// than returned, so a later real one still wins.
+		{"bare stamp then a real one", "capsHash:\ncapsHash: def456\n", "def456"}, //nolint:dupword // two stamps is the case under test
+		{"stamped past the window is not read", strings.Repeat("x\n", 8) + "capsHash: nope\n", ""},
+		{"no trailing newline", "capsHash: 9f9f9f", "9f9f9f"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root := Root(t.TempDir())
+			ref := root.SkillReference()
+			if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(ref, []byte(tc.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if got := stampedHash(root); got != tc.want {
+				t.Fatalf("stampedHash = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
