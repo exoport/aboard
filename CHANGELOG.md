@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## v0.1.2 — 2026-08-29
+
+A crash fix and the skill lesson that a real session paid for. `capsHash` is
+unchanged at `207b5d93` — nothing here touches the described surface, so a skill
+reference generated against v0.1.1 stays current.
+
+- **`stampedHash` no longer panics on a malformed reference, which is what its
+  own doc comment always promised.** Two bounds on two adjacent lines were
+  missing: `strings.Split(body, "\n")[:6]` slices a file with fewer than six
+  lines out of range, and `strings.Fields(after)[0]` indexes an empty slice when
+  a line reads `capsHash:` with nothing after it. Either one takes down
+  `aboard status` — and, through `aboard.Status`, any host embedding it.
+  Reproduced against the released v0.1.1 binary with a two-line
+  `reference.generated.md`:
+  `panic: slice bounds out of range [:6] with capacity 3`.
+  - **The blast radius is what makes it worth a release rather than a note.**
+    Every caller reads `""` as the ordinary "no reference copied here" case —
+    the file is somebody's COPY, so truncated, hand-edited, or half-written by
+    an interrupted redirect are all normal states, not corruption. And the two
+    commands it kills are `status` and a host's `doctor`: the ones a person runs
+    precisely when something is already wrong.
+  - Found from the outside, while adding an `aboard.skill_reference` check to
+    `ape doctor` — the new caller widened the reach of a bug that was already
+    shipped, rather than introducing one. The scan window is now a named
+    constant, and a table-driven test covers empty, short, unstamped, bare-stamp,
+    stamp-past-the-window, and no-trailing-newline references.
+
+- **The skill now says to wait for the nudge, not for the first click.** An
+  agent following it used `--for change`, which fires on the FIRST write of an
+  interaction — a human working through a four-field form saves once per field —
+  so it woke holding one answer and three defaults, read the defaults as a
+  decision, and wrote back under someone who was still reading. Twice. The
+  correction is that `poke` is the default because it is the only predicate that
+  means *I have finished*, and that narrowing to `change` belongs to a board
+  another AGENT is driving, where every write is final and there is nobody to
+  interrupt. Also: tell the human the button is what releases you, since one who
+  does not know it is there will answer and then wait to be noticed. In
+  `SKILL.md` and mirrored in `references/capabilities.md`.
+
 ## v0.1.1 — 2026-08-28
 
 One user-visible change, and it is the last open item from
