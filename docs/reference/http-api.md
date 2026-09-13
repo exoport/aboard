@@ -161,6 +161,16 @@ host on a light theme that only sends the message shows the board dark for a mom
 first, which is what Moonwatcher reported on 2026-09-13. Send both — the parameter for
 the first paint, the message for every change after it.
 
+**Keep the parameter fixed for the life of the frame or view, and let the message carry
+every change.** Changing `?theme=` is changing the page's query, which a fragment-only
+navigation (`#tab=…`) never does: the page reloads, and a host that checks every address
+it navigates to against the one it started with — the VS Code panel does — refuses the new
+one outright, so a sidebar click silently does nothing. And because a reload re-reads the
+parameter, including the board's own [self-reload](../how-to/run-in-vscode.md#when-the-page-reloads-itself)
+after a rebuild, a host whose theme has changed since should send the `theme` message
+again on every load, not only the first. Found by the extension on 2026-09-13, while it
+added the parameter.
+
 ### Two channels: framed and top level
 
 The messages below travel between the board and its **host** — whatever shows the board
