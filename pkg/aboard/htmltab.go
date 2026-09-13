@@ -78,7 +78,12 @@ const htmlTabCSP = "sandbox allow-scripts; " +
 //
 // If a host still gets a blank tab, its webview console names the origin it
 // tried to frame from — add it here rather than widening to *.
-const htmlTabFrameAncestors = "'self' vscode-webview: vscode-file: https://*.vscode-cdn.net"
+//
+// mwembed: is Moonwatcher's wrapper page (2026-09-13), which frames the board to
+// reach the embedder messages a top-level page could not. It is TEMPORARY: once
+// Moonwatcher loads the board top level under ?embed=top, the tab's only
+// ancestor is the board itself and this entry can go.
+const htmlTabFrameAncestors = "'self' vscode-webview: vscode-file: https://*.vscode-cdn.net mwembed:"
 
 const bridgeScript = `<script>
 (function () {

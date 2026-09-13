@@ -76,7 +76,8 @@ server was down, and therefore never reconnected.
 `frame-ancestors` is checked against the **whole** ancestor chain — not just the
 immediate parent. Inside VS Code that chain includes the webview document hosting the
 Simple Browser, so the policy admits `vscode-webview:`, `vscode-file:` and
-`https://*.vscode-cdn.net` alongside `'self'`.
+`https://*.vscode-cdn.net` alongside `'self'` (and `mwembed:`, for Moonwatcher's wrapper
+page).
 
 If a widget tab is blank in some other host, open that host's webview developer console:
 a blocked frame is reported with the origin it tried to frame from. Add **that origin**

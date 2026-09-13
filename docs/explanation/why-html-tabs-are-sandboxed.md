@@ -67,7 +67,10 @@ though the shell were the thing being refused — the misdirection that cost the
 was reproduced headlessly with a cross-origin wrapper: the nested case is refused exactly
 like the direct one.
 
-So the list is now `'self' vscode-webview: vscode-file: https://*.vscode-cdn.net`.
+So the list is now `'self' vscode-webview: vscode-file: https://*.vscode-cdn.net`, plus
+`mwembed:` — Moonwatcher's wrapper page, which frames the board from its own scheme and
+hit exactly the same blank tab. That entry is temporary: it goes once Moonwatcher loads
+the board top level with `?embed=top` and the board is the tab's only ancestor.
 
 **Do not tighten it back to `'self'`.** If another host shows a blank tab, its webview
 console names the origin it tried to frame from — add *that origin*, rather than widening

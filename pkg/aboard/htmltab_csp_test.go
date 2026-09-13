@@ -42,6 +42,10 @@ func TestHTMLTabCSP(t *testing.T) {
 		// Deliberately wider than 'self': frame-ancestors is checked against the
 		// WHOLE chain, and the board is normally viewed inside VS Code's webview.
 		"frame-ancestors 'self' vscode-webview:",
+		// Moonwatcher's wrapper page frames the board from its own scheme, and
+		// without this every html tab inside it is blank. Temporary: see the
+		// comment on htmlTabFrameAncestors.
+		" mwembed:",
 	} {
 		if !strings.Contains(csp, want) {
 			t.Errorf("the html tab CSP has lost %q:\n%s", want, csp)
