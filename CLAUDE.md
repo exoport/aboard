@@ -105,7 +105,24 @@ reads `^[a-z]*(\d+)$`) and the document **schema resets to 1** (it read 3, count
 spike's two layout changes). That second one shipped a defect worth remembering: the
 version is declared in Go AND in the shell, and changing one made every board come up
 with an empty tab strip, no console error and a valid document — now checked by
-`TestTheShellAgreesWithTheDeclaredSchemaVersion`. `capsHash` is `207b5d93`.
+`TestTheShellAgreesWithTheDeclaredSchemaVersion`. `capsHash` was `207b5d93` then.
+
+**2026-09-13 — Moonwatcher's seven asks, answered.** A Moonwatcher session (the
+Tauri/WebKitGTK workbench that shows this board in its own window) handed over seven
+asks; the human decided each, and four commits landed them, unreleased. `mwembed:` is
+in `frame-ancestors` (temporary, see `htmltab.go`). Form fields and markup images are
+checked item by item at the write (`items`/`itemTypes` on a state field), and the
+markup colour check reads `regions` — it read `marks`, a key no image has, from the day
+it was written. Agent images go in `.aboard/uploads/`, never `assets/`, and a retake
+keeps its marks when only `src` changes. `?embed=top` is a second host channel,
+`?theme=` paints a host's variant from the first frame, and `/capabilities` declares the
+whole embed surface. `serve --detach` starts a board in a session of its own. **Two
+asks were declined by the human and stay declined**: the system colour scheme as the
+default (dark is the default for everyone), and a `systemd --user` unit (state outside
+`.aboard/`). `capsHash` is **`8beefdfe`**. **`/tmp` is a quota'd tmpfs on this
+machine**, and when it fills, `go test` fails with `disk quota exceeded` and the shell
+tool can fail to return output at all; `TMPDIR=$HOME/.cache/<dir>` is the way to a
+trustworthy run, and nothing above that directory holds an `.aboard/`.
 
 `development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file

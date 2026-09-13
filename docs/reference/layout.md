@@ -24,6 +24,8 @@ opinion about it.
       journal.<name>.jsonl the named board's own log
       rendered.json        mount receipts: what a browser reported it drew, per tab
       rendered.<name>.json the named board's own receipts
+      serve.log            output of a board started with `serve --detach`
+      serve.<name>.log     the same, for a named board
       logs/<tab>.log       sidecar output for a `log` tab
       logs/<name>/<tab>.log  the named board's own sidecar logs
       shots/               screenshots from test/shot.sh
@@ -152,6 +154,7 @@ be repeated on every command.
 | `run/instance.json` · `run/instance.<name>.json` | the board |
 | `run/journal.jsonl` · `run/journal.<name>.jsonl` | the board |
 | `run/rendered.json` · `run/rendered.<name>.json` | the board |
+| `run/serve.log` · `run/serve.<name>.log` | the board |
 | `run/logs/<tab>.log` · `run/logs/<name>/<tab>.log` | the board |
 | `uploads/`                    | the project — **shared** |
 | `recipes/`                    | the project — **shared** |

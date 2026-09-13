@@ -524,6 +524,13 @@ func (s *server) listen(ctx context.Context, want int, root Root, name string, i
 // it answers, but not as us. Both cases proceed, and writeInstance overwrites the
 // record on the way up.
 func (s *server) refuseRecordedBoard(ctx context.Context, root Root, name string, inv Invocation) error {
+	return refuseLiveRecord(ctx, root, name, inv)
+}
+
+// refuseLiveRecord is refuseRecordedBoard without a server, for the one caller
+// that must ask before it has one: `serve --detach`, which would otherwise
+// truncate the running board's log on its way to being refused.
+func refuseLiveRecord(ctx context.Context, root Root, name string, inv Invocation) error {
 	// A bool rather than an early `if err != nil { return nil }`: an absent or
 	// unreadable record is not a failure to report here, it is the ordinary case
 	// of a project whose board is not running.

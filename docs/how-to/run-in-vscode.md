@@ -34,12 +34,19 @@ get different ports rather than fighting over one. Read it from `aboard status` 
 
 Give the server its own terminal (a VS Code integrated terminal is ideal — it dies with
 the window, which is usually what you want). If you would rather it survive the
-terminal, run it detached and let the instance file be the record of where it went:
+terminal, detach it and let the instance file be the record of where it went:
 
 ```bash
-aboard serve > /tmp/aboard-serve.log 2>&1 &
+aboard serve --detach
 aboard status
 ```
+
+`--detach` starts the server in a session of its own, writes its output to
+`.aboard/run/serve.log`, and returns once the board answers, printing the URL and the
+pid. That is what survives a terminal — or an agent session — being torn down:
+`aboard serve … &`, with or without `nohup`, stays in the shell's process group and
+dies with it. Stop a detached board by its pid (`kill <pid>`), never by matching
+`aboard serve`, which would match every board on the machine.
 
 `aboard serve` refuses to start a second board for the same project and prints the URL
 of the one already running. That is deliberate: a second session must not be able to

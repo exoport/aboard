@@ -284,6 +284,18 @@ func (r Root) InstanceFile(name string) string {
 	return filepath.Join(r.RunDir(), "instance."+name+".json")
 }
 
+// ServeLog is where a board started with `serve --detach` writes its output,
+// beside the instance record that says where it went. Per board, for the same
+// reason the record is: two named boards detached from one project must not
+// write one file. Truncated on each detached start, so it stays the size of one
+// run — the one a reader looks at after a start that did not come up.
+func (r Root) ServeLog(name string) string {
+	if name == "" {
+		return filepath.Join(r.RunDir(), "serve.log")
+	}
+	return filepath.Join(r.RunDir(), "serve."+name+".log")
+}
+
 // InstanceGlob matches EVERY board's instance record in this project — the
 // default board's and every named one's. `aboard boards` needs it: it has a pid
 // and a root and has to find which of the project's boards that process is

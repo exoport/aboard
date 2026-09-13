@@ -158,6 +158,7 @@ func Commands() []Command {
 			Doc:  "run the board server for this project",
 			Flags: []Flag{
 				{Name: "base-path", Type: flagTypeString, Doc: "serve under a URL prefix, e.g. /aboard (default: the server root)"},
+				{Name: "detach", Type: flagTypeBool, Def: defFalse, Doc: "start the server in a session of its own, log to .aboard/run/serve.log, and return once it answers"},
 				{Name: "dev", Type: flagTypeBool, Def: defFalse, Doc: "serve the web tree from disk instead of the embedded copy"},
 				{Name: "dev-dir", Type: flagTypeString, Doc: "with --dev, the web tree to serve (default: pkg/aboard/web under the root)"},
 				{Name: "port", Type: flagTypeInt, Def: "0", Doc: "port to listen on (0 derives one from the project root; env PORT)"},

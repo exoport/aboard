@@ -464,7 +464,7 @@ func (r StatusReport) Human(inv Invocation) string {
 		fmt.Fprintf(&b, "it would use port %d\n", r.WouldUsePort)
 	case !r.Running:
 		fmt.Fprintf(&b, "stale record: %s (pid %d) is not answering\n", r.URL, r.PID)
-		fmt.Fprintf(&b, "start a fresh one with `%s serve`\n", inv)
+		fmt.Fprintf(&b, "start a fresh one with `%s serve`, or `%s serve --detach` to outlive the shell that starts it\n", inv, inv)
 	default:
 		fmt.Fprintf(&b, "aboard running at %s\n", r.URL)
 		fmt.Fprintf(&b, "  project %s\n  state   %s\n  pid     %d\n  since   %s\n",
