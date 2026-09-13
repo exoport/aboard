@@ -257,7 +257,7 @@
       ]
     },
     "image": {
-      "doc": "an image from assets/ or uploads/ only",
+      "doc": "an image from uploads/ (put yours in .aboard/uploads/) or the binary's own assets/ only",
       "props": [
         "src",
         "alt",
@@ -313,7 +313,7 @@
     "Catalog (25): col, row, grid, card, tabs, divider, spacer, title, heading, text, caption, badge, notice, quote, code, link, list, checklist, kv, table, stat, meter, image, button, field.",
     "Where a prop takes both `value` and `text`, `value` wins.",
     "`tone` takes a token NAME from `tones` above, never a hex. An unrecognised one draws the default, so `aboard apply` warns about it.",
-    "`image.src` must be under assets/ or uploads/; `link.href` must be #, / or http(s).",
+    "`image.src` must be under uploads/ or assets/ — and an image you supply goes in `.aboard/uploads/`, because assets/ is compiled into the binary; `link.href` must be #, / or http(s).",
     "Any prop may be `{\"bind\":\"path.in.data\"}` instead of a literal — EXCEPT `field.bind` and `checklist[].bind`, which are the paths themselves.",
     "An unknown component type renders a visible marker. An unknown PROP renders nothing at all, which is why `aboard apply` warns about one.",
     "PREFER THIS OVER `html` whenever it can express the shape.",

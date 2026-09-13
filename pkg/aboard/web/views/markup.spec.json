@@ -14,7 +14,15 @@
     },
     "images": {
       "type": "array",
-      "doc": "each { id, src, caption, annotatable, regions[], strokes[] }"
+      "doc": "one per picture; the marks drawn on it live in its regions[] and strokes[]",
+      "items": [
+        "id",
+        "src",
+        "caption",
+        "annotatable",
+        "regions",
+        "strokes"
+      ]
     }
   },
   "colors": [
@@ -153,6 +161,7 @@
     "Marks are numbered continuously across the tab, so a number names one mark.",
     "`color` is a token NAME from `colors` above, never a hex. An unrecognised one draws nothing at all, so `aboard apply` warns about it.",
     "`strokes[].points` is one \"x,y x,y\" string.",
-    "Put agent-supplied images in assets/; pasted ones land in uploads/."
+    "Put an image you supply in `.aboard/uploads/` (PNG, JPEG, GIF or WebP; SVG is refused) and reference it as `uploads/<file>` — where pasted and dropped images land too. `assets/` is compiled into the binary, so a file written there is never served.",
+    "To retake a screen, give the new capture a NEW file name and change only that image's `src`: its marks and their notes stay, because they live on the image object and nothing else holds them. They stay aligned when the retake has the same framing and aspect ratio. Reusing the old file name does not reload the picture in an open page."
   ]
 }

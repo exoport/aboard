@@ -63,6 +63,15 @@ import (
 type stateField struct {
 	Type string `json:"type"`
 	Doc  string `json:"doc"`
+	// Items declares the keys of the objects inside an array field, for the
+	// fields whose element shape the renderer reads by name — the state-level
+	// twin of a component's ItemProps. Checking only the field's NAME let a
+	// form whose every field said `kind` instead of `type` apply clean and draw
+	// "Unsupported field type" five times.
+	Items []string `json:"items,omitempty"`
+	// ItemTypes, when set, is every value an item's `type` may take: the cases
+	// the renderer has a branch for. Anything else draws a marker, not a field.
+	ItemTypes []string `json:"itemTypes,omitempty"`
 }
 
 // componentSpec describes one entry in a renderer's own inner vocabulary. Only
@@ -450,7 +459,15 @@ func manifestMarkdown(m manifest) string {
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
-				fmt.Fprintf(&b, "| `%s` | %s | %s |\n", k, t.State[k].Type, t.State[k].Doc)
+				field := t.State[k]
+				kind, doc := field.Type, field.Doc
+				if len(field.Items) > 0 {
+					kind = fmt.Sprintf("%s of { %s }", kind, strings.Join(field.Items, ", "))
+				}
+				if len(field.ItemTypes) > 0 {
+					doc = fmt.Sprintf("%s — an item's `type` is one of: %s", doc, strings.Join(field.ItemTypes, ", "))
+				}
+				fmt.Fprintf(&b, "| `%s` | %s | %s |\n", k, kind, doc)
 			}
 			b.WriteString("\n")
 		}
@@ -844,6 +861,9 @@ func checkTabState(byType map[string]typeSpec, where, typeName string, state map
 			out = append(out, fmt.Sprintf("%s (%s): state.%s is not declared by the %s renderer — it will be stored and ignored",
 				where, typeName, name, typeName))
 		}
+		for _, name := range sortedKeys(spec.State) {
+			out = append(out, checkStateItems(where, typeName, name, spec.State[name], state[name])...)
+		}
 	}
 
 	if len(spec.Components) > 0 {
@@ -862,7 +882,10 @@ func checkTabState(byType map[string]typeSpec, where, typeName string, state map
 			if !ok {
 				continue
 			}
-			for _, group := range []string{"marks", "strokes"} {
+			// `regions`, not `marks`: this read `marks` — a key no image has —
+			// from the day it was written, so a wrong colour on a rectangle or
+			// an ellipse was never reported, and only strokes were checked.
+			for _, group := range []string{"regions", "strokes"} {
 				marks, _ := image[group].([]any)
 				for _, m := range marks {
 					mark, ok := m.(map[string]any)
@@ -1011,6 +1034,54 @@ func checkItemShape(where string, obj map[string]any, key, typeName, propPath st
 		}
 	}
 	return out
+}
+
+// checkStateItems checks the objects inside one declared array field of a tab's
+// state: every key must be one the renderer reads, and — where the field
+// declares them — every item's `type` must be one it draws. Both halves are
+// needed for the write that motivated this: `kind` where `type` belonged is an
+// unread key AND a missing type, and naming only one of them sends the author
+// looking for the wrong fix.
+func checkStateItems(where, typeName, name string, field stateField, value any) []string {
+	if len(field.Items) == 0 && len(field.ItemTypes) == 0 {
+		return nil
+	}
+	items, _ := value.([]any)
+	out := []string{}
+	for i, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		at := fmt.Sprintf("state.%s[%d]", name, i)
+		if len(field.Items) > 0 {
+			for _, key := range sortedKeys(item) {
+				if !contains(field.Items, key) {
+					out = append(out, fmt.Sprintf("%s (%s): %s.%s is not read — a %s %s item is { %s }",
+						where, typeName, at, key, typeName, name, strings.Join(field.Items, ", ")))
+				}
+			}
+		}
+		if got, isString := item[keyType].(string); len(field.ItemTypes) > 0 && (!isString || !contains(field.ItemTypes, got)) {
+			out = append(out, fmt.Sprintf("%s (%s): %s.type is %s — the %s renderer draws %s, and anything else renders as an unsupported marker",
+				where, typeName, at, shownItemType(item), typeName, strings.Join(field.ItemTypes, ", ")))
+		}
+	}
+	return out
+}
+
+// shownItemType says what an item's `type` actually is, in a form that cannot be
+// mistaken for another: "missing" for no key at all, a quoted string for a string,
+// and the bare value for anything else — `1` and `"1"` are different mistakes.
+func shownItemType(item map[string]any) string {
+	v, present := item[keyType]
+	if !present {
+		return "missing"
+	}
+	if s, isString := v.(string); isString {
+		return strconv.Quote(s)
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 type uiChild struct {
@@ -1230,7 +1301,7 @@ func catalogHint(spec typeSpec) string {
 	return "the catalog holds: " + strings.Join(names, ", ")
 }
 
-func sortedKeys(m map[string]any) []string {
+func sortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

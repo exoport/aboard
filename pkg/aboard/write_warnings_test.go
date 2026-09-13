@@ -58,10 +58,54 @@ func TestWriteWarningsPerDetector(t *testing.T) {
 			want: `ab1: root.tone = "claude" is not a tone this board has`,
 		},
 		{
-			name: "unknown markup colour",
+			// `regions`, which is where markup keeps a rectangle or an ellipse.
+			// This case used to say `marks` — a key no image has — and passed,
+			// because the detector read the same wrong key: a region's colour was
+			// never checked at all.
+			name: "unknown markup colour on a region",
 			doc: `{"tabs":[{"id":"ab1","type":"markup","state":{"images":[
-				{"id":"ab2","marks":[{"id":"ab3","color":"claude"}]}]}}]}`,
+				{"id":"ab2","regions":[{"id":"ab3","color":"claude"}]}]}}]}`,
 			want: `ab1: ab3.color = "claude" is not a colour this board has`,
+		},
+		{
+			name: "unknown markup colour on a stroke",
+			doc: `{"tabs":[{"id":"ab1","type":"markup","state":{"images":[
+				{"id":"ab2","strokes":[{"id":"ab4","color":"claude"}]}]}}]}`,
+			want: `ab1: ab4.color = "claude" is not a colour this board has`,
+		},
+		{
+			// The write that started this detector, from a Moonwatcher session on
+			// 2026-09-11: `kind` where `type` belonged, applied clean, and every
+			// field drew "Unsupported field type". It is two mistakes at once, so
+			// it gets two warnings — this case and the next.
+			name: "a form field key the renderer does not read",
+			doc: `{"tabs":[{"id":"ab1","type":"form","state":{"fields":[
+				{"id":"name","kind":"text","label":"Name"}]}}]}`,
+			want: `ab1 (form): state.fields[0].kind is not read — a form fields item is { id, type,`,
+		},
+		{
+			name: "a form field with no type",
+			doc: `{"tabs":[{"id":"ab1","type":"form","state":{"fields":[
+				{"id":"name","kind":"text","label":"Name"}]}}]}`,
+			want: `ab1 (form): state.fields[0].type is missing — the form renderer draws range, select, checkbox, text, textarea`,
+		},
+		{
+			name: "a form field type the renderer has no branch for",
+			doc: `{"tabs":[{"id":"ab1","type":"form","state":{"fields":[
+				{"id":"n","type":"number","label":"How many"}]}}]}`,
+			want: `ab1 (form): state.fields[0].type is "number" — the form renderer draws`,
+		},
+		{
+			name: "a markup image key the renderer does not read",
+			doc: `{"tabs":[{"id":"ab1","type":"markup","state":{"images":[
+				{"id":"ab2","src":"uploads/a.png","marks":[]}]}}]}`,
+			want: `ab1 (markup): state.images[0].marks is not read — a markup images item is { id, src, caption, annotatable, regions, strokes }`,
+		},
+		{
+			name: "a form nested inside a stack block is checked too",
+			doc: `{"tabs":[{"id":"ab1","type":"stack","state":{"blocks":[
+				{"id":"ab2","type":"form","state":{"fields":[{"id":"q","type":"radio"}]}}]}}]}`,
+			want: `ab1/ab2 (form): state.fields[0].type is "radio"`,
 		},
 		{
 			name: "wrong item shape inside a fixed-shape array prop",
@@ -196,6 +240,23 @@ func TestWriteWarningsStaysQuietOnCorrectDocuments(t *testing.T) {
 				{"id":"ab2","type":"ui","state":{"root":{"type":"grid","columns":"4","children":[]}}},
 				{"id":"ab3","type":"ui","state":{"root":{"type":"grid","columns":6,"gap":"10px","children":[]}}}
 			]}`,
+		},
+		{
+			// Every field type, each carrying every key its branch reads.
+			name: "a form using every field type the renderer draws",
+			doc: `{"tabs":[{"id":"ab1","type":"form","state":{"title":"Q","intro":"","fields":[
+				{"id":"a","type":"range","label":"A","hint":"h","min":0,"max":10,"step":1,"value":3},
+				{"id":"b","type":"select","label":"B","options":["x","y"],"value":"x"},
+				{"id":"c","type":"checkbox","label":"C","value":false},
+				{"id":"d","type":"text","label":"D","placeholder":"p","value":""},
+				{"id":"e","type":"textarea","label":"E","placeholder":"p","value":""}]}}]}`,
+		},
+		{
+			// Exactly the object markup.js pushes when the human pastes an image,
+			// so a browser write can never trip the check it is not responsible for.
+			name: "a markup image as the browser writes it",
+			doc: `{"tabs":[{"id":"ab1","type":"markup","state":{"layout":"stacked","images":[
+				{"id":"i1","src":"uploads/a.png","caption":"pasted image","annotatable":true,"regions":[],"strokes":[]}]}}]}`,
 		},
 		{
 			name: "a well-formed kv with both literal and bound values",

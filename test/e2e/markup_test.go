@@ -1839,7 +1839,89 @@ func TestRightClickingAMarkRowOffersItsId(t *testing.T) {
 // different image from the one above it and there is no caption to truncate.
 // The caption is still on screen, once, in the slice head, where it is renamed.
 
+// Retaking a screen keeps the review drawn on it. The markup spec tells an agent
+// to change only an image's `src` for a retake, and says the marks stay — this is
+// that sentence, run. It needs an OPEN page on purpose: the case it describes is a
+// session replacing a capture while the human is still looking at the old one, so
+// the write lands as a foreign change and the renderer has to swap the picture
+// without rebuilding the image's marks from nothing.
+//
+// Asked for by a Moonwatcher session on 2026-09-11, which rebuilt a review tab
+// twice because nothing said a src swap was safe.
+func TestChangingAnImagesSrcKeepsItsMarks(t *testing.T) {
+	s := open(t, "tab="+markupTab)
+	view := s.view(markupTab)
+	img := view.Locator(`.markup-figure[data-image-id="img1"] img.markup-img`)
+
+	before := markupImage(t, "img1")
+	oldSrc, _ := before["src"].(string)
+	const newSrc = "assets/mock-screen-after.svg"
+	if oldSrc == newSrc {
+		t.Fatalf("the fixture's img1 already shows %s, so nothing would change", newSrc)
+	}
+	marks := map[string]string{}
+	for _, key := range []string{"regions", "strokes"} {
+		list, _ := before[key].([]any)
+		for _, raw := range list {
+			if m, ok := raw.(map[string]any); ok {
+				id, _ := m["id"].(string)
+				marks[id] = markNote(t, "img1", id)
+			}
+		}
+	}
+	if len(marks) == 0 {
+		t.Fatal("the fixture's img1 has no marks, so there is nothing for a retake to keep")
+	}
+
+	// The board is shared by the whole suite, so the capture goes back afterwards.
+	// A defer and not t.Cleanup: the test's context is cancelled before cleanups
+	// run, and the restoring read goes through it.
+	defer func() {
+		d := readDoc(t)
+		setImageSrc(t, d, "img1", oldSrc)
+		apply(t, d)
+	}()
+
+	d := readDoc(t)
+	setImageSrc(t, d, "img1", newSrc)
+	applyLabelled(t, d, "retake img1")
+
+	eventually(t, "the open page to load the new capture", func() bool {
+		got, err := img.GetAttribute("src")
+		return err == nil && strings.HasSuffix(got, newSrc)
+	})
+
+	if got := markCount(t, "img1"); got != len(marks) {
+		t.Errorf("the retake left %d marks on img1, want the %d it had", got, len(marks))
+	}
+	for id, note := range marks {
+		if got := markNote(t, "img1", id); got != note {
+			t.Errorf("mark %s's note is %q after the retake, want %q", id, got, note)
+		}
+		if err := expect.Locator(view.Locator(`.markup-list [data-mark-key="img1::` + id + `"]`)).ToBeVisible(); err != nil {
+			t.Errorf("mark %s is no longer listed under the new capture: %v", id, err)
+		}
+	}
+}
+
 /* ---------- helpers ---------- */
+
+// setImageSrc points one of the markup tab's images at another file, in a
+// document about to be applied, and touches nothing else on it.
+func setImageSrc(t *testing.T, d doc, imageID, src string) {
+	t.Helper()
+	images, ok := d.state(t, markupTab)["images"].([]any)
+	if !ok {
+		t.Fatal("the markup tab has no images list")
+	}
+	for _, raw := range images {
+		if im, ok := raw.(map[string]any); ok && im["id"] == imageID {
+			im["src"] = src
+			return
+		}
+	}
+	t.Fatalf("no image %q on the markup tab", imageID)
+}
 
 func markupImages(t *testing.T) []map[string]any {
 	t.Helper()

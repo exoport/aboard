@@ -23,7 +23,26 @@
     },
     "fields": {
       "type": "array",
-      "doc": "each { id, type: range|select|checkbox|text|textarea, label, value, … }"
+      "doc": "one per question; the human's answer is written to its value",
+      "items": [
+        "id",
+        "type",
+        "label",
+        "value",
+        "hint",
+        "min",
+        "max",
+        "step",
+        "options",
+        "placeholder"
+      ],
+      "itemTypes": [
+        "range",
+        "select",
+        "checkbox",
+        "text",
+        "textarea"
+      ]
     }
   },
   "controls": [
@@ -39,6 +58,7 @@
   "keys": [],
   "notes": [
     "Field ids stay SEMANTIC and author-chosen — you read answers back by them.",
+    "A field's kind is its `type` — never `kind`. `min`, `max` and `step` are read by a range, `options` (a list of strings) by a select, `placeholder` by text and textarea, and `label` and `hint` by every type.",
     "A default value may mean \"not answered yet\"."
   ]
 }

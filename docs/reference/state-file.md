@@ -154,7 +154,11 @@ Two shapes are worth knowing before you read a spec:
 `aboard apply` writes on stderr when a document sets state no renderer reads: an unknown
 component, an unknown prop on a known component, a wrong item shape, a bad block field, a
 `{bind}` that resolves nowhere, a colour name the board does not have, or a `version`
-this board does not write.
+this board does not write. Arrays whose items the renderer reads by name are checked
+item by item where their spec declares `items` — a `form` field or a `markup` image with
+a key nothing reads — and a `form` field's `type` against the five the renderer draws
+(`itemTypes`), so a field written with `kind` instead of `type` warns twice at the write
+rather than drawing "Unsupported field type" in front of the human.
 
 **None of them refuse the write by default.** A spec can lag its renderer, and a board
 that rejected writes because its own documentation was behind would be worse than one

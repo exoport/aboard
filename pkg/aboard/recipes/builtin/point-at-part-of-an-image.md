@@ -7,7 +7,8 @@ tags: [markup, image, annotate, read-back]
 
 # Point at part of an image
 
-Put the image in `assets/`, then:
+Put the image in `.aboard/uploads/` (PNG, JPEG, GIF or WebP) — not `assets/`, which is
+compiled into the binary and never sees a file you write — then:
 
 ```js
 upsertTab(b, 'layout', () => ({
@@ -15,8 +16,8 @@ upsertTab(b, 'layout', () => ({
   state: {
     layout: 'side-by-side',
     images: [
-      { id: newId(b), src: 'assets/before.png', caption: 'Before', annotatable: true, regions: [], strokes: [] },
-      { id: newId(b), src: 'assets/after.png',  caption: 'After',  annotatable: false },
+      { id: newId(b), src: 'uploads/before.png', caption: 'Before', annotatable: true, regions: [], strokes: [] },
+      { id: newId(b), src: 'uploads/after.png',  caption: 'After',  annotatable: false },
     ],
   },
 }));
@@ -43,3 +44,8 @@ for (const img of tab.state.images || []) {
 ```
 
 Then name the element each mark landed on, so they can see you understood.
+
+To retake a screen after a fix, keep what they drew: write the new capture under a
+NEW file name and change only that image's `src`. The marks live on the image
+object, so they stay — aligned, as long as the retake has the same framing and
+aspect ratio. Rebuilding the image would discard them.
