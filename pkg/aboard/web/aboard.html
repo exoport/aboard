@@ -832,10 +832,12 @@ function themeKind() {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 }
 
-// `?theme=`, which the head script already stamped. Kept here because a
-// theme.json edit re-decides the theme later in the page's life, and the host's
-// word has to keep outranking the stored choice and the project default then too
-// — until the human presses the switch, which is the one thing that outranks it.
+// The host's latest word on the variant: `?theme=` at load, which the head
+// script already stamped, then the `kind` of each `theme` message after it (see
+// applyEmbedderTheme). Kept here because a theme.json edit re-decides the theme
+// later in the page's life, and the host's word has to keep outranking the stored
+// choice and the project default then too — until the human presses the switch,
+// which is the one thing that outranks it. In memory only, like the parameter.
 let themeParam = (() => {
   const asked = new URLSearchParams(location.search).get('theme');
   return asked === 'light' || asked === 'dark' ? asked : null;
@@ -972,8 +974,14 @@ function applyEmbedderTheme(msg) {
     document.documentElement.style.setProperty(name, value);
     embedderTokens.add(name);
   }
-  if (msg.kind === 'dark' || msg.kind === 'light') setTheme(msg.kind, { remember: false });
-  else document.dispatchEvent(new CustomEvent('aboard:theme', { detail: { kind: themeKind() } }));
+  // The kind replaces `?theme=` as the host's word, so a theme.json edit after
+  // this message keeps it. Setting only the attribute used to lose it: the
+  // refresh re-decided from the load-time parameter, or the stored choice, and a
+  // light host's board went dark again. Reported by Moonwatcher on 2026-09-13.
+  if (msg.kind === 'dark' || msg.kind === 'light') {
+    themeParam = msg.kind;
+    setTheme(msg.kind, { remember: false });
+  } else document.dispatchEvent(new CustomEvent('aboard:theme', { detail: { kind: themeKind() } }));
 }
 
 // Everything an embedder may ASK this page to do, and it is a short list on

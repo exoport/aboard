@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## Unreleased
+
+- **A `theme.json` edit no longer throws away the variant a host last sent.** A host's
+  `{__aboard:'theme', kind}` set the variant but was not remembered, and an edit to
+  `.aboard/theme.json` re-decides the variant — from `?theme=`, the host's word at LOAD,
+  or failing that the viewer's stored choice. So a board loaded with `?theme=dark` and
+  told `light` went dark again the moment the project theme changed, and so did a panel
+  with no parameter whose viewer had once stored dark. The message's `kind` now replaces
+  the parameter as the host's word, still in memory only, and the board's own switch
+  still clears it. Reported by Moonwatcher on 2026-09-13; the browser suite has the three
+  cases, and fails two of them on v0.2.0.
+
 ## v0.2.0 — 2026-09-13
 
 What a week of embedding the board in another tool turned up. Moonwatcher — a

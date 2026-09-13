@@ -159,7 +159,10 @@ file, not `localStorage` — and it gives way the moment the human presses the b
 theme switch. It exists because the `theme` message below can only arrive after load: a
 host on a light theme that only sends the message shows the board dark for a moment
 first, which is what Moonwatcher reported on 2026-09-13. Send both — the parameter for
-the first paint, the message for every change after it.
+the first paint, the message for every change after it. A message's `kind` then
+replaces the parameter as the host's word for the rest of the page's life, so an edit
+to `.aboard/theme.json` keeps the variant the host last sent rather than going back to
+the one the page loaded with.
 
 **Keep the parameter fixed for the life of the frame or view, and let the message carry
 every change.** Changing `?theme=` is changing the page's query, which a fragment-only
@@ -328,7 +331,10 @@ never arriving.
 
 It is applied as inline custom properties on the root element — outranking both
 variants, so a host need not know which one the viewer is in — and is written **nowhere**:
-not the board document, not `localStorage`. See
+not the board document, not `localStorage`. A `kind` outranks the viewer's stored choice
+and the project's `theme.json` default for as long as the page is open, exactly as
+[`?theme=`](#theme) does, and it survives a `theme.json` edit, which re-decides the
+variant; only the human pressing the board's own switch takes it back. See
 [colour and themes](theme.md#a-theme-from-an-embedder).
 
 ### What embedding deliberately does not add

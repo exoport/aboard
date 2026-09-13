@@ -201,7 +201,10 @@ Three rules, and each of them is a refusal:
 The tokens are applied as inline custom properties on the root element, which outrank
 every stylesheet rule in both variants — so a host does not have to know which variant
 the viewer is in. A message arrives after load, so a host that wants the first frame
-right puts `?theme=` on the URL as well. Pressing the board's own switch clears them: a human pressing a button
+right puts `?theme=` on the URL as well. A `kind` replaces that parameter as the host's
+word, so an edit to `.aboard/theme.json` keeps the variant the host last sent rather than
+the one the page loaded with — or the viewer's stored choice, when there was no
+parameter. Pressing the board's own switch clears them: a human pressing a button
 and nothing happening is worse than a panel that stops matching its host until the host
 speaks again, which it does on its own next theme change.
 

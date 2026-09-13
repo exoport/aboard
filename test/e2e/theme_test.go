@@ -489,6 +489,88 @@ func TestAnEmbedderCanHandTheBoardATheme(t *testing.T) {
 	}
 }
 
+// The host's LATEST word is the one a theme.json edit keeps. A refresh re-decides
+// the variant, and it used to re-decide it from `?theme=` — the host's word at
+// LOAD — so a board loaded dark and told light went dark again the moment
+// somebody edited the project theme. Without the parameter the stored choice did
+// the same. Reported by Moonwatcher on 2026-09-13, from its direct load.
+//
+// On its own board, because the test writes theme.json. Top level under
+// `?embed=top`, where a message posted on the page's own window is the host's.
+func TestAThemeFileEditKeepsTheHostsLastThemeMessage(t *testing.T) {
+	dir := t.TempDir()
+	url := startThemedBoardIn(t, dir, `{"version":1,"light":{"--accent":"#112233"}}`)
+
+	edit := func(s *session, hex string) {
+		t.Helper()
+		if err := os.WriteFile(aboard.Root(dir).ThemeFile(),
+			[]byte(`{"version":1,"light":{"--accent":"`+hex+`"}}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// ABOARD_THEME is assigned in the same task as the re-decision that follows
+		// it, so once it holds the edit the variant has already been decided —
+		// which is what lets a WRONG variant fail as a wrong variant rather than as
+		// a timeout.
+		eventually(t, "the theme.json edit to reach the page", func() bool {
+			var got string
+			s.evalJSON(&got, `() => (window.ABOARD_THEME && window.ABOARD_THEME.light || {})['--accent'] || ''`)
+			return got == hex
+		})
+	}
+	message := func(s *session, kind string) {
+		t.Helper()
+		if _, err := s.page.Evaluate(`(k) => window.postMessage({ __aboard: 'theme', kind: k }, '*')`, kind); err != nil {
+			t.Fatalf("posting a %s theme on the board's own window: %v", kind, err)
+		}
+		eventually(t, "the board to take the host's "+kind, func() bool { return s.themeAttr() == kind })
+	}
+
+	// Loaded with ?theme=dark, then told light: the report as filed.
+	s := openAt(t, url, "embed=top&theme=dark&tab=ab133")
+	if got := s.themeAttr(); got != "dark" {
+		t.Fatalf("?theme=dark booted %q", got)
+	}
+	message(s, "light")
+	edit(s, "#445566")
+	if got := s.themeAttr(); got != "light" {
+		t.Errorf("a theme.json edit put the load-time ?theme=dark back over the host's light: %q", got)
+	}
+
+	// The human's switch still outranks the host, edit or no edit. Told light
+	// again first, so a failure above does not turn this press into the opposite
+	// toggle and report a second defect that is the first one.
+	message(s, "light")
+	if err := s.page.Locator("#theme").Click(); err != nil {
+		t.Fatalf("pressing the theme switch: %v", err)
+	}
+	edit(s, "#778899")
+	if got := s.themeAttr(); got != "dark" {
+		t.Errorf("after the switch, a theme.json edit put the host's light back: %q", got)
+	}
+
+	// No parameter at all, and a viewer who stored dark — the VS Code panel's case.
+	v := openAt(t, url, "embed=top&tab=ab133")
+	v.evalJSON(new(any), `() => { localStorage.setItem('aboard.theme', 'dark'); return null; }`)
+	if _, err := v.page.Reload(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if err := v.page.Locator("#tabs .tab").First().WaitFor(playwright.LocatorWaitForOptions{
+		State: playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		t.Fatalf("the board never came back: %v", err)
+	}
+	message(v, "light")
+	edit(v, "#aabbcc")
+	if got := v.themeAttr(); got != "light" {
+		t.Errorf("a theme.json edit put the stored dark back over the host's light: %q", got)
+	}
+	var stored string
+	v.evalJSON(&stored, `() => localStorage.getItem('aboard.theme') || ''`)
+	if stored != "dark" {
+		t.Errorf("the host's message rewrote the viewer's stored choice to %q", stored)
+	}
+}
+
 // A message that did not come from the parent is ignored. The board has no
 // authentication, so every channel into it is a channel somebody else can shout
 // down — this one is closed by comparing the source WINDOW, which nothing but
