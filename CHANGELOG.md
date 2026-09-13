@@ -1,5 +1,104 @@
 # CHANGELOG
 
+## v0.2.0 — 2026-09-13
+
+What a week of embedding the board in another tool turned up. Moonwatcher — a
+workbench that shows this board in its own native WebKit view — handed over seven
+asks; five landed, and two were declined and stay declined (below). `capsHash`
+moves from `207b5d93` to **`8beefdfe`**: new flags, a new manifest section and new
+state-field declarations are all described surface, so run `make caps` (or
+regenerate your copied skill reference) after upgrading.
+
+A minor version rather than a patch because a host can now build on things that did
+not exist: a flag, two URL parameters, a second message channel, and a manifest
+section that says which of them a board has.
+
+- **A host that does not frame the board can now talk to it: `?embed=top`.** Every
+  message a host exchanges with the board — `newtab`, `host`, `theme` and
+  `clipboard-result` in, `active` and `clipboard-image` out — used to be accepted
+  only from `window.parent` and posted only to it. A host that creates the view the
+  board runs in and injects its own script has no parent to be, so Moonwatcher built
+  a wrapper iframe purely to have one, and paid with a second copy of every
+  per-viewer setting (browsers partition storage by top-level origin) and blank
+  `html` tabs. Under `?embed=top` the same messages travel on the board's own
+  window.
+  - **The trust is the framed rule in a second place**: a message is accepted when
+    `event.source` is the host's window — the parent when framed, the board's own
+    window at top level. A sandboxed `html` tab can post to `window.top`, but its
+    message arrives with its own frame as the source, so it reaches neither channel.
+    Every refusal the framed channel had is kept: `newtab` opens the sheet and stops,
+    tokens are validated, nothing is stored.
+  - Without the flag an unframed page neither listens nor posts — a plain browser tab
+    is top level too, and has nobody to talk to.
+  - Every host message now goes through one module, `views/embed.js`, and a test
+    refuses a direct `parent.postMessage` anywhere else in the web tree. Moonwatcher
+    confirmed its injected script runs in the page's own world, so `e.source ===
+    window` holds in WebKit as it does in the Chromium the browser suite drives.
+
+- **`/capabilities` declares the embedding surface, under `embed`.** Channels
+  (`frame`, `top`), the host URL parameters (`chrome`, `embed`, `theme`) and the
+  messages in each direction. A host can tell a board that speaks a channel from an
+  older one before loading it, rather than by loading it and waiting — until now the
+  VS Code extension had to search the shell's HTML for `dataset.chrome`, because
+  nothing in the manifest could answer. Declared in `pkg/aboard/embed.go` and checked
+  against the web tree in both directions, so the list cannot drift from what the
+  shell handles. The `dataset.chrome` spelling is kept, and tested, for extensions
+  already installed.
+
+- **`?theme=dark|light` paints the host's theme from the first frame.** The `theme`
+  message can only arrive after load, so a host on a light theme showed the board
+  dark for a moment and then corrected it. The parameter is read by the same head
+  script that stamps the theme before first paint, ahead of the viewer's stored
+  choice and the project's `theme.json` default. It is written nowhere and gives way
+  when the human presses the theme switch. An unrecognised value is ignored.
+
+- **`serve --detach`: a board that outlives the shell that started it.** A board
+  started as `aboard serve … &` from an agent session stays in that session's process
+  group — `nohup` only ignores the hangup — so a session restart killed it, left its
+  record behind, and every `apply` after that failed until somebody noticed.
+  `--detach` starts the same command again in a session of its own (a detached
+  process on Windows), writes its output to `.aboard/run/serve.log`, and returns once
+  that process answers `/health` — the child's own pid, never merely "a board
+  answers". It still refuses a second board for the project, before touching the
+  running board's log; the first version truncated that log on its way to being
+  refused, which a run with the real binary found and the test, reading the log too
+  early, had not. Under ape it re-runs `ape aboard serve`. `aboard status` names
+  `--detach` when it finds a stale record, and the skill tells an agent to start a
+  board detached.
+
+- **The write-time checks look inside `form.fields[]` and `markup.images[]`.** Two
+  sessions wrote `kind` where a form field needs `type`; the write applied clean with
+  exit 0 and every field drew "Unsupported field type". A state field in a spec may
+  now declare `items` (the keys of the objects inside it) and `itemTypes` (the values
+  an item's `type` may take). That write now warns twice — an unread key and a missing
+  type — inside stack blocks too. Still warnings, as every write check is;
+  `apply --strict` refuses.
+
+- **Fixed: a wrong colour name on a markup region was never reported.** The colour
+  check read `image.marks`, a key no image has, from the day it was written, so only
+  strokes were checked. Its test used the same wrong key, which is why it passed. It
+  reads `regions` now.
+
+- **Agent images go in `.aboard/uploads/`, never `assets/`.** The markup spec, the
+  skill and the built-in image recipe told agents to put images in `assets/`, which is
+  compiled into the binary: a file written there answers 404 and the tab shows "Image
+  failed to load". And a documented rule, with a browser test behind it: **a retake
+  keeps its marks** when only the image's `src` changes, because the marks live on
+  the image object. Give the new capture a new file name; reusing the old one does
+  not reload the picture in a page that already has it open.
+
+- **`mwembed:` is admitted in an `html` tab's `frame-ancestors`**, for Moonwatcher's
+  wrapper page, where every widget tab was blank — the same whole-ancestor-chain rule
+  that once blanked them in VS Code. Temporary: it goes once Moonwatcher loads the
+  board with `?embed=top`.
+
+- **Declined, by the owner**, and recorded so they are not re-proposed:
+  - *The system colour scheme as the default.* Dark is the default for every viewer;
+    `prefers-color-scheme` is never read. `?theme=` is what a host uses instead.
+  - *A `systemd --user` unit per project.* It would be state outside `.aboard/`,
+    written once and then stale — the argument that keeps `aboard boards` a process
+    scan with no registry.
+
 ## v0.1.3 — 2026-08-29
 
 One new write-time check, for the half of a `ui` mistake the existing ones could
