@@ -173,6 +173,15 @@ reveal or select on every message it gets.
 **Authenticate the message by `event.source`, never by origin** — the board posts with
 `'*'`, because a webview's origin is not knowable in advance.
 
+Two more parameters are for hosts. `?theme=dark|light` paints the board in the host's
+variant from the very first frame; the `theme` message can only arrive after the page
+has loaded, so a light host that relies on it alone shows the board dark for a moment.
+And a host that does not frame the board at all — one that creates the view the board
+runs in and injects its own script into the page — adds `?embed=top`, and exchanges the
+same messages on the board's own window instead of across a frame. Both are in
+[the HTTP API](../reference/http-api.md#two-channels-framed-and-top-level), and
+`GET /capabilities` lists them under `embed`, so a host can check before loading.
+
 The full contract is the shell section of [the HTTP API](../reference/http-api.md),
 including what `GET /health` reports about a board served under a prefix.
 

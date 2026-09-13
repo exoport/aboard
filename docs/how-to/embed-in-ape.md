@@ -62,6 +62,15 @@ cannot recover from:
 - **No generated `completion` subcommand.** Shell completion belongs to the host's root.
 - **Web assets arrive as an `fs.FS`**, not as an assumption about the filesystem — the same seam that makes `serve --dev` work.
 
+One thing runs the other way, and it is a constraint on the HOST: **`serve --detach`
+starts the command again**. It re-runs `os.Executable()` with the cobra command path
+minus the root's own name and every flag that was set — so under ape it runs `ape
+aboard serve …`. That works for any host whose binary reaches the tree at the path
+it was mounted at. A host that mounts the tree somewhere its own binary cannot reach
+from the command line (a tree built only for tests, a binary that dispatches on
+something other than its arguments) gets a detached child that cannot find `serve`,
+and reports that child's own error rather than hanging.
+
 If you are extending aboard, those are the rules to keep. They are stated in
 `pkg/aboard/aboard.go` beside the code that honours them.
 
