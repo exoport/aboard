@@ -109,7 +109,7 @@ with an empty tab strip, no console error and a valid document — now checked b
 
 **2026-09-13 — Moonwatcher's seven asks, answered.** A Moonwatcher session (the
 Tauri/WebKitGTK workbench that shows this board in its own window) handed over seven
-asks; the human decided each, and four commits landed them, unreleased. `mwembed:` is
+asks; the human decided each, and four commits landed them, released as **v0.2.0**. `mwembed:` is
 in `frame-ancestors` (temporary, see `htmltab.go`). Form fields and markup images are
 checked item by item at the write (`items`/`itemTypes` on a state field), and the
 markup colour check reads `regions` — it read `marks`, a key no image has, from the day
