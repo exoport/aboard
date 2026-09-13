@@ -119,7 +119,10 @@ keeps its marks when only `src` changes. `?embed=top` is a second host channel,
 whole embed surface. `serve --detach` starts a board in a session of its own. **Two
 asks were declined by the human and stay declined**: the system colour scheme as the
 default (dark is the default for everyone), and a `systemd --user` unit (state outside
-`.aboard/`). `capsHash` is **`8beefdfe`**. **`/tmp` is a quota'd tmpfs on this
+`.aboard/`). `capsHash` is **`8beefdfe`**. **v0.2.1** followed the same day with the one
+defect Moonwatcher then found: a `theme` message's `kind` was never remembered, so a
+`theme.json` edit re-decided the variant from the load-time `?theme=` (or the stored
+choice) and undid the host. The kind now replaces `themeParam`; `capsHash` did not move. **`/tmp` is a quota'd tmpfs on this
 machine**, and when it fills, `go test` fails with `disk quota exceeded` and the shell
 tool can fail to return output at all; `TMPDIR=$HOME/.cache/<dir>` is the way to a
 trustworthy run, and nothing above that directory holds an `.aboard/`.
