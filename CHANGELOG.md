@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## Unreleased
+## v0.2.1 — 2026-09-13
+
+One fix to the embedding surface v0.2.0 shipped, found by Moonwatcher the same day
+while it built its direct load. `capsHash` stays **`8beefdfe`**: nothing described
+changed, only the shell's behaviour, so there is nothing to regenerate.
 
 - **A `theme.json` edit no longer throws away the variant a host last sent.** A host's
   `{__aboard:'theme', kind}` set the variant but was not remembered, and an edit to
