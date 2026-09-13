@@ -140,6 +140,84 @@ func TestTheThemeSwitchIsPerViewerAndSurvivesAReload(t *testing.T) {
 	}
 }
 
+// `?theme=` is a host's word for this page load: it outranks the viewer's stored
+// choice, is never written anywhere, and gives way to the human pressing the
+// switch. A host that only sends a `theme` message after load shows the wrong
+// variant for a moment first — asked to go by Moonwatcher on 2026-09-13, whose
+// light theme opened every board dark and then corrected it.
+func TestAThemeParamOutranksTheStoredChoiceAndIsNeverStored(t *testing.T) {
+	s := open(t, "tab=ab133")
+
+	// A viewer who chose dark, on purpose.
+	s.evalJSON(new(any), `() => { localStorage.setItem('aboard.theme', 'dark'); return null; }`)
+	if _, err := s.page.Goto(boardURL + "/?theme=light&tab=ab133"); err != nil {
+		t.Fatalf("loading with ?theme=light: %v", err)
+	}
+	if err := s.page.Locator("#tabs .tab").First().WaitFor(playwright.LocatorWaitForOptions{
+		State: playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		t.Fatalf("the board never came up: %v", err)
+	}
+	if got := s.themeAttr(); got != "light" {
+		t.Fatalf("?theme=light booted %q over a stored dark", got)
+	}
+	var stored string
+	s.evalJSON(&stored, `() => localStorage.getItem('aboard.theme') || ''`)
+	if stored != "dark" {
+		t.Errorf("?theme= rewrote the viewer's stored choice to %q", stored)
+	}
+
+	// The human pressing the switch outranks the host.
+	if err := s.page.Locator("#theme").Click(); err != nil {
+		t.Fatalf("pressing the theme switch: %v", err)
+	}
+	if got := s.themeAttr(); got != "dark" {
+		t.Errorf("the switch did not win over ?theme=: %q", got)
+	}
+
+	// An unknown value is ignored rather than guessed at: the stored choice decides.
+	if _, err := s.page.Goto(boardURL + "/?theme=sepia&tab=ab133"); err != nil {
+		t.Fatalf("loading with ?theme=sepia: %v", err)
+	}
+	if err := s.page.Locator("#tabs .tab").First().WaitFor(playwright.LocatorWaitForOptions{
+		State: playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		t.Fatalf("the board never came up: %v", err)
+	}
+	if got := s.themeAttr(); got != "dark" {
+		t.Errorf("?theme=sepia booted %q, want the stored dark", got)
+	}
+}
+
+// Dark stays the default for every viewer, whatever the system says — the
+// owner's decision on 2026-09-13, when a host asked for prefers-color-scheme.
+func TestTheDefaultIsDarkEvenOnALightSystem(t *testing.T) {
+	ctx, err := browser.NewContext(playwright.BrowserNewContextOptions{
+		ColorScheme: playwright.ColorSchemeLight,
+	})
+	if err != nil {
+		t.Fatalf("new light-scheme context: %v", err)
+	}
+	defer ctx.Close()
+	page, err := ctx.NewPage()
+	if err != nil {
+		t.Fatalf("new page: %v", err)
+	}
+	if _, err := page.Goto(boardURL + "/?tab=ab133"); err != nil {
+		t.Fatalf("goto: %v", err)
+	}
+	if light, err := page.Evaluate(`() => matchMedia('(prefers-color-scheme: light)').matches`); err != nil || light != true {
+		t.Fatalf("the context does not report a light system scheme (%v, %v), so this test is testing nothing", light, err)
+	}
+	got, err := page.Evaluate(`() => document.documentElement.getAttribute('data-theme')`)
+	if err != nil {
+		t.Fatalf("reading data-theme: %v", err)
+	}
+	if got != "dark" {
+		t.Errorf("a fresh viewer on a light system booted %v, want dark", got)
+	}
+}
+
 // The html tab's frame is a SEPARATE DOCUMENT with its own :root, so the switch
 // cannot reach it through the cascade. It is told, and it must be told fast
 // enough that the two halves of the screen are never visibly disagreeing.

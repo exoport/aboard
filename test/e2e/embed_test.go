@@ -559,6 +559,248 @@ func TestTheBoardWorksWhereStorageIsRefused(t *testing.T) {
 	}
 }
 
+/* ---------- the top-level channel: ?embed=top ---------- */
+
+// A host that creates the view the board runs in — Moonwatcher's WebKit view is
+// the first — does not need a frame to be the board's parent. It runs a script in
+// the page itself, and under `?embed=top` the board speaks to it on its own
+// window: the same messages as the framed channel, accepted from `e.source ===
+// window` where the framed channel accepts them from the parent.
+//
+// Moonwatcher built a wrapper iframe purely to have a parent to be, and paid for
+// it with a second copy of every per-viewer setting and a blank html tab. These
+// are the four things it asked to be able to rely on without one, plus the
+// refusals that keep the channel no wider than the framed one.
+
+// topHostScript is a stand-in for a host's document-start script. It runs before
+// the shell, listens on the board's own window, records what the board tells it,
+// and answers a clipboard request the way a host that can copy does.
+const topHostScript = `
+window.__host = { active: [], clip: [], strangers: 0, answer: { ok: true, tool: 'xclip' } };
+addEventListener('message', (e) => {
+  const m = e.data;
+  if (!m || typeof m !== 'object' || typeof m.__aboard !== 'string') return;
+  if (e.source !== window) { window.__host.strangers += 1; return; }
+  if (m.__aboard === 'active') window.__host.active.push(m.tab);
+  if (m.__aboard === 'clipboard-image') {
+    window.__host.clip.push({ id: m.id, dataUrl: m.dataUrl });
+    const a = window.__host.answer;
+    window.postMessage({ __aboard: 'clipboard-result', id: m.id, ok: a.ok, error: a.error, tool: a.tool }, '*');
+  }
+});`
+
+// openTopHost opens the board top level with the host stand-in installed from the
+// first line of the document, which is where a host's script really runs — so the
+// announcement of the tab the board opens on is heard, not missed.
+func openTopHost(t *testing.T, query string) *session {
+	t.Helper()
+	s := openChrome(t, query)
+	script := topHostScript
+	if err := s.page.AddInitScript(playwright.Script{Content: &script}); err != nil {
+		t.Fatalf("installing the host stand-in: %v", err)
+	}
+	if _, err := s.page.Reload(); err != nil {
+		t.Fatalf("reloading with the host installed: %v", err)
+	}
+	if err := s.page.Locator(".topbar h1").WaitFor(playwright.LocatorWaitForOptions{
+		State: playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		t.Fatalf("the board never came back with the host installed: %v", err)
+	}
+	s.stripBuilt()
+	return s
+}
+
+func (s *session) hostActive() []string {
+	s.t.Helper()
+	var got []string
+	s.evalJSON(&got, `() => window.__host.active`)
+	return got
+}
+
+func TestATopLevelHostCanOpenTheBoardsNewTabSheet(t *testing.T) {
+	s := openTopHost(t, "chrome=notabs&embed=top")
+
+	// The premise, exactly as in the framed test: under notabs the + is gone, and
+	// this message is the only way back to it.
+	if err := expect.Locator(s.page.Locator("#add-tab")).ToBeHidden(); err != nil {
+		t.Fatalf("the + is visible under chrome=notabs, so this test is testing nothing: %v", err)
+	}
+	before, err := s.page.Locator("#tabs .tab").Count()
+	if err != nil {
+		t.Fatalf("counting tabs: %v", err)
+	}
+
+	if _, err := s.page.Evaluate(`() => window.postMessage({ __aboard: 'newtab' }, '*')`, nil); err != nil {
+		t.Fatalf("posting newtab on the board's own window: %v", err)
+	}
+	if err := expect.Locator(s.page.Locator("#new-tab-dialog")).ToBeVisible(); err != nil {
+		t.Fatalf("a top-level host's newtab did not open the board's sheet: %v", err)
+	}
+	// Opens the sheet and stops — the same refusal as the framed channel.
+	if got, _ := s.page.Locator("#tabs .tab").Count(); got != before {
+		t.Errorf("the newtab message created a tab on its own: %d tabs, was %d", got, before)
+	}
+	if err := s.page.Locator("#new-tab-cancel").Click(); err != nil {
+		t.Fatalf("cancelling the sheet: %v", err)
+	}
+}
+
+func TestATopLevelHostHearsWhichTabIsActive(t *testing.T) {
+	s := openTopHost(t, "chrome=notabs&embed=top")
+
+	var first string
+	eventually(t, "the board to announce the tab it opened on", func() bool {
+		got := s.hostActive()
+		if len(got) > 0 {
+			first = got[len(got)-1]
+		}
+		return first != ""
+	})
+
+	// A key press inside the board — navigation the host did not ask for, which
+	// is the whole reason the message exists.
+	if err := s.page.Keyboard().Press("]"); err != nil {
+		t.Fatalf("pressing ]: %v", err)
+	}
+	var moved string
+	eventually(t, "an active message naming a different tab", func() bool {
+		got := s.hostActive()
+		if len(got) > 0 {
+			moved = got[len(got)-1]
+		}
+		return moved != "" && moved != first
+	})
+	if err := expect.Locator(s.page.Locator(`[data-tab="` + moved + `"][data-active="yes"]`)).ToBeVisible(); err != nil {
+		t.Errorf("the board announced %s but is showing something else: %v", moved, err)
+	}
+}
+
+func TestATopLevelHostCanHandTheBoardATheme(t *testing.T) {
+	s := openTopHost(t, "chrome=notabs&embed=top")
+	before := s.rootToken("--bg")
+
+	if _, err := s.page.Evaluate(`() => window.postMessage(
+		{ __aboard: 'theme', kind: 'light', tokens: { '--bg': '#fff8e7', '--nonsense': '#000' } }, '*')`, nil); err != nil {
+		t.Fatalf("posting a theme on the board's own window: %v", err)
+	}
+	eventually(t, "the board to take the host's ground", func() bool {
+		got := s.rootToken("--bg")
+		return strings.Contains(got, "255, 248, 231") || strings.Contains(got, "#fff8e7")
+	})
+	if got := s.rootToken("--bg"); got == before {
+		t.Errorf("--bg is still %q", got)
+	}
+	if got := s.themeAttr(); got != "light" {
+		t.Errorf("the host's kind did not reach the board: %q", got)
+	}
+	// Written nowhere: a host's opinion is not the human's choice.
+	var stored string
+	s.evalJSON(&stored, `() => { try { return localStorage.getItem('aboard.theme') || ''; } catch (e) { return ''; } }`)
+	if stored != "" {
+		t.Errorf("the host's theme was stored as the viewer's own choice: %q", stored)
+	}
+}
+
+func TestATopLevelHostCopiesAnImageForTheBoard(t *testing.T) {
+	s := openTopHost(t, "embed=top&tab="+markupTab)
+	view := s.view(markupTab)
+
+	if _, err := s.page.Evaluate(`() => {
+		window.postMessage({ __aboard: 'host', name: 'top-standin', clipboard: true }, '*');
+		Object.defineProperty(navigator, 'clipboard', {
+			configurable: true,
+			value: { write: () => Promise.reject(new Error('blocked by a permissions policy')) },
+		});
+	}`, nil); err != nil {
+		t.Fatalf("announcing the host and blocking the clipboard: %v", err)
+	}
+
+	if err := view.Locator(`[data-gesture="crop"]`).Click(); err != nil {
+		t.Fatalf("choosing the crop tool: %v", err)
+	}
+	svg := view.Locator(".markup-svg").First()
+	if _, err := svg.Evaluate(`(el) => el.scrollIntoView({ block: 'center' })`, nil); err != nil {
+		t.Fatalf("scrolling the image into view: %v", err)
+	}
+	box, err := svg.BoundingBox()
+	if err != nil || box == nil {
+		t.Fatalf("no svg to drag on: %v", err)
+	}
+	// The bottom-right corner, which the fixture leaves unmarked — a drag that
+	// starts on a mark selects it instead of cropping (see cropInFrame).
+	s.dragPointer(
+		point{box.X + box.Width*0.78, box.Y + box.Height*0.78},
+		point{box.X + box.Width*0.95, box.Y + box.Height*0.95},
+	)
+	if err := view.Locator(`[data-gesture="copy-region"]`).Click(); err != nil {
+		t.Fatalf("clicking Copy region: %v", err)
+	}
+
+	// The request reached the host...
+	var asks []map[string]any
+	eventually(t, "the board to ask its top-level host", func() bool {
+		s.evalJSON(&asks, `() => window.__host.clip`)
+		return len(asks) > 0
+	})
+	if url, _ := asks[len(asks)-1]["dataUrl"].(string); !strings.HasPrefix(url, "data:image/png;base64,") {
+		t.Errorf("the board sent %q, want a PNG data URL", firstChars(url, 32))
+	}
+	// ...and the host's answer reached the renderer.
+	if err := expect.Locator(view.Locator(".markup-copy-status")).ToContainText("copied"); err != nil {
+		got, _ := view.Locator(".markup-copy-status").TextContent()
+		t.Fatalf("the host said yes and the board did not report a copy (status %q): %v", got, err)
+	}
+	if err := expect.Locator(view.Locator(".markup-image-dialog[open]")).ToHaveCount(0); err != nil {
+		t.Errorf("the host copied it and the board offered the fallback anyway: %v", err)
+	}
+}
+
+// The refusal that makes the channel safe: a sandboxed frame inside the board —
+// which is what an html tab is — can post to window.top, and its message must be
+// ignored, because it arrives with the FRAME as its source. The stand-in counts it
+// arriving, so "ignored" is not "never sent".
+func TestATopLevelHostChannelRefusesAFrameInsideTheBoard(t *testing.T) {
+	s := openTopHost(t, "chrome=notabs&embed=top")
+
+	if _, err := s.page.Evaluate(`() => {
+		const f = document.createElement('iframe');
+		f.setAttribute('sandbox', 'allow-scripts');
+		f.srcdoc = "<script>top.postMessage({ __aboard: 'newtab' }, '*');<\/script>";
+		document.body.append(f);
+	}`, nil); err != nil {
+		t.Fatalf("adding a sandboxed frame: %v", err)
+	}
+	eventually(t, "the frame's message to reach the top window", func() bool {
+		return s.evalBool(`() => window.__host.strangers > 0`)
+	})
+	time.Sleep(settle)
+	if err := expect.Locator(s.page.Locator("#new-tab-dialog")).ToBeHidden(); err != nil {
+		t.Errorf("a sandboxed frame opened the New tab sheet through the top-level channel: %v", err)
+	}
+}
+
+// Without the flag a top-level page has no host: it neither listens nor posts. A
+// plain browser tab is top level too, and it has nobody to talk to.
+func TestATopLevelPageWithoutEmbedTopHasNoHost(t *testing.T) {
+	s := openTopHost(t, "chrome=notabs")
+
+	if _, err := s.page.Evaluate(`() => window.postMessage({ __aboard: 'newtab' }, '*')`, nil); err != nil {
+		t.Fatalf("posting newtab: %v", err)
+	}
+	if err := s.page.Keyboard().Press("]"); err != nil {
+		t.Fatalf("pressing ]: %v", err)
+	}
+	time.Sleep(settle)
+
+	if err := expect.Locator(s.page.Locator("#new-tab-dialog")).ToBeHidden(); err != nil {
+		t.Errorf("an unhosted page opened the sheet for a message on its own window: %v", err)
+	}
+	if got := s.hostActive(); len(got) != 0 {
+		t.Errorf("an unhosted page announced its active tab %v to nobody", got)
+	}
+}
+
 /* ---------- helpers ---------- */
 
 // openChrome opens a page whose tab strip is deliberately not on screen, so the

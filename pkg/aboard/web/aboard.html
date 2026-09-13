@@ -39,15 +39,27 @@
      refused it outright, and a refusal is a thrown SecurityError rather than a
      null: unguarded, that would take the whole page down to save a preference.
 
-     Dark unless something says otherwise, and there are exactly two things that
-     may: the viewer's own stored choice, which wins, and the project's
-     theme.json `default`, which decides for a viewer who has never chosen. -->
+     Dark unless something says otherwise, and there are exactly three things
+     that may, in this order:
+
+       1. `?theme=dark|light` in the URL — a HOST's word for this page load. A
+          host that sends a `theme` message after load is a moment too late for
+          the first paint, and a light host showing a dark board for that moment
+          is the flash this exists to remove (asked for by Moonwatcher,
+          2026-09-13). Read here and never written anywhere, like `?chrome=`.
+       2. the viewer's own stored choice;
+       3. the project's theme.json `default`, for a viewer who has never chosen.
+
+     Never the system colour scheme: dark is the default for every viewer, by
+     the owner's decision, and a media query would take that away. -->
 <script>
 (function () {
   var theme = window.ABOARD_THEME;
   var stored = null;
   try { stored = localStorage.getItem('aboard.theme'); } catch (e) {}
-  var kind = stored === 'light' || stored === 'dark' ? stored
+  var asked = new URLSearchParams(location.search).get('theme');
+  var kind = asked === 'light' || asked === 'dark' ? asked
+    : stored === 'light' || stored === 'dark' ? stored
     : (theme && theme.default === 'light' ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', kind);
 
@@ -242,6 +254,7 @@ import { inlineEditor, flashSaved } from './views/inline.js';
 import { button, GESTURE_ATTR } from './views/controls.js';
 import { askConfirm, askPrompt } from './views/dialog.js';
 import { api } from './views/api.js';
+import { fromEmbedder, postToEmbedder } from './views/embed.js';
 
 const CLIENT_ID = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
 
@@ -819,6 +832,15 @@ function themeKind() {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 }
 
+// `?theme=`, which the head script already stamped. Kept here because a
+// theme.json edit re-decides the theme later in the page's life, and the host's
+// word has to keep outranking the stored choice and the project default then too
+// — until the human presses the switch, which is the one thing that outranks it.
+let themeParam = (() => {
+  const asked = new URLSearchParams(location.search).get('theme');
+  return asked === 'light' || asked === 'dark' ? asked : null;
+})();
+
 function paintTheme() {
   const kind = themeKind();
   $theme.textContent = THEME_LABEL[kind];
@@ -851,6 +873,7 @@ $theme.addEventListener('click', () => {
   // matching its host until the host speaks again — and the host speaks on its
   // own theme change, so it is a temporary disagreement either way.
   clearEmbedderTheme();
+  themeParam = null;
   setTheme(themeKind() === 'light' ? 'dark' : 'light');
 });
 
@@ -876,7 +899,8 @@ async function refreshTheme() {
   // project's default, which is the whole point of the field.
   let stored = null;
   try { stored = localStorage.getItem('aboard.theme'); } catch {}
-  if (stored === 'dark' || stored === 'light') setTheme(stored);
+  if (themeParam) setTheme(themeParam, { remember: false });
+  else if (stored === 'dark' || stored === 'light') setTheme(stored);
   else setTheme(theme && theme.default === 'light' ? 'light' : 'dark', { remember: false });
 }
 
@@ -906,7 +930,8 @@ function applyProjectTheme(theme) {
 //
 // Three rules, and each is a refusal:
 //
-//   - AUTHENTICATED BY SOURCE, never by origin. `e.source === window.parent` is
+//   - AUTHENTICATED BY SOURCE, never by origin. `e.source` is the host's window
+//     (the parent, or this window under ?embed=top — views/embed.js), which is
 //     the same test the bridge in an html frame makes, and the mirror of the
 //     `active` message going the other way. A webview's origin is a uuid nobody
 //     can know in advance, so comparing origins would mean comparing to '*'.
@@ -955,7 +980,9 @@ function applyEmbedderTheme(msg) {
 // purpose. Authenticated by `e.source` rather than by origin, exactly like the
 // `active` message going the other way: a sandboxed `html` tab is a frame inside
 // this one and can reach `window.top`, so "who sent it" is the only question
-// worth asking.
+// worth asking. The host's window is the parent when the board is framed, and
+// this window itself when a host runs the board top level under `?embed=top`
+// (views/embed.js) — the same messages and the same refusals on both.
 //
 // `newtab` opens the board's own New tab sheet. A host that hides the tab strip
 // with `?chrome=notabs` hides the `+` with it, so this is how its own button
@@ -969,7 +996,9 @@ function applyEmbedderTheme(msg) {
 // certainly cannot start a session; the rule that nothing in the UI does that
 // holds across the frame boundary too.
 addEventListener('message', (e) => {
-  if (window.parent === window || e.source !== window.parent) return;
+  // The parent when framed; this window itself at top level under ?embed=top.
+  // One rule for both — see views/embed.js for why it is the same trust.
+  if (!fromEmbedder(e)) return;
   const msg = e.data;
   if (!msg || typeof msg !== 'object') return;
   if (msg.__aboard === 'theme') { applyEmbedderTheme(msg); return; }
@@ -2312,10 +2341,11 @@ addEventListener('pagehide', () => rememberScroll(activeId));
 let announcedTab = null;
 
 function announceActive(id) {
-  if (window.parent === window) return;
   if (id === announcedTab) return;
+  // Remembered only once it reaches somebody: an unhosted board posts nothing,
+  // and must not later skip the first real announcement as "unchanged".
+  if (!postToEmbedder({ __aboard: 'active', tab: id })) return;
   announcedTab = id;
-  try { parent.postMessage({ __aboard: 'active', tab: id }, '*'); } catch {}
 }
 
 function activate(id) {

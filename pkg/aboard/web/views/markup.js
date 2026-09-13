@@ -7,6 +7,7 @@ import { openContextMenu, copyText, referenceFor } from './menu.js';
 import { button, controlsFor } from './controls.js';
 import { PALETTES } from './controls.generated.js';
 import { api } from './api.js';
+import { embedderWindow, postToEmbedder } from './embed.js';
 
 const ctl = controlsFor('markup');
 
@@ -2104,7 +2105,7 @@ export function mountMarkup(root, ctx) {
       // one, so "the host never answered" and "xclip is missing" and "nothing is
       // framing this page" were indistinguishable to the person reading it.
       const why = (viaHost && viaHost.error) ? viaHost.error
-        : window.parent === window
+        : !embedderWindow()
           ? (err && err.message ? String(err.message) : 'the clipboard is not permitted here')
           : hostClipboardGap();
       copyStatus(why, true);
@@ -2114,15 +2115,15 @@ export function mountMarkup(root, ctx) {
     }
   }
 
-  // Ask whoever framed this board to put a PNG on the system clipboard.
+  // Ask whoever hosts this board to put a PNG on the system clipboard.
   //
-  // Unframed, or framed by something that does not implement it, this resolves
+  // Unhosted, or hosted by something that does not implement it, this resolves
   // to null and the caller falls through to the picture. There is deliberately
   // no check for "is this VS Code": the board cannot tell, should not care, and
   // a host that answers has proved more than any sniff could.
   let clipboardAsk = 0;
   const clipboardWaiting = new Map();
-  // The shell authenticates the host message (e.source === window.parent) and
+  // The shell authenticates the host message (fromEmbedder in embed.js) and
   // re-emits it here, so this listener sees only messages that already passed
   // that check and nothing in this file has to repeat it.
   document.addEventListener('aboard:clipboard-result', (evt) => {
@@ -2136,18 +2137,21 @@ export function mountMarkup(root, ctx) {
   // Why a copy could not go through the host, in words that name the hop rather
   // than the symptom. Called only AFTER an attempt, so every branch describes
   // something that has already been tried.
+  //
+  // "hosting", not "framing": since ?embed=top a host can run the board as its
+  // own top-level page, where there is no frame at all.
   function hostClipboardGap() {
-    if (window.parent === window) return 'nothing is framing this board';
+    if (!embedderWindow()) return 'nothing is hosting this board';
     const host = window.ABOARD_HOST;
     if (host && !host.clipboard) {
-      return `the ${host.name} window framing this board cannot write images to the clipboard`;
+      return `the ${host.name} window hosting this board cannot write images to the clipboard`;
     }
     if (!host) {
-      return 'the window framing this board never said what it can do, and did not answer when asked — '
+      return 'the window hosting this board never said what it can do, and did not answer when asked — '
         + 'if this is a VS Code panel, the extension is older than this board (reinstall the .vsix) '
         + 'or the panel needs reloading';
     }
-    return `the ${host.name} window framing this board did not answer within six seconds`;
+    return `the ${host.name} window hosting this board did not answer within six seconds`;
   }
 
   // An announcement makes the FAILURE legible; it is not permission to try.
@@ -2161,7 +2165,7 @@ export function mountMarkup(root, ctx) {
   // So: ask unless there is nobody to ask, or the host has said in so many words
   // that it cannot. Silence is answered by the timeout, as it was before.
   function askHostToCopy(blob) {
-    if (window.parent === window) return Promise.resolve(null);
+    if (!embedderWindow()) return Promise.resolve(null);
     const host = window.ABOARD_HOST;
     if (host && !host.clipboard) return Promise.resolve(null);
     return new Promise((resolve) => {
@@ -2170,9 +2174,7 @@ export function mountMarkup(root, ctx) {
       reader.onerror = () => resolve(null);
       reader.onload = () => {
         clipboardWaiting.set(id, resolve);
-        try {
-          parent.postMessage({ __aboard: 'clipboard-image', id, dataUrl: String(reader.result) }, '*');
-        } catch {
+        if (!postToEmbedder({ __aboard: 'clipboard-image', id, dataUrl: String(reader.result) })) {
           clipboardWaiting.delete(id);
           resolve(null);
           return;

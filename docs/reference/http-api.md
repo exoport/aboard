@@ -100,6 +100,8 @@ selection, zoom and collapsed blocks out of the document is the same rule.
 | --------------- | ---------------------------------------------------------------------------------- |
 | `?tab=<id>`     | Open on that tab. `#tab=<id>&node=<id>` addresses a node inside one, and a fragment change moves the view without reloading the page. |
 | `?chrome=`      | `full` (the default) · `notabs` · `none`. See below.                              |
+| `?embed=top`    | A host runs this page top level and speaks to it on the same window. See [two channels](#two-channels-framed-and-top-level). |
+| `?theme=`       | `dark` · `light`: the variant to paint from the first frame. See [`?theme=`](#theme). |
 | `?nosse=1`      | Do not open the event stream. For headless screenshots, which otherwise never reach network-idle. |
 | `?probe=1`      | A test seam: exposes the shell's document plumbing on `window.__aboardProbe` for the browser suite. Nothing is exposed without it. |
 
@@ -144,9 +146,62 @@ It composes with the deep link (`?chrome=notabs#tab=ab71`) and survives the boar
 own [self-reload](../how-to/run-in-vscode.md#when-the-page-reloads-itself), which
 preserves query and fragment.
 
+### `?theme=`
+
+`dark` or `light`: the variant this page load paints in, from the first frame. It is
+read by the same classic script in `<head>` that stamps the theme before first paint,
+and it decides ahead of the other two things that may — the viewer's stored choice and
+the project's `theme.json` default. An unrecognised value is ignored. Nothing reads the
+system colour scheme: dark is the default for every viewer.
+
+It is a host's word, not the human's choice, so it is **written nowhere** — not the state
+file, not `localStorage` — and it gives way the moment the human presses the board's own
+theme switch. It exists because the `theme` message below can only arrive after load: a
+host on a light theme that only sends the message shows the board dark for a moment
+first, which is what Moonwatcher reported on 2026-09-13. Send both — the parameter for
+the first paint, the message for every change after it.
+
+### Two channels: framed and top level
+
+The messages below travel between the board and its **host** — whatever shows the board
+inside something of its own. A host can be in one of two places, and the board speaks
+the same messages, under the same rules, in both:
+
+| channel | the host is | turned on by | the host sends with | the host listens with |
+| ------- | ----------- | ------------ | ------------------- | --------------------- |
+| `frame` | the board's parent: the board is in an `<iframe>` | being framed | `frame.contentWindow.postMessage(msg, '*')` | `addEventListener('message')`, keeping `e.source === frame.contentWindow` |
+| `top`   | script running in the board's own top-level page — a view the host created and injects script into | `?embed=top` | `window.postMessage(msg, '*')` | `addEventListener('message')`, keeping `e.source === window` |
+
+**One rule decides both: a message is accepted when `event.source` is the host's
+window** — the parent when framed, the board's own window under `?embed=top`. That is
+the same trust in two places. A sandboxed `html` tab is an opaque-origin frame; it can
+post to `window.top`, but its message arrives with its own frame as the source, so it
+reaches neither channel. What passes `e.source === window` is script running in the page
+itself — the board's own, or the host's injected script — and either could already press
+any button on the board.
+
+The top-level channel was added on 2026-09-13 for Moonwatcher, which shows the board in a
+native WebKit view it creates. Without it, a host that wanted `?chrome=notabs` had to
+wrap the board in an iframe of its own purely to have a parent to be — and paid for the
+wrapper with a second copy of every per-viewer setting (browsers partition storage by the
+top-level origin) and a blank `html` tab (its `frame-ancestors` refused the wrapper).
+
+`?embed=top` is required at top level because a plain browser tab is top level too, and
+it has nobody to talk to: without the flag an unframed page neither listens nor posts.
+Inside a frame the flag is ignored — being framed already says who the host is.
+
+A host's own listener on the board's window hears the messages **it** posts as well as
+the board's, so it dispatches on `__aboard` rather than assuming every message is a reply.
+Send `host`, and anything else, after the page's `load` event: the shell's listener is
+registered by its module, which runs after a document-start script.
+
+A host can tell whether a board speaks either channel before loading it: `GET
+/capabilities` reports them under `embed`, with every URL parameter and message listed
+below. See [the embed section](capabilities.md#the-embed-section).
+
 ### What the shell posts to an embedder
 
-When the page is framed, `activate()` tells the parent which tab is now on screen:
+When the page has a host, `activate()` tells it which tab is now on screen:
 
 ```js
 { __aboard: 'active', tab: 'ab13' }
@@ -155,7 +210,7 @@ When the page is framed, `activate()` tells the parent which tab is now on scree
 Posted with `'*'` as the target origin, because an embedder's
 `vscode-webview://<uuid>` origin is not knowable in advance and the tab id is already
 in this page's own URL. **The receiver authenticates by comparing `event.source`, not
-by origin.** An unframed page posts nothing.
+by origin.** A page with no host — unframed, and no `?embed=top` — posts nothing.
 
 It is sent whenever the active tab CHANGES — including the tab the board picks for
 itself at load, and the ones `[`, `]` and `1`–`9` reach, which is the whole reason it
@@ -174,11 +229,13 @@ for the same data is a bug factory.
 
 ### What an embedder may post to the shell
 
-Four messages, in the other direction, and all are **authenticated by
-`event.source === window.parent`** — the mirror of the rule the `active` message above
-asks its receiver to apply, and the same rule an `html` tab's bridge uses on messages
-from ITS parent. A message from any other window — a sibling frame, an opener, a
-sandboxed `html` tab reaching `window.top`, a script in the console — is ignored.
+Four messages, in the other direction, and all are **authenticated by `event.source`
+being the host's window** — `window.parent` when framed, the board's own window under
+`?embed=top` — the mirror of the rule the `active` message above asks its receiver to
+apply, and the same rule an `html` tab's bridge uses on messages from ITS parent. A
+message from any other window — a sibling frame, an opener, a sandboxed `html` tab
+reaching `window.top` — is ignored. The examples below are the framed spelling; at top
+level each is `window.postMessage(msg, '*')`.
 
 #### `newtab`
 

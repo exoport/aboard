@@ -198,6 +198,9 @@ type manifest struct {
 	// stylesheet; `tones` and `colors` stay where they are and are checked
 	// AGAINST this set rather than duplicating it (TestEveryDeclaredColourNameIsAToken).
 	Theme themeSpec `json:"theme"`
+	// Embed is what a host that shows the board inside something of its own may
+	// rely on: the channels, the URL parameters and the messages. See embed.go.
+	Embed embedSpec `json:"embed"`
 }
 
 // themeSpec is what `aboard capabilities` says about colour.
@@ -303,6 +306,7 @@ func buildManifest(assets fs.FS) (manifest, error) {
 			Default:  ThemeDark,
 			File:     DirName + "/theme.json",
 		},
+		Embed: declaredEmbed,
 	}
 	m.Hash = capsHash(m)
 	return m, nil
@@ -545,6 +549,8 @@ func manifestMarkdown(m manifest) string {
 			"A project may patch either from `%s`; the VALUES are the theme's business, the NAMES are yours.\n\n",
 			"`"+strings.Join(m.Theme.Variants, "`, `")+"`", m.Theme.Default, m.Theme.File)
 	}
+
+	embedMarkdown(&b, m.Embed)
 
 	fmt.Fprintf(&b, "## Endpoints\n\n| route | purpose |\n|---|---|\n")
 	for _, r := range m.Routes {

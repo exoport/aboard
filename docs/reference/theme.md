@@ -106,7 +106,12 @@ disagree about theme while agreeing about content — the same rule that keeps s
 zoom, scroll position and `?chrome=` out of the state file.
 
 It is stamped **before the first paint**, by a classic script in the document head, so a
-page never shows the wrong theme and then corrects itself. `?chrome=` is unaffected;
+page never shows the wrong theme and then corrects itself. Three things decide it, in
+order: [`?theme=dark|light`](http-api.md#theme) in the URL (a host's word for this load,
+never stored, and overruled by pressing the switch), then the viewer's stored choice,
+then the project's `theme.json` default. **Dark is the default for everyone else** — the
+system colour scheme is deliberately not consulted, because the choice is the viewer's
+and the default is the project's. `?chrome=` is unaffected;
 there is no keyboard shortcut, deliberately — a shell-level key would be taken away from
 every renderer that might want it, and the button is always on screen.
 
@@ -166,7 +171,8 @@ an `html` tab's frame, which is told the new values rather than being rebuilt.
 
 ## A theme from an embedder
 
-A host that frames the board can hand it a palette — a VS Code panel derives one from
+A host — framing the board, or running it top level under
+[`?embed=top`](http-api.md#two-channels-framed-and-top-level) — can hand it a palette — a VS Code panel derives one from
 the editor's own theme, so the board belongs in the window instead of being a dark
 rectangle inside a light IDE.
 
@@ -181,7 +187,8 @@ frame.contentWindow.postMessage({
 Three rules, and each of them is a refusal:
 
 - **Authenticated by source**, never by origin: the board ignores anything whose
-  `event.source` is not `window.parent`. A webview's origin is a uuid nobody can know in
+  `event.source` is not the host's window — `window.parent`, or the board's own window
+  under `?embed=top`. A webview's origin is a uuid nobody can know in
   advance, so an origin check would have to be `'*'`. This is the same rule the
   `{__aboard:'active'}` message obeys going the other way.
 - **Per viewer, and written nowhere** — not the board document, not `localStorage`.
@@ -193,7 +200,8 @@ Three rules, and each of them is a refusal:
 
 The tokens are applied as inline custom properties on the root element, which outrank
 every stylesheet rule in both variants — so a host does not have to know which variant
-the viewer is in. Pressing the board's own switch clears them: a human pressing a button
+the viewer is in. A message arrives after load, so a host that wants the first frame
+right puts `?theme=` on the URL as well. Pressing the board's own switch clears them: a human pressing a button
 and nothing happening is worse than a panel that stops matching its host until the host
 speaks again, which it does on its own next theme change.
 

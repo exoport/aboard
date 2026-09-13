@@ -97,6 +97,22 @@ embeds the module it just wrote. It regenerates three files — the control modu
 skill's generated reference, and the skill's recipe index — and then runs `--check` as
 the assertion.
 
+## The embed section
+
+`embed` is what a host that shows the board inside something of its own may rely on:
+the **channels** it may speak on (`frame`, `top`), the shell's **URL parameters** a host
+may set (`chrome`, `embed`, `theme`), and the **messages** in each direction (`in`: host
+to board; `out`: board to host). A host reads it before loading the page, so it can tell
+a board that speaks the top-level channel from an older one without loading it and
+waiting to see — the same reasoning as the `host` announcement.
+
+It is declared in `pkg/aboard/embed.go` and checked against the web tree in both
+directions by `TestTheEmbedDeclarationMatchesTheShell`: every declared inbound message is
+handled by the shell's embedder listener and every handled one is declared; every
+outbound message goes through `postToEmbedder` in `views/embed.js`, whose call sites are
+the complete list; and nothing in the tree posts to its parent around it. The contract
+itself is in [the HTTP API](http-api.md#two-channels-framed-and-top-level).
+
 ## The declared command table
 
 The CLI surface is declared as data in `pkg/aboard/commands.go` — name, arguments, doc,
