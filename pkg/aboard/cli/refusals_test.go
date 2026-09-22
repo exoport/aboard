@@ -45,6 +45,7 @@ func TestArgumentCountErrorsExitUsage(t *testing.T) {
 		{"recipes", "list", "extra"},    // NoArgs, on a SUBcommand
 		{"recipes", "show"},             // ExactArgs(1), on a subcommand
 		{"capabilities", "dag", "more"}, // MaximumNArgs(1)
+		{"shot"},                        // MinimumNArgs(1)
 	} {
 		full := append([]string{"--cwd", dir}, args...)
 		code, _, _ := exitOf(t, full...)
@@ -378,5 +379,30 @@ func TestInitDoesNotClaimABoardItFailedToCreate(t *testing.T) {
 	}
 	if strings.Contains(out, "start it with") {
 		t.Errorf("init told the reader to serve a board that was never created:\n%s", out)
+	}
+}
+
+// `shot`'s flags are refused before anything is contacted — no board, no browser
+// — so each is a usage error even in a directory where neither exists.
+func TestShotFlagsItCannotActOnExitUsage(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := aboard.Init(aboard.InitConfig{Dir: dir}, aboard.DefaultInvocation); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"shot", "ab1", "--theme", "sepia"},
+		{"shot", "ab1", "ab2", "--node", "Summary"}, // one node belongs to ONE tab
+		{"shot", "ab1", "--width", "0"},
+		{"shot", "ab1", "--timeout", "0s"},
+		{"shot", "ab1", "--output-format", "xml"},
+	} {
+		code, _, _ := exitOf(t, append([]string{"--cwd", dir}, args...)...)
+		if code != aboard.ExitUsage {
+			t.Errorf("`aboard %s` exited %d, want %d", strings.Join(args, " "), code, aboard.ExitUsage)
+		}
+	}
+	// And a board that is not running is a failure, not a usage error.
+	if code, _, _ := exitOf(t, "--cwd", dir, "shot", "ab1"); code != aboard.ExitFailed {
+		t.Errorf("`aboard shot ab1` with no board running exited %d, want %d", code, aboard.ExitFailed)
 	}
 }

@@ -22,13 +22,13 @@ opinion about it.
       instance.<name>.json the same, for a named board
       journal.jsonl        the append-only log of accepted writes (+ .1 rotation)
       journal.<name>.jsonl the named board's own log
-      rendered.json        mount receipts: what a browser reported it drew, per tab
+      rendered.json        mount receipts: what a browser drew, and what did not fit, per tab
       rendered.<name>.json the named board's own receipts
       serve.log            output of a board started with `serve --detach`
       serve.<name>.log     the same, for a named board
       logs/<tab>.log       sidecar output for a `log` tab
       logs/<name>/<tab>.log  the named board's own sidecar logs
-      shots/               screenshots from test/shot.sh
+      shots/               screenshots from `aboard shot`
 ```
 
 The split is between **content** and **machine-local runtime**. `aboard.json`,

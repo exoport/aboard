@@ -360,3 +360,97 @@ func TestTheHelpPanelNamesTheNotesStrip(t *testing.T) {
 		t.Errorf("the row is there and says nothing useful: %v", err)
 	}
 }
+
+// The note and the requests strip fold into ONE line, and the fold is the
+// viewer's: remembered in this browser, the same on every tab, never a write.
+//
+// Asked for from a real board: on a `ui` tab with a long note, the two strips
+// plus the change banner plus the action strip were about a third of a 900px
+// window before the tab's content began, and the first two sit in the STICKY
+// head, so they cost that on every scroll offset too. What the folded line must
+// keep is asserted as carefully as what it hides: the note's words, and the
+// count of the human's own notes nobody has answered.
+func TestFoldingTheNoteAndRequestsStripsIsRememberedPerViewer(t *testing.T) {
+	id := makeScratchTab(t, "Fold me")
+	s := open(t, "tab="+id)
+
+	if err := s.page.Locator("#tab-asks-input").Fill("the second row is stale"); err != nil {
+		t.Fatalf("typing the note: %v", err)
+	}
+	if err := s.page.Keyboard().Press("Enter"); err != nil {
+		t.Fatalf("pressing Enter: %v", err)
+	}
+	eventually(t, "the note to reach the server", func() bool { return len(requestsOn(t, id)) == 1 })
+
+	summary := s.page.Locator("#context-summary")
+	if err := expect.Locator(summary).ToBeHidden(); err != nil {
+		t.Fatalf("the folded line is showing before anything was folded: %v", err)
+	}
+
+	revBefore := readDoc(t)["rev"]
+	if err := s.page.Locator("#context-toggle").Click(); err != nil {
+		t.Fatalf("pressing the fold: %v", err)
+	}
+	for _, sel := range []string{"#tab-note", "#tab-asks"} {
+		if err := expect.Locator(s.page.Locator(sel)).ToBeHidden(); err != nil {
+			t.Errorf("%s is still on screen after folding: %v", sel, err)
+		}
+	}
+	if err := expect.Locator(summary).ToContainText("Made by the browser suite"); err != nil {
+		t.Errorf("the folded line lost the note: %v", err)
+	}
+	if err := expect.Locator(summary).ToContainText("1 note for the agent"); err != nil {
+		t.Errorf("the folded line hides that a note of theirs is unanswered: %v", err)
+	}
+	if got := readDoc(t)["rev"]; got != revBefore {
+		t.Errorf("folding the strips wrote to the board (rev %v -> %v)", revBefore, got)
+	}
+
+	// Remembered across a reload, and the same on another tab: the preference
+	// is about screen space, not about any one tab's content.
+	if _, err := s.page.Reload(); err != nil {
+		t.Fatalf("reloading: %v", err)
+	}
+	s.tab("ab13")
+	if err := expect.Locator(summary).ToBeVisible(); err != nil {
+		t.Errorf("the fold was not remembered across a reload and a tab change: %v", err)
+	}
+	if err := expect.Locator(s.page.Locator("#tab-note")).ToBeHidden(); err != nil {
+		t.Errorf("another tab's note strip came back unfolded: %v", err)
+	}
+
+	// The folded line is itself the way back.
+	if err := summary.Click(); err != nil {
+		t.Fatalf("clicking the folded line: %v", err)
+	}
+	if err := expect.Locator(s.page.Locator("#tab-note")).ToBeVisible(); err != nil {
+		t.Errorf("clicking the folded line did not unfold it: %v", err)
+	}
+	stored, err := s.page.Evaluate(`() => localStorage.getItem('aboard.context')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored != "open" {
+		t.Errorf("localStorage aboard.context is %v after unfolding, want \"open\"", stored)
+	}
+}
+
+// A tab with no note draws no purpose line at all. It drew an empty "THIS TAB
+// IS FOR" with an Add button: the shell set `hidden` on the strip, and the
+// strip's own `display: flex` beat the browser's `[hidden]` rule, so the
+// attribute did nothing. Unnoticed because every tab on the example board has
+// a note, which is why this test removes one.
+func TestATabWithNoNoteDrawsNoPurposeLine(t *testing.T) {
+	id := makeScratchTab(t, "No note")
+	d := readDoc(t)
+	delete(d.tab(t, id), "note")
+	apply(t, d)
+
+	s := open(t, "tab="+id)
+	if err := expect.Locator(s.page.Locator("#tab-asks")).ToBeVisible(); err != nil {
+		t.Fatalf("the requests strip is missing: %v", err)
+	}
+	if err := expect.Locator(s.page.Locator("#tab-note")).ToBeHidden(); err != nil {
+		t.Errorf("a tab with no note still draws the purpose line: %v", err)
+	}
+}

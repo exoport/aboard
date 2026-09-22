@@ -74,7 +74,7 @@
       ]
     },
     "tabs": {
-      "doc": "switchable panels; which one is open is per-viewer and never stored",
+      "doc": "switchable panels; which one is open is per-viewer and never stored. A deep link `#tab=<id>&node=<panel label>` opens one, so it can be linked to and screenshotted, but no agent can read which panel anybody has open",
       "props": [
         "panels"
       ],
@@ -189,7 +189,7 @@
       "layout": true
     },
     "list": {
-      "doc": "a bulleted list of plain values",
+      "doc": "a bulleted list of plain values; an item may be a `{bind}`",
       "props": [
         "items"
       ]
@@ -220,7 +220,7 @@
       }
     },
     "table": {
-      "doc": "a read-only table. `rows` are arrays, or objects keyed by column id. For a table the human edits, use the `table` TAB type.",
+      "doc": "a read-only table. `rows` are arrays, or objects keyed by column id. A cell or a column label may be a `{bind}`, so a live column is fine. For a table the human edits, use the `table` TAB type.",
       "props": [
         "columns",
         "rows"
@@ -306,7 +306,8 @@
   },
   "gestures": [
     "whatever the agent described — buttons record an intent, fields write into the data model",
-    "a tabs component remembers which panel you had open, per viewer"
+    "a tabs component remembers which panel you had open, per viewer",
+    "a deep link opens a tabs panel by its label"
   ],
   "keys": [],
   "notes": [
@@ -315,6 +316,8 @@
     "`tone` takes a token NAME from `tones` above, never a hex. An unrecognised one draws the default, so `aboard apply` warns about it.",
     "`image.src` must be under uploads/ or assets/ — and an image you supply goes in `.aboard/uploads/`, because assets/ is compiled into the binary; `link.href` must be #, / or http(s).",
     "Any prop may be `{\"bind\":\"path.in.data\"}` instead of a literal — EXCEPT `field.bind` and `checklist[].bind`, which are the paths themselves.",
+    "`commonProps` apply to EVERY component on top of its own `props`, so a component's `props` list is not all it reads. `grow: true` makes a node take the free width in a `row` — a `field` included, which is how a longtext beside a checkbox gets wide — and `id` names a node a deep link's `node=` can reach. Copying nodes between trees filtered to a component's own `props` drops both, with no warning, because nothing is wrong with the result.",
+    "Every component whose content is larger than its box is measured, at the width the browser has, and reaches `aboard rendered` and `aboard shot` as “does not fit”: `cut` (overflow hidden), `spill` (draws past its edge, e.g. an unbroken URL) or `scroll` (a code block or a wide table scrolls inside the tab). Only the OPEN panel is drawn, so only it is measured, and each finding names its panel.",
     "An unknown component type renders a visible marker. An unknown PROP renders nothing at all, which is why `aboard apply` warns about one.",
     "PREFER THIS OVER `html` whenever it can express the shape.",
     "`text` on a component names the props that carry its DISPLAY text, in reading order — `a|b` means “the first of these that is set” and `=p` means “the value in `state.data` at the path prop `p` names”. `aboard export` reads it; the renderer does not, so it describes the renderer rather than driving it.",

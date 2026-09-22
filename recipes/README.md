@@ -23,7 +23,7 @@ the other way — which is what happened to both files in here.
 
 | recipe | when to use it |
 | --- | --- |
-| [`decision-wizard-with-live-summary`](decision-wizard-with-live-summary.md) | When you have put a pile of findings in front of the human and need a verdict on each, and they want to see what they have chosen so far without hunting through tabs. This shape is for DECIDING; a `gate` tab is for committing. |
+| [`decision-wizard-with-live-summary`](decision-wizard-with-live-summary.md) | When you have put a pile of findings or proposed edits in front of the human and need a verdict or a sign-off on each — a review queue, per-item approval, anything you would otherwise render as a wall of cards — and they want to see what they have chosen so far without hunting through tabs. This shape is for DECIDING; a `gate` tab is for committing. |
 | [`human-checklist`](human-checklist.md) | When you are handing over steps only a person can carry out — verify this by hand, install that, look at it in the real app — and you need to read back which ones they actually did. Not for work you could do yourself, and not for an approval on the record. |
 
 Both are `ui` tabs and both carry an `aboard-template` block, so both can be applied

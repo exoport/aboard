@@ -30,6 +30,7 @@ compass](https://diataxis.fr/compass/) if you're unsure where a given doc belong
 - [How to use the VS Code extension](how-to/use-the-vscode-extension.md) — the sidebar tree and the panel, how it finds a board, and what is still unproven about it
 - [How to run a second board in one project](how-to/run-a-second-board.md) — `--name`, what gets its own copy, and the four things two boards share
 - [How to put aboard behind a reverse proxy](how-to/serve-under-a-path-prefix.md) — `serve --base-path`, the trailing slash, the `Host` allow-list and the same-origin rule
+- [How to look at a tab the way the human sees it](how-to/look-at-a-tab.md) — `aboard shot`: a picture of a tab, a `ui` panel or one node, and the five ways a hand-rolled headless screenshot comes out empty or wrong
 - [How to promote a board tab into a document](how-to/promote-a-tab-into-a-document.md) — `aboard export`, what to rewrite rather than paste, and demoting the tab afterwards
 - [How to write a recipe](how-to/write-a-recipe.md)
 - [How to embed aboard in ape](how-to/embed-in-ape.md)

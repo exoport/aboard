@@ -1,8 +1,8 @@
 ---
 name: decision-wizard-with-live-summary
-description: "One ui tab of internal panels — N decision panels plus a Summary panel that reads the same state.data the fields write, so it cannot go stale."
-when_to_use: "When you have put a pile of findings in front of the human and need a verdict on each, and they want to see what they have chosen so far without hunting through tabs. This shape is for DECIDING; a gate tab is for committing."
-tags: [ui, tabs, bind, decisions, summary, wizard]
+description: "One ui tab of internal panels — one panel per item, each with its own verdict or approve-and-notes fields, plus a Summary panel that reads the same state.data the fields write, so it cannot go stale."
+when_to_use: "When you have put a pile of findings or proposed edits in front of the human and need a verdict or a sign-off on each — a review queue, per-item approval, anything you would otherwise render as a wall of cards — and they want to see what they have chosen so far without hunting through tabs. This shape is for DECIDING; a gate tab is for committing."
+tags: [ui, tabs, bind, decisions, summary, wizard, review, sign-off]
 requires:
   min_schema: 1
 ---
@@ -14,6 +14,10 @@ requires:
 Use this when you have put a pile of findings in front of the human and need a
 verdict on each — options, a recommendation, a place to say "not like that" —
 and they want to see what they have chosen so far without hunting through tabs.
+The same shape serves a **review queue**: N proposed edits, one panel each, an
+approve tick and a notes box per item. One item at a time is the point. A long
+scrolling page of cards makes the human hold every item in view at once, and
+makes "which ones have I done?" a search.
 
 ## The constraint that decides the shape
 
@@ -58,7 +62,10 @@ human's approval record into your wizard.
   "type": "ui",
   "note": "One tab, N panels. The middle panels decide; the Summary panel is read-only and live.",
   "state": {
-    "data": { "b1": "— not decided —", "b1_note": "", "hk_a": false },
+    "data": {
+      "b1": "— not decided —", "b1_note": "", "hk_a": false,
+      "approve": { "e1": false }, "notes": { "e1": "" }
+    },
     "intents": [],
     "root": {
       "type": "tabs",
@@ -100,6 +107,29 @@ human's approval record into your wizard.
           ]
         },
         {
+          "label": "e1",
+          "children": [
+            { "type": "row", "children": [{ "type": "badge", "value": "e1", "tone": "accent" }] },
+            { "type": "title", "value": "One proposed edit, signed off on its own" },
+            { "type": "caption", "value": "Why this edit, in a sentence the human can check." },
+            {
+              "type": "grid",
+              "columns": 2,
+              "children": [
+                { "type": "card", "title": "Now", "children": [{ "type": "code", "value": "what the text says today" }] },
+                { "type": "card", "title": "Proposed", "children": [{ "type": "code", "value": "what it would say" }] }
+              ]
+            },
+            {
+              "type": "row",
+              "children": [
+                { "type": "field", "field": "checkbox", "label": "Approve e1", "bind": "approve.e1" },
+                { "type": "field", "field": "longtext", "label": "Notes, changes, questions", "bind": "notes.e1", "grow": true }
+              ]
+            }
+          ]
+        },
+        {
           "label": "Housekeeping",
           "children": [
             {
@@ -122,7 +152,9 @@ human's approval record into your wizard.
                   "pairs": [
                     { "key": "B1 granularity", "value": { "bind": "b1" } },
                     { "key": "B1 note", "value": { "bind": "b1_note" } },
-                    { "key": "Delete the dead fixture", "value": { "bind": "hk_a" } }
+                    { "key": "Delete the dead fixture", "value": { "bind": "hk_a" } },
+                    { "key": "e1 approved", "value": { "bind": "approve.e1" } },
+                    { "key": "e1 notes", "value": { "bind": "notes.e1" } }
                   ]
                 }
               ]
@@ -152,6 +184,30 @@ The `B1` panel in the template above is one. Four rules earn their place in it:
   decision survives promotion into the repo beside it; a note in a general box
   loses its subject.
 
+### One sign-off, as a panel
+
+The `e1` panel is the review-queue shape: an item that is approved or not, rather
+than picked from options. Before and after in a two-column `grid`, then an
+`approve.<id>` checkbox and a `notes.<id>` longtext. Keying both by the item id
+makes the read-back one dict per concern. `approve.e1` and `notes.e1` sit in
+`data.approve` and `data.notes`, and `apply-approved` is a loop over the first.
+
+**Where the two fields go is a layout choice with a trade.** Two shapes work:
+
+- **In a `row`, with `"grow": true` on the longtext** (the template): the tick and
+  the notes box share one line, and the box takes the rest of the width. This is
+  the compact one, and on a panel with a long before/after it is a line saved.
+- **As direct children of the panel**: stacked, each full width, with nothing to
+  get wrong. It costs a row.
+
+What does NOT work is a `row` without `grow`: a `field` in a row is only as wide
+as its content, so the notes box comes out a few words wide. `grow` is one of the
+`commonProps` that `aboard capabilities ui` lists apart from each component's own
+`props`, and it applies to every component. That separation is how it gets missed.
+A session once read `field`'s `props` list as exhaustive, stripped `grow` from 15
+fields while copying a tree into a new tab, and then reported narrow notes boxes
+as a limitation of `field`.
+
 ### The Summary panel
 
 Two shapes work, and the choice is layout, not capability:
@@ -162,6 +218,16 @@ Two shapes work, and the choice is layout, not capability:
 - **`caption` + `text` in a `row`, one per value** — more to write, and worth it
   when a label needs to be long or a value needs to sit under rather than beside
   it.
+- **`table` with a `{bind}` in its cells**: one row per item, with columns for the
+  item, its tick and its note. It is the most compact for a long queue, and it
+  needs a binary newer than v0.2.1. Before that, the renderer drew a bound cell as
+  `[object Object]` while `aboard export` printed the answer, so an agent checking
+  through export saw a table the human never did. On an older board, use `kv`.
+
+A `checklist` bound to the same `approve.<id>` paths also works and is tempting,
+because ticking in the Summary becomes the same act as ticking in the panel. It
+gives up the property below, though, so reach for it only when the human asks to
+approve from the Summary.
 
 Read-only because there is nothing there to edit — no `field`, no `checklist`, no
 `button`. That is a stronger guarantee than a `readOnly` flag: the components
@@ -205,6 +271,13 @@ print(json.dumps(t['state']['data'], indent=1, ensure_ascii=False))"
 
 That is the raw record, keyed the way you wrote the binds — the form you act on.
 
+**You cannot read which panel the human has open**, because that choice is per
+viewer and never stored. You CAN send them to one: `#tab=<id>&node=<panel label>`
+opens that panel, and every panel on the way to it when `tabs` are nested. It is
+also how to screenshot a panel that is not the first:
+`aboard shot <id> --node <panel label>`. On a binary without `aboard shot`, the
+skill's screenshot pitfall has the chromium command.
+
 Then **promote the outcome into whatever the project uses for decisions**. The
 board is where a thing is worked out; it is not the record. A verdict whose only
 trace is `state.data` dies with the machine. Carry the **reason** across, not just
@@ -224,8 +297,8 @@ aboard wait --for "answer <tab-id>" --note "waiting on the port decisions"
   `ui` tree — an unknown component, an unknown prop, a `{bind}` that resolves
   nowhere and a colour name this board does not have all warn — so read stderr,
   and use `apply --check` to run them without writing, or `apply --strict` to
-  refuse on any warning. Then render it and **look**: nothing here can see a
-  layout that is legal and unreadable.
+  refuse on any warning. Then render it with `aboard shot` and **look**: nothing
+  here can see a layout that is legal and unreadable.
 - **An unknown component type draws a visible marker; an unknown PROP draws
   nothing at all.** The second is the one that reads as a styling problem.
 - **`checklist` writes booleans**, and a non-string renders as its JSON — so a
@@ -238,6 +311,13 @@ aboard wait --for "answer <tab-id>" --note "waiting on the port decisions"
   worth it for a summary that cannot lie.
 - **Nested bind paths auto-create**, so `"b1.choice"` is safe to write into an
   empty `data`. Flat keys (`b1_choice`) are easier to eyeball in a raw read-back.
+- **Converting an existing tab to this shape costs nothing if the binds stay
+  identical.** The human's answers live in `state.data` under the bind paths, not
+  in the nodes. So moving an existing long-scrolling tab's nodes into panels, with
+  every `bind` unchanged, restructures it IN PLACE and loses nothing they wrote.
+  Build the new tree from the old tab's own nodes rather than retyping them. Copy
+  each node whole, too: filtering a node to its component's `props` list drops
+  `grow` and `id`, and nothing warns, because the result is valid, just narrower.
 
 ## When NOT to use this shape
 

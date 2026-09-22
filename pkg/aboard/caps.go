@@ -248,7 +248,7 @@ var declaredRoutes = []routeSpec{
 	{http.MethodGet, "/journal", "recent accepted writes; `schema` says whether `before` holds each changed tab whole or its bare state"},
 	{http.MethodGet, "/history", "one tab's recorded prior versions, newest first (?tab=<id>&limit=N)"},
 	{http.MethodGet, "/watch", "those writes as JSON lines, as they happen"},
-	{http.MethodPost, "/rendered", "a mount receipt from the browser: control ids drawn, pressed, and any unknown-component markers"},
+	{http.MethodPost, "/rendered", "a mount receipt from the browser: control ids drawn, pressed, any unknown-component markers, and what did not fit at its width"},
 	{http.MethodPost, routeLog, "append output to a tab's sidecar log"},
 	{http.MethodGet, routeLog, "the tail of one"},
 	{http.MethodPost, "/upload", "an image pasted or dropped by the human"},

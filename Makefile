@@ -130,7 +130,7 @@ tools: $(GOLANGCI_LINT) $(GOFUMPT) $(GORELEASER) $(GOVULNCHECK) ## Pre-install a
 tidy:              ## Update go.mod and go.sum.
 	go mod tidy
 
-# Screenshots are deliberately NOT removed here: test/shot.sh writes them to
+# Screenshots are deliberately NOT removed here: `aboard shot` writes them to
 # .aboard/run/shots/ (Root.ShotsDir), and everything under .aboard/ is the
 # board's own — state, uploads, journal, instance record. A `make clean` that
 # reached in there would delete a human's work to save a few kilobytes.
@@ -210,18 +210,23 @@ E2E_RUN ?= .
 e2e: build         ## LOCAL ONLY: the real browser suite (playwright-go, //go:build e2e). No server or PROJECT needed.
 	go test -tags e2e -count=1 -timeout 10m -run '$(E2E_RUN)' -v ./test/e2e
 
-# SHOT_TABS is passed straight through: `make shot SHOT_TABS="ab133 ab22#help"`.
-# With none, shot.sh shoots its default set. LOOK at the pictures — every visual
-# regression this project has shipped passed the DOM assertions first.
-# PROJECT picks the board, and here it is optional and defaults to this
-# checkout: shot.sh only READS the board and writes pictures into its
-# .aboard/run/shots/. It is the one shell script left in test/ — `make e2e`
-# takes its own screenshots, but only of a temp board that is deleted, and
-# looking at a picture of the board you are actually working on is a different
-# job.
+# `make shot` is `aboard shot` with this checkout's binary. SHOT_TABS names the
+# tabs (ids, keys or types) and SHOT_FLAGS passes anything else:
+#   make shot SHOT_TABS="ab133 ab22" SHOT_FLAGS="--help-panel"
+# With no SHOT_TABS it shoots one tab of each of five types. LOOK at the
+# pictures — every visual regression this project has shipped passed the DOM
+# assertions first. PROJECT picks the board and defaults to this checkout: a
+# shot only READS the board and writes pictures into its .aboard/run/shots/.
+# `make e2e` takes screenshots too, but only of a temp board that is deleted,
+# and looking at the board you are actually working on is a different job.
+#
+# It used to run test/shot.sh, the last shell script in test/. The script is
+# gone because every agent in every OTHER project needed the same thing and had
+# no Makefile to find it in; what it knew is in pkg/aboard/shot.go now.
+SHOT_TABS ?= kanban dag diagram form markup
 .PHONY: shot
-shot:              ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="ab1 ab22#help"); a running server is required.
-	PROJECT="$(PROJECT)" ./test/shot.sh $(SHOT_TABS)
+shot: build        ## Screenshot tabs into <project>/.aboard/run/shots/ (PROJECT=<dir> SHOT_TABS="ab1 ab22" SHOT_FLAGS="--help-panel"); a running server is required.
+	./$(BIN) shot --cwd "$(or $(PROJECT),.)" $(SHOT_FLAGS) $(SHOT_TABS)
 
 .PHONY: dev
 dev:               ## Serve the UI from disk, so edits to pkg/aboard/web need no rebuild.

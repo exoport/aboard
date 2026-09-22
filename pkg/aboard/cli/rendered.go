@@ -19,6 +19,12 @@ draws nothing at all. After every mount the shell posts the control ids it drew,
 the ones somebody pressed, and any unknown-component markers, and this prints
 them.
 
+It also says what did NOT FIT, at the width that browser had: a ` + "`ui`" + `
+component or an ` + "`html`" + ` widget whose content is larger than its box — cut off
+(overflow hidden), spilling past its edge (an unbroken URL), or scrolling inside
+the tab (a wide code block or table). Only those two renderers measure; the
+others draw the board's own layouts, which truncate on purpose.
+
 This is NOT a DOM sweep. Every id here is already declared in
 views/<type>.spec.json; nothing is scraped and nothing is matched against prose.
 

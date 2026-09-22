@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/exoport/aboard/pkg/aboard"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // Neither test registers gesture coverage. Both drive CONTROLS — a declared
@@ -170,5 +171,158 @@ func TestTheChangeBannerLinksToWhatTheTabSaidBefore(t *testing.T) {
 	}
 	if err := expect.Locator(prev).ToBeHidden(); err != nil {
 		t.Errorf("the panel did not toggle shut: %v", err)
+	}
+}
+
+// A page `aboard shot` loads (`?shot=1`) posts no receipt, and paints a
+// deep-linked node at scroll 0.
+//
+// The receipt half: `wait --for "rendered <id>"` is a session waiting for a
+// PERSON to have the tab open, and an agent photographing the tab must not
+// release it, nor count as a mount in `aboard rendered`. Made non-vacuous by
+// opening an ordinary page afterwards: its receipt arrives, and the count it
+// arrives at says whether the shot's page posted one first.
+//
+// The scroll half: chromium's --screenshot draws a scrolled document wrongly (a
+// node 1600px down came out as a black frame), so a shot page hands the offset
+// to the views as a transform and stays at scroll 0.
+func TestAShotPagePostsNoReceiptAndPaintsAtScrollZero(t *testing.T) {
+	id := makeScratchTabOfType(t, "Shot probe", "ui", map[string]any{
+		"data": map[string]any{},
+		"root": map[string]any{"type": "col", "children": []any{
+			map[string]any{"type": "title", "value": "Top of the tab"},
+			map[string]any{"type": "spacer", "size": "1600px"},
+			map[string]any{"type": "notice", "id": "far", "value": "down here"},
+			map[string]any{"type": "spacer", "size": "600px"},
+		}},
+	})
+
+	shot := open(t, "tab="+id+"&shot=1&nosse=1&node=far")
+	far := shot.view(id).Locator(`[data-ui-id="far"]`)
+	if err := expect.Locator(far).ToBeVisible(); err != nil {
+		t.Fatalf("the deep-linked node never drew: %v", err)
+	}
+	got, err := shot.page.Evaluate(`() => ({ y: scrollY, shift: document.getElementById('views').style.transform,
+		top: document.querySelector('[data-ui-id="far"]').getBoundingClientRect().top })`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := got.(map[string]any)
+	if y, _ := m["y"].(float64); y != 0 {
+		t.Errorf("a shot page is scrolled to %v; chromium's --screenshot draws that wrongly", y)
+	}
+	if shift, _ := m["shift"].(string); !strings.HasPrefix(shift, "translateY(-") {
+		t.Errorf("the deep link's offset was not handed to the views: transform %q", shift)
+	}
+	if top, _ := m["top"].(float64); top < 0 || top > 900 {
+		t.Errorf("the node sits at %vpx, outside the window a picture would show", top)
+	}
+
+	s := open(t, "tab="+id)
+	if err := expect.Locator(s.view(id)).ToBeVisible(); err != nil {
+		t.Fatalf("the tab never mounted in an ordinary page: %v", err)
+	}
+	eventually(t, "the ordinary page's receipt", func() bool { return receiptFor(t, id).Mounts >= 1 })
+	if n := receiptFor(t, id).Mounts; n != 1 {
+		t.Errorf("the tab has %d mounts after one ordinary page and one shot page; the shot posted a receipt", n)
+	}
+}
+
+// What does not fit reaches the agent: a `ui` component whose content is wider
+// than its box is in the receipt, named, with the panel it is in, the width the
+// browser had and how far it runs over. A panel that fits reports nothing, and
+// switching to one that does not sweeps again — the panel switch is not a
+// declared control, so without the re-sweep the receipt would describe a panel
+// nobody is looking at.
+func TestWhatDoesNotFitReachesTheReceipt(t *testing.T) {
+	long := "https://example.com/" + strings.Repeat("a", 300)
+	id := makeScratchTabOfType(t, "Clip probe", "ui", map[string]any{
+		"data": map[string]any{},
+		"root": map[string]any{"type": "tabs", "panels": []any{
+			map[string]any{"label": "Fits", "children": []any{map[string]any{"type": "text", "value": "short"}}},
+			map[string]any{"label": "Wide", "children": []any{
+				map[string]any{"type": "card", "title": "Proposed", "children": []any{map[string]any{"type": "text", "value": long}}},
+				map[string]any{"type": "code", "value": strings.Repeat("1234567890 ", 60)},
+			}},
+		}},
+	})
+
+	s := open(t, "tab="+id)
+	eventually(t, "the mount's receipt", func() bool { return receiptFor(t, id).Mounts >= 1 })
+	if got := receiptFor(t, id); len(got.Clipped) != 0 || got.Width != 1400 {
+		t.Errorf("a panel that fits reported %+v at width %d", got.Clipped, got.Width)
+	}
+
+	panel := s.view(id).Locator(".uic-tabs button").Filter(playwright.LocatorFilterOptions{HasText: "Wide"}).First()
+	if err := panel.Click(); err != nil {
+		t.Fatalf("opening the Wide panel: %v", err)
+	}
+	eventually(t, "the re-sweep after the panel switch", func() bool { return len(receiptFor(t, id).Clipped) >= 2 })
+
+	var spill, scroll *aboard.Clip
+	clips := receiptFor(t, id).Clipped
+	for i := range clips {
+		switch {
+		case clips[i].Kind == aboard.ClipSpill && strings.HasPrefix(clips[i].Where, `text "https://example.com/`):
+			spill = &clips[i]
+		case clips[i].Kind == aboard.ClipScroll && strings.HasPrefix(clips[i].Where, "code"):
+			scroll = &clips[i]
+		}
+	}
+	if spill == nil || spill.X <= 0 || !strings.HasSuffix(spill.Where, "(panel Wide)") {
+		t.Errorf("the unbroken URL was not reported as spilling, in its panel: %+v", clips)
+	}
+	if scroll == nil || scroll.X <= 0 {
+		t.Errorf("the wide code block was not reported as scrolling: %+v", clips)
+	}
+	// Innermost only: the card the URL spills out of spills too, and saying so
+	// would be the same finding once per level of nesting.
+	for _, c := range clips {
+		if strings.HasPrefix(c.Where, "card") {
+			t.Errorf("an ancestor of a spill was reported as well: %+v", c)
+		}
+	}
+}
+
+// An html widget measures itself from inside its frame, which the parent cannot
+// read: a fixed stage with overflow hidden whose text runs past its bottom is a
+// CUT, and it reaches the receipt once the frame has loaded and reported.
+func TestAnHTMLWidgetReportsWhatItCuts(t *testing.T) {
+	html := `<style>body{margin:0}.stage{width:600px;height:120px;overflow:hidden}</style>` +
+		`<div class="stage" id="slide-1"><p>` + strings.Repeat("A slide whose text runs past its stage. ", 60) + `</p></div>`
+	id := makeScratchTabOfType(t, "Cut probe", "html", map[string]any{"html": html, "data": map[string]any{}})
+
+	open(t, "tab="+id)
+	eventually(t, "the frame's report to reach the receipt", func() bool {
+		for _, c := range receiptFor(t, id).Clipped {
+			if c.Where == "widget div#slide-1" && c.Kind == aboard.ClipCut && c.Y > 0 {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+// A page `aboard shot` loads writes the same sweep into itself, where the
+// command reads it back out of --dump-dom, instead of posting a receipt.
+func TestAShotPageWritesItsReportIntoThePage(t *testing.T) {
+	id := makeScratchTabOfType(t, "Shot report probe", "ui", map[string]any{
+		"data": map[string]any{},
+		"root": map[string]any{"type": "code", "value": strings.Repeat("1234567890 ", 60)},
+	})
+	s := open(t, "tab="+id+"&shot=1&nosse=1")
+	report := s.page.Locator("script#aboard-shot-report")
+	if err := expect.Locator(report).ToBeAttached(); err != nil {
+		t.Fatalf("a shot page wrote no report: %v", err)
+	}
+	body, err := report.TextContent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body, `"kind":"scroll"`) || !strings.Contains(body, `"width":1400`) {
+		t.Errorf("the report does not carry the measurement: %s", body)
+	}
+	if n := receiptFor(t, id).Mounts; n != 0 {
+		t.Errorf("a shot page posted a receipt as well (%d mounts)", n)
 	}
 }

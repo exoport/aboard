@@ -134,7 +134,7 @@ var invocationAllowList = map[string]string{
 // defect is only visible from a host that did not exist yet. A new one would
 // be just as invisible, so the tree is checked rather than trusted.
 func TestNoNewHardcodedInvocations(t *testing.T) {
-	verbs := "serve|status|init|apply|requests|capabilities|journal|history|wait|poke|boards|uploads|rendered|recipes|log|export|watch|version"
+	verbs := "serve|status|init|apply|requests|capabilities|journal|history|wait|poke|boards|uploads|rendered|shot|recipes|log|export|watch|version"
 	// Inside a Go string literal, not preceded by "ape " (which is prose about
 	// the host) and not part of `.aboard/` or `aboard.json`.
 	re := regexp.MustCompile(`"[^"]*(^|[^.\w])aboard (` + verbs + `)`)

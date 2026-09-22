@@ -82,6 +82,8 @@ export function mountHtml(root, ctx) {
   let lastLoadedHtml = null;
   let saveTimer = null;
   let lastAppliedHeight = 0;
+  // The last "what does not fit" the frame reported; null until it has.
+  let lastMeasure = null;
 
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -196,6 +198,7 @@ export function mountHtml(root, ctx) {
 
   // Cache-bust so a reload after an edit actually fetches the new document.
   function loadFrame() {
+    lastMeasure = null;   // a new document has measured nothing yet
     lastLoadedHtml = ctx.state.html;
     frame.src = api(`/tab/${encodeURIComponent(tabId)}/html`)
       + `?v=${Date.now()}&theme=${encodeURIComponent(themeKind())}`;
@@ -216,6 +219,27 @@ export function mountHtml(root, ctx) {
       saveTimer = setTimeout(() => {
         ctx.save().then((ok) => flash(ok ? 'saved' : 'save failed'));
       }, 250);
+      return;
+    }
+    if (msg.__aboard === 'measure') {
+      // What the widget found did not fit, from inside the frame: the page
+      // against the frame, and any box in it that cuts its own content. Kept
+      // for measure() below and reported to the board by the shell's sweep,
+      // which this asks for because the frame answers after the mount's own
+      // sweep has already gone.
+      const num = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(1e6, Math.round(Number(v)))) : 0);
+      lastMeasure = {
+        x: num(msg.x),
+        y: num(msg.y),
+        cutX: msg.cutX === true,
+        cutY: msg.cutY === true,
+        boxes: (Array.isArray(msg.boxes) ? msg.boxes : []).slice(0, 20).map((b) => ({
+          where: String((b && b.where) || '?').slice(0, 60),
+          x: num(b && b.x),
+          y: num(b && b.y),
+        })),
+      };
+      document.dispatchEvent(new CustomEvent('aboard:resweep'));
       return;
     }
     if (msg.__aboard === 'height') {
@@ -283,6 +307,19 @@ export function mountHtml(root, ctx) {
     destroy() {
       window.removeEventListener('message', onMessage);
       document.removeEventListener('aboard:theme', pushTheme);
+    },
+    // The frame's own report, as clip findings. The page's vertical overflow
+    // is only news when the frame cannot grow to it — a fixed state.height, or
+    // the 4000px cap — and only CUT when the widget hides its scrollbar;
+    // otherwise the frame simply scrolls.
+    measure() {
+      if (!lastMeasure) return [];
+      const m = lastMeasure;
+      const out = [];
+      if (m.x > 2) out.push({ where: 'widget page', kind: m.cutX ? 'cut' : 'scroll', x: m.x, y: 0 });
+      if (m.y > 2) out.push({ where: 'widget page', kind: m.cutY ? 'cut' : 'scroll', x: 0, y: m.y });
+      for (const b of m.boxes) out.push({ where: `widget ${b.where}`, kind: 'cut', x: b.x, y: b.y });
+      return out;
     },
   };
 }

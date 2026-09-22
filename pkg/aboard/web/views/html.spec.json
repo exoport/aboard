@@ -43,6 +43,7 @@
     "sandbox=\"allow-scripts\" with connect-src ’none’: anything local, nothing over the network.",
     "Bridge: aboard.get(), aboard.set(next), aboard.onData(fn), aboard.fit().",
     "PREFER `ui` unless the INTERACTION is the point.",
-    "An html BLOCK inside a stack renders like any other block; its persisted state lives at blocks[].state.data, not the tab’s own state.data."
+    "An html BLOCK inside a stack renders like any other block; its persisted state lives at blocks[].state.data, not the tab’s own state.data.",
+    "The frame measures itself on load and on every resize: a page wider than the frame, and any box inside it with overflow hidden or clip whose content does not fit, reach `aboard rendered` and `aboard shot` as “does not fit”. A box that SCROLLS is not reported: inside a widget, that is usually the point of it."
   ]
 }

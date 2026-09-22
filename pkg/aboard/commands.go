@@ -17,6 +17,8 @@
 
 package aboard
 
+import "strconv"
+
 // Exit codes. A small table, shared across commands so a code means one thing.
 //
 //	0  it worked
@@ -78,6 +80,7 @@ const (
 	flagNameBy           = "by"
 	flagNameNote         = "note"
 	flagNameOutputFormat = "output-format"
+	flagNameBrowser      = "browser"
 
 	// defFalse is how pflag renders a bool flag's default, which is what the
 	// parity test reads back off the tree.
@@ -151,6 +154,8 @@ func commonExits() []Exit {
 //
 // Reordering this slice therefore moves capsHash, which is correct: the manifest
 // reports it.
+//
+//nolint:maintidx // one literal with no branches: its "complexity" is its length, and splitting it would scatter the one place the CLI surface reads top to bottom
 func Commands() []Command {
 	return []Command{
 		{
@@ -299,11 +304,34 @@ func Commands() []Command {
 		{
 			Name: "rendered",
 			Args: "[tab]",
-			Doc:  "print what the browser reported it drew: control ids, presses, and unknown-component markers",
+			Doc:  "print what the browser reported it drew: control ids, presses, unknown-component markers, and what did not fit",
 			Flags: []Flag{
 				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
 			},
 			Exits: commonExits(),
+		},
+		{
+			// Beside `rendered`, because it answers the same question with a
+			// picture instead of a list of ids: what does this tab actually look
+			// like on screen.
+			Name: "shot",
+			Args: "<tab>...",
+			Doc:  "screenshot tabs of the running board with a headless browser, into .aboard/run/shots/, and report what did not fit",
+			Flags: []Flag{
+				{Name: flagNameBrowser, Type: flagTypeString, Doc: "the chromium-family browser to drive, a path or a name on $PATH (env ABOARD_BROWSER; default: the first one found)"},
+				{Name: "height", Type: flagTypeInt, Def: strconv.Itoa(ShotDefaultHeight), Doc: "window height in pixels"},
+				{Name: "help-panel", Type: flagTypeBool, Def: defFalse, Doc: "open the board's help panel over the tab"},
+				{Name: "node", Type: flagTypeString, Doc: "a node's id or a ui panel's label to open first; refused if the tab has none"},
+				{Name: flagNameOutputFormat, Type: flagTypeString, Def: defaultOutputFormat, Doc: UsageOutputFormat},
+				{Name: "theme", Type: flagTypeString, Doc: "dark or light (default: the board's own default)"},
+				{Name: "timeout", Type: flagTypeDuration, Def: ShotDefaultTimeout.String(), Doc: "how long each picture may take"},
+				{Name: "width", Type: flagTypeInt, Def: strconv.Itoa(ShotDefaultWidth), Doc: "window width in pixels"},
+			},
+			Exits: []Exit{
+				{Code: ExitOK, Meaning: "every picture was written"},
+				{Code: ExitFailed, Meaning: "no board running, no such tab or node, no browser, or a picture was not written"},
+				{Code: ExitUsage, Meaning: "a flag or argument the command cannot act on"},
+			},
 		},
 		{
 			Name: "uploads",

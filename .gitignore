@@ -41,7 +41,7 @@ coverage.out
 # somebody's afternoon.
 /.aboard/
 
-# test/shot.sh writes to .aboard/run/shots/, which /.aboard/ already covers.
+# `aboard shot` writes to .aboard/run/shots/, which /.aboard/ already covers.
 # This entry is for the older path and for anything pointed at it by hand.
 /.shots/
 

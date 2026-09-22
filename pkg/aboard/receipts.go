@@ -77,7 +77,70 @@ type Receipt struct {
 	Unknown []string `json:"unknown,omitempty" yaml:"unknown,omitempty"`
 	// Fired counts control ids somebody actually invoked, id -> times.
 	Fired map[string]int `json:"fired,omitempty" yaml:"fired,omitempty"`
+	// Width is the browser window's width when Clipped was measured. A box
+	// that fits at 1400px can clip at 600, so a finding without it is a claim
+	// about no screen in particular.
+	Width int `json:"width,omitempty" yaml:"width,omitempty"`
+	// Clipped are the boxes whose content did not fit them at that width, from
+	// the renderers that measure: `ui` (its own components, named by the panel
+	// they are in) and `html` (the widget's page, and boxes in it that cut).
+	Clipped []Clip `json:"clipped,omitempty" yaml:"clipped,omitempty"`
 }
+
+// Clip is one box whose content is larger than the box, as a browser measured
+// it. X and Y are how many pixels do not fit, across and down.
+type Clip struct {
+	Where string `json:"where"       yaml:"where"`
+	Kind  string `json:"kind"        yaml:"kind"`
+	X     int    `json:"x,omitempty" yaml:"x,omitempty"`
+	Y     int    `json:"y,omitempty" yaml:"y,omitempty"`
+}
+
+// The three kinds of not fitting, worst first.
+//
+//	cut     overflow hidden or clip: the rest is not on screen at all
+//	spill   overflow visible: it draws past the box, over whatever is beside it
+//	scroll  overflow auto or scroll: reachable, by scrolling a box in the tab
+const (
+	ClipCut    = "cut"
+	ClipSpill  = "spill"
+	ClipScroll = "scroll"
+)
+
+// maxClips caps one receipt's findings. Forty boxes that do not fit is already
+// a layout to rethink, not a list to read.
+const maxClips = 40
+
+// capClips keeps the findings a receipt may carry: a known kind, a bounded
+// label and bounded numbers. Posted by a browser, so every field is checked.
+func capClips(in []Clip) []Clip {
+	out := make([]Clip, 0, len(in))
+	for _, c := range in {
+		if len(out) >= maxClips {
+			break
+		}
+		switch c.Kind {
+		case ClipCut, ClipSpill, ClipScroll:
+		default:
+			continue
+		}
+		where := strings.TrimSpace(c.Where)
+		if runes := []rune(where); len(runes) > 120 {
+			where = string(runes[:119]) + "…"
+		}
+		out = append(out, Clip{Where: orDash(where), Kind: c.Kind, X: clampPx(c.X), Y: clampPx(c.Y)})
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// maxPx bounds any pixel count a browser posts. A million pixels is a thousand
+// screens; past it, a number is a bug or an attack, not a layout.
+const maxPx = 1_000_000
+
+func clampPx(n int) int { return max(0, min(n, maxPx)) }
 
 // receiptStore is the sidecar file, read and rewritten whole under one lock.
 //
@@ -115,8 +178,10 @@ func (r *receiptStore) record(in Receipt) Receipt {
 		Undeclared: capIDs(in.Undeclared),
 		Unknown:    capIDs(in.Unknown),
 		Fired:      map[string]int{},
+		Width:      clampPx(in.Width),
+		Clipped:    capClips(in.Clipped),
 	}
-	// Controls, undeclared and unknown describe THIS mount and are replaced:
+	// Controls, undeclared, unknown and clipped describe THIS mount and are replaced:
 	// a marker that was fixed must stop being reported, or the receipt becomes a
 	// list of things that were once wrong. Fired counts accumulate, because a
 	// press that happened did happen.
@@ -272,10 +337,42 @@ func RenderedHuman(tab string, list []Receipt) string {
 		if len(r.Fired) > 0 {
 			fmt.Fprintf(&b, "  pressed        : %s\n", firedList(r.Fired))
 		}
+		if len(r.Clipped) > 0 {
+			b.WriteString(ClipsHuman(r.Width, r.Clipped, "  "))
+		}
 	}
 	b.WriteString("\nWhat this is not evidence of, both of them on purpose:\n")
 	b.WriteString("  · no receipt means nobody had the tab OPEN in a browser — not that it failed to render.\n")
 	b.WriteString("  · a control listed here was REACHED. It says nothing about whether it behaved correctly.\n")
+	b.WriteString("  · \"does not fit\" is measured at the width that browser had, on ui and html tabs only:\n")
+	b.WriteString("    an empty list says nothing about a narrower window, or about the other renderers.\n")
+	return b.String()
+}
+
+// ClipsHuman prints what did not fit, one box per line, worst kind first. It is
+// shared with `aboard shot`, which measures the same way in its own window.
+func ClipsHuman(width int, clips []Clip, indent string) string {
+	var b strings.Builder
+	at := ""
+	if width > 0 {
+		at = fmt.Sprintf(" at %dpx wide", width)
+	}
+	fmt.Fprintf(&b, "%sdoes not fit%s:\n", indent, at)
+	for _, kind := range []string{ClipCut, ClipSpill, ClipScroll} {
+		for _, c := range clips {
+			if c.Kind != kind {
+				continue
+			}
+			var by []string
+			if c.X > 0 {
+				by = append(by, fmt.Sprintf("%dpx across", c.X))
+			}
+			if c.Y > 0 {
+				by = append(by, fmt.Sprintf("%dpx down", c.Y))
+			}
+			fmt.Fprintf(&b, "%s  %-6s %s — %s\n", indent, c.Kind, c.Where, strings.Join(by, ", "))
+		}
+	}
 	return b.String()
 }
 

@@ -1584,9 +1584,46 @@
                         {
                           "type": "caption",
                           "value": "Both sides of a pair resolve a {bind}. Type in the Input panel and these change — that is what kv is for, and it is the case that used to render [object Object], because kv resolved the pairs array but not the values inside it."
+                        },
+                        {
+                          "columns": [
+                            {
+                              "id": "field",
+                              "label": "field"
+                            },
+                            {
+                              "id": "value",
+                              "label": "live value"
+                            }
+                          ],
+                          "rows": [
+                            {
+                              "field": "text you typed",
+                              "value": {
+                                "bind": "demo.text"
+                              }
+                            },
+                            {
+                              "field": "level",
+                              "value": {
+                                "bind": "demo.level"
+                              }
+                            },
+                            {
+                              "field": "components",
+                              "value": {
+                                "bind": "demo.count"
+                              }
+                            }
+                          ],
+                          "type": "table"
+                        },
+                        {
+                          "type": "caption",
+                          "value": "A table cell resolves a {bind} the same way. It used to print [object Object] here while aboard export printed the answer, so an agent checking its tab through export saw a table the human never did."
                         }
                       ],
-                      "title": "kv, reading state.data",
+                      "title": "kv and table, reading state.data",
                       "type": "card"
                     },
                     {

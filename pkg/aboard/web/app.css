@@ -560,7 +560,6 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   display: flex;
   align-items: baseline;
   gap: 9px;
-  margin-top: 10px;
   padding: 2px 1px 7px;
   border-bottom: 1px solid var(--line);
   font-size: 0.85rem;
@@ -598,6 +597,77 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 }
 
 .ask-label { flex: 0 0 auto; color: var(--mark); }
+
+/* `hidden` has to be said out loud for both strips. `display: flex` above is an
+   author rule and the browser's own `[hidden] { display: none }` is not, so the
+   attribute lost: a tab with no note drew an empty "THIS TAB IS FOR" line with
+   an Add button, while the shell set `hidden` on it and every comment here said
+   the strip appears only once a note is written. A line of the sticky head on
+   every tab without a note, unnoticed because the example board gives every tab
+   one. */
+.tab-note[hidden], .tab-asks[hidden] { display: none; }
+
+/* The fold around both strips: a disclosure button to the left, and the two
+   strips — or, folded, one line standing in for them — to its right. Aligned on
+   the first baseline, so the triangle sits on the line it folds whichever strip
+   happens to come first. The margin that used to be the note's is the fold's,
+   so the gap under the tab strip is the same whichever of the three is on top. */
+.tab-context {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-top: 10px;
+}
+.tab-context[hidden] { display: none; }
+.context-body { flex: 1 1 auto; min-width: 0; }
+.tab-note[hidden] + .tab-asks { margin-top: 0; }
+
+/* A triangle rather than a bordered button: it is a disclosure, and a box on
+   the left of the purpose line is exactly the weight taken off it on
+   2026-08-27 so it would stop reading as a notice. */
+.context-toggle {
+  flex: 0 0 auto;
+  background: none;
+  border-color: transparent;
+  padding: 1px 4px;
+  color: var(--dim);
+}
+
+.tab-context[data-folded="yes"] .tab-note,
+.tab-context[data-folded="yes"] .tab-asks,
+.tab-context[data-folded="no"] .context-summary { display: none; }
+
+/* Folded: one line, the note's caption shape, clipped rather than wrapped —
+   the whole reason to fold is that a long note costs three lines. The count of
+   the human's unanswered notes keeps --mark and never shrinks, because it is
+   the part of this line that must not be the one cut off. */
+.context-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  padding: 2px 1px 7px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.context-summary-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.context-summary-asks {
+  flex: 0 0 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--mark);
+  white-space: nowrap;
+}
+.context-summary-asks[hidden] { display: none; }
 .ask-body { flex: 1 1 auto; min-width: 0; }
 
 .ask-list { list-style: none; margin: 0 0 4px; padding: 0; }

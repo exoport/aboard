@@ -157,6 +157,29 @@
   <button type="button" class="icon-btn tab-add" id="add-tab" title="Add a tab">+</button>
 </div>
 
+  <!-- The two strips below fold into ONE line, and the fold is remembered.
+       Both live in the sticky head, so together they cost their height on every
+       tab and at every scroll offset: measured at about a third of a 900px
+       window on a `ui` tab with a long note, before the tab's own content began.
+       The note is written once and read rarely; the requests strip is an input
+       row the human uses when they have something to say.
+
+       Folded, the line keeps what must not go quiet: the start of the note, and
+       how many of the human's own notes are still unanswered. The choice is per
+       VIEWER and global rather than per tab — the content is per tab, but the
+       preference is about screen space — so it lives in localStorage and never
+       goes near aboard.json. -->
+  <div class="tab-context" id="tab-context" data-folded="no" hidden>
+  <button type="button" class="icon-btn context-toggle" id="context-toggle"
+    aria-expanded="true" aria-controls="tab-context-body"></button>
+  <div class="context-body" id="tab-context-body">
+
+  <div class="context-summary" id="context-summary">
+    <span class="tab-note-label" id="context-summary-label">this tab is for</span>
+    <span class="context-summary-text" id="context-summary-text"></span>
+    <span class="context-summary-asks" id="context-summary-asks" hidden></span>
+  </div>
+
   <div class="tab-note" id="tab-note" hidden>
     <span class="tab-note-label">this tab is for</span>
     <span class="tab-note-text" id="tab-note-text"></span>
@@ -188,6 +211,9 @@
       </div>
     </div>
   </div>
+
+  </div><!-- /.context-body -->
+  </div><!-- /.tab-context -->
 
 </div><!-- /.board-head -->
 
@@ -1048,6 +1074,7 @@ const $tabNoteText = document.getElementById('tab-note-text');
 const $tabNoteEdit = document.getElementById('tab-note-edit');
 
 function renderTabNote() {
+  renderContext();
   const tab = tabById(activeId);
   if (!tab) { $tabNote.hidden = true; return; }
   const note = typeof tab.note === 'string' ? tab.note.trim() : '';
@@ -1059,6 +1086,7 @@ function renderTabNote() {
 function editTabNote() {
   const tab = tabById(activeId);
   if (!tab) return;
+  unfoldContext();
   const editor = inlineEditor({
     value: typeof tab.note === 'string' ? tab.note : '',
     placeholder: 'What is this tab for? Context an agent cannot infer from its contents.',
@@ -1173,6 +1201,7 @@ function askRow(tab, ask) {
 }
 
 function renderTabAsks() {
+  renderContext();
   const tab = tabById(activeId);
   $tabAsks.hidden = !tab;
   if (!tab) return;
@@ -1222,6 +1251,70 @@ $tabAsksInput.addEventListener('keydown', (e) => {
   e.preventDefault();
   addAsk();
 });
+
+/* ---------- folding both strips into one line ---------- */
+
+// Per viewer and global: which tab you are on changes what the two strips SAY,
+// never whether you want them taking the room. localStorage, guarded like every
+// other storage access here, because a frame refused storage must lose the
+// preference and not the page.
+//
+// What the folded line keeps is the point of the design, not decoration. The
+// note's first words stay, so the tab still says what it is for at a glance;
+// and the count of the human's own notes still waiting stays, because a fold
+// that hid "you asked for something here and nobody answered" would be the
+// requests strip going quiet exactly when it matters. The tab strip carries the
+// same count, but under ?chrome=notabs there is no tab strip.
+
+const FOLD_KEY = 'aboard.context';
+const $context = document.getElementById('tab-context');
+const $contextToggle = document.getElementById('context-toggle');
+const $contextSummary = document.getElementById('context-summary');
+const $contextSummaryLabel = document.getElementById('context-summary-label');
+const $contextSummaryText = document.getElementById('context-summary-text');
+const $contextSummaryAsks = document.getElementById('context-summary-asks');
+
+let contextFolded = (() => {
+  try { return localStorage.getItem(FOLD_KEY) === 'folded'; } catch { return false; }
+})();
+
+function setContextFolded(folded) {
+  contextFolded = folded;
+  try { localStorage.setItem(FOLD_KEY, folded ? 'folded' : 'open'); } catch {}
+  renderContext();
+}
+
+function renderContext() {
+  const tab = tabById(activeId);
+  $context.hidden = !tab;
+  if (!tab) return;
+  $context.dataset.folded = contextFolded ? 'yes' : 'no';
+  $contextToggle.textContent = contextFolded ? '▸' : '▾';
+  $contextToggle.setAttribute('aria-expanded', String(!contextFolded));
+  $contextToggle.title = contextFolded
+    ? 'Show what this tab is for and the notes for the agent'
+    : 'Fold what this tab is for and the notes for the agent into one line';
+  $contextToggle.setAttribute('aria-label', $contextToggle.title);
+
+  const note = typeof tab.note === 'string' ? tab.note.trim() : '';
+  const pending = asksOf(tab).filter((ask) => !ask.done).length;
+  const unanswered = `${pending} note${pending === 1 ? '' : 's'} for the agent`;
+  $contextSummaryLabel.textContent = note ? 'this tab is for' : 'notes for the agent';
+  $contextSummaryLabel.classList.toggle('ask-label', !note);
+  $contextSummaryText.textContent = note || (pending ? `${pending} not yet answered` : 'none open');
+  $contextSummaryAsks.hidden = !(note && pending);
+  $contextSummaryAsks.textContent = unanswered;
+}
+
+// Anything that needs a strip open opens it first. Editing the note, or leaving
+// a request from the tab's context menu, while the fold hides the very input
+// being asked for would be a gesture that does nothing visible.
+function unfoldContext() {
+  if (contextFolded) setContextFolded(false);
+}
+
+$contextToggle.addEventListener('click', () => setContextFolded(!contextFolded));
+$contextSummary.addEventListener('click', unfoldContext);
 
 /* ---------- help, and keys for the things you repeat ---------- */
 
@@ -1312,7 +1405,7 @@ function openHelp() {
     ['1 … 9', 'jump to that tab'],
     ['Escape', 'close a panel or menu'],
     ['right-click', 'copy an id, a link to it, or it as markdown'],
-    ['#tab=ab71&node=ab58', 'a link that opens one node, not just the tab'],
+    ['#tab=ab71&node=ab58', 'a link that opens one node, not just the tab — on a ui tab, node= may name a panel by its label'],
   ], true));
 
   if (type && HELP[type]) {
@@ -1364,6 +1457,7 @@ function openHelp() {
     ['heartbeat', 'when an agent maintains a tab, how long ago it last said anything'],
     ['this tab is for', "the tab's purpose, written by the agent that opened it. Yours to edit, and an agent reads it"],
     ['notes for the agent', 'ask for something to be fixed here. A session picks it up and ticks it off; ✕ removes yours'],
+    ['▾ / ▸', 'fold both of those into one line, on every tab, to give the tab its room back. The line keeps the note’s first words and how many of your notes are unanswered. Yours alone, remembered in this browser'],
     ['reload', 'the page reloads itself when its own code changes — no need to reload webviews'],
     ['version', 'which binary is serving — the commit it was built from, +dirty if uncommitted'],
     ['☾ / ☀', 'switch between the dark and light themes. Yours alone — it is remembered in this browser and changes nothing for anyone else'],
@@ -1643,7 +1737,7 @@ function buildTabs() {
         { label: tab.note ? 'Edit what this tab is for' : 'Say what this tab is for',
           hint: 'note', run: () => { activate(tab.id); editTabNote(); } },
         { label: 'Leave a note for the agent',
-          hint: 'request', run: () => { activate(tab.id); $tabAsksInput.focus(); } },
+          hint: 'request', run: () => { activate(tab.id); unfoldContext(); $tabAsksInput.focus(); } },
         'separator',
         md && { label: 'Copy as markdown', hint: `${md.split('\n').length} lines`,
           run: (ev) => copyText(md, ev) },
@@ -2111,6 +2205,12 @@ function sweepReceipt(root, tab, mount) {
   }
   const fired = pendingPresses.get(tab.id) || new Map();
   pendingPresses.delete(tab.id);
+  // What does not fit, from a renderer that can say: `ui` measures its own
+  // components and `html` relays its frame's report; the rest draw the board's
+  // own layouts, which truncate by design and would only be noise. The width
+  // travels with it, because a box that fits at 1400px can clip at 600.
+  let clipped = [];
+  try { clipped = (mounted.get(tab.id)?.handle?.measure?.() || []).slice(0, 40); } catch { /* a report must not break the thing it reports on */ }
   return {
     tab: tab.id,
     type: tab.type,
@@ -2119,10 +2219,19 @@ function sweepReceipt(root, tab, mount) {
     undeclared: [...undeclared],
     unknown: [...unknown],
     fired: Object.fromEntries(fired),
+    width: Math.round(innerWidth),
+    clipped,
   };
 }
 
+// ?shot=1 is a page `aboard shot` loaded, and it posts no receipt. A receipt
+// says a browser somebody was looking at drew the tab; `wait --for "rendered
+// <id>"` is a session waiting for exactly that, and a picture an agent took of
+// the tab must not release it, nor count as a mount in `aboard rendered`.
+const SHOT = new URLSearchParams(location.search).has('shot');
+
 function postReceipt(root, tab, { mount = true } = {}) {
+  if (SHOT) { writeShotReport(); return; }
   let body;
   try { body = JSON.stringify(sweepReceipt(root, tab, mount)); } catch { return; }
   fetch(api('/rendered'), {
@@ -2134,6 +2243,40 @@ function postReceipt(root, tab, { mount = true } = {}) {
     keepalive: true,
   }).catch(() => {});
 }
+
+// On a shot page the sweep goes into the page instead of to the server, where
+// `aboard shot` reads it back out of chromium's --dump-dom: what the headless
+// window drew, at the width it was given, without counting as anyone looking.
+// Escaped so no string in it can close the script element early.
+function writeShotReport() {
+  const tab = tabById(activeId);
+  const entry = activeId && mounted.get(activeId);
+  if (!tab || !entry) return;
+  let report;
+  try { report = JSON.stringify(sweepReceipt(entry.root, tab, false)); } catch { return; }
+  let el = document.getElementById('aboard-shot-report');
+  if (!el) {
+    el = document.createElement('script');
+    el.type = 'application/json';
+    el.id = 'aboard-shot-report';
+    document.body.append(el);
+  }
+  el.textContent = report.replace(/</g, '\\u003c');
+}
+
+// Sweep again when a renderer says its shape changed after the mount's sweep
+// went out: a `ui` panel switch, or an `html` frame reporting what did not fit
+// once it had loaded. Debounced, because a frame reports again after the board
+// resizes it to fit.
+let resweepTimer = null;
+document.addEventListener('aboard:resweep', () => {
+  clearTimeout(resweepTimer);
+  resweepTimer = setTimeout(() => {
+    const tab = tabById(activeId);
+    const entry = activeId && mounted.get(activeId);
+    if (tab && entry) postReceipt(entry.root, tab, { mount: false });
+  }, 300);
+});
 
 // A press is recorded on the way through and reported shortly after, on a
 // debounce.
@@ -2674,6 +2817,22 @@ await loadCapabilities();
 setInterval(refreshWaiters, 30000);
 setInterval(() => { if (waiting.length) paintPoke(); }, 15000);
 goToTarget(readTarget());
+
+// A page `aboard shot` loaded is photographed by chromium's --screenshot, which
+// draws a SCROLLED document wrongly. Measured on 2026-09-22: a deep link that
+// scrolled 465px came out with a 465px blank band above the head, and one to a
+// node 1600px down came out as a solid black frame. At scroll 0 it is right. So
+// here, and only here, the offset a deep link scrolled to is handed to the views
+// as a transform instead: the same picture, painted at scroll 0. The head stays
+// where it is, exactly as it does when a person scrolls.
+if (SHOT && scrollY > 0) {
+  const offset = scrollY;
+  scrollTo(0, 0);
+  document.getElementById('views').style.transform = `translateY(${-offset}px)`;
+}
+// And the report again, now that a deep link has opened whatever it opened: the
+// activation's sweep ran before it.
+if (SHOT) writeShotReport();
 
 // Following a link to a node on the tab you are already on must still move the
 // view, so listen for hash changes rather than only reading it at load.

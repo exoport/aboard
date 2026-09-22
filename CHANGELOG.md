@@ -1,5 +1,100 @@
 # CHANGELOG
 
+## Unreleased
+
+What a session in another project found by using the board hard for a day, passed on
+from its `ui` review tab, and the command it had to rebuild by hand to find it.
+`capsHash` moves from `8beefdfe` to **`4a958b30`**: a new command, two new receipt
+fields, and the `ui` spec now documents binds in `table` and `list`, the panel deep link,
+`commonProps` and what it measures. Run `make caps` (or regenerate a copied skill
+reference) after upgrading.
+
+- **`aboard shot <tab>` takes a picture of a tab with a headless browser.** The skill
+  tells every agent to render what it wrote and look before saying it is ready, and
+  the only way to do that was `test/shot.sh`, which exists in this checkout and
+  nowhere else. The session that asked for it had built a proxy to take one picture.
+  The command resolves a tab by id, key or type. `--node` opens a `ui` panel or scrolls
+  to a node, and is refused when the tab has no such thing, because the page would
+  otherwise open on the first panel and look exactly like success. An `html` tab is
+  shot on its own route. A snap browser renders into its own directory and the file
+  is moved, since it cannot write under a hidden directory such as `~/.cache`. The
+  output says what a picture does NOT show. Pictures go to `.aboard/run/shots/`, and
+  the previous one is removed first. It exits 1 if any picture was not written;
+  `test/shot.sh` exited 0 on a partial run, which suits a person reading the
+  terminal and not an agent reading the status. `make shot` now runs it (with
+  `SHOT_FLAGS` for the flags), and `test/shot.sh` is gone.
+- **The board says what does not fit.** A mount receipt now carries, at the width
+  the browser had, every box whose content is larger than the box: `cut` (overflow
+  hidden, so the rest is not on screen), `spill` (it draws past its edge, e.g. an
+  unbroken URL) or `scroll` (a code block or wide table the human must scroll). Each
+  comes with how many pixels do not fit. `aboard rendered` prints it, worst first.
+  `aboard shot` prints the same list for its own window, read from the page through
+  the same chromium run's `--dump-dom`. It catches what a picture hides, like text
+  below a clipped edge or the columns a table scrolls away. Only renderers that
+  measure contribute, so a report is not noise. `ui` measures the components it
+  built in the open panel and names the panel; a panel switch sweeps again, and only
+  the innermost of a nested spill is listed. `html` relays what its frame measures
+  from inside, including a slide cut off at the bottom of an `overflow: hidden` stage;
+  a widget's own scrolling boxes are left out. `stack` passes through what its
+  blocks report. The rest draw the board's own layouts, which truncate on purpose.
+  The idea came from a session that checked 98 HTML slides for overflow by
+  measuring `scrollHeight` through `--dump-dom` instead of looking at 98 pictures,
+  and found four.
+- **A page opened with `?shot=1` posts no mount receipt.** `wait --for "rendered <id>"`
+  is a session waiting for a PERSON to open the tab, and an agent photographing the
+  tab must not release it. The same page paints a scrolled deep link at scroll 0,
+  because chromium's `--screenshot` draws a scrolled document wrongly: measured, a
+  465px scroll left a blank band above the head, and a node 1600px down came out
+  as a black frame.
+
+- **A `ui` `table` resolves a `{bind}` in a cell, and in a column label.** It drew
+  `String(cell)`, so a live column came out as `[object Object]`, while `aboard export`
+  resolved the same cell and printed the answer. `kv` had this exact defect and was fixed
+  on its own. The session that found it could not screenshot the tab, so it checked
+  through export and got a clean read of a table the human saw as a column of objects.
+  `apply --strict` passed because the bind was valid. `list` items had the same
+  asymmetry and resolve now too. The example gallery's Data panel carries a bound table,
+  so the case that broke is also the case the example shows.
+- **A deep link can open a panel of a `ui` tab.** `#tab=<id>&node=<panel label>` opens
+  that panel of a `tabs` component, and every panel on the way to it when they are
+  nested, and `node=` also takes any node's `id`, which it scrolls to. A panel is opened
+  and NOT scrolled to: scrolling to its strip put the strip under the sticky head.
+  Before this a panel could not be addressed: an agent could not send the human to
+  one, and a headless screenshot of a panel-per-item tab always showed the first
+  panel, because a fresh browser profile has no remembered panel. It is navigation,
+  so it is remembered like a click and never written; an agent still cannot read which
+  panel anybody has open.
+- **The note and the requests strip fold into one line, and the fold is remembered.**
+  Both sit in the sticky head, so on a `ui` tab with a long note they, the change
+  banner and the action strip took about a third of a 900px window before the tab's
+  content began. A `▾` beside them folds both into a single line, which keeps the first
+  words of the note and how many of the human's own notes are still unanswered. The
+  setting is per viewer and global (`localStorage`, `aboard.context`), because the
+  content is per tab but the preference is about screen space. Editing the note, or
+  "Leave a note for the agent" from a tab's menu, unfolds it first.
+- **A tab with no note no longer draws an empty "THIS TAB IS FOR" line.** The shell set
+  `hidden` on the strip, and the strip's `display: flex` beat the browser's own `[hidden]`
+  rule, so the attribute did nothing. The result was a line of the sticky head, with an
+  Add button, on every tab without a note. Nobody noticed because every tab on the
+  example board has one.
+- **A `ui` `badge` placed straight into a panel or card no longer stretches full width.**
+  Both are flex columns, so the badge filled the column like a bar.
+- **The skill says how to screenshot a board from any project.** It said `make shot`,
+  which exists only in this repository. It now says `aboard shot`, and keeps the
+  hand-driven chromium command for binaries that do not have it, with `?nosse=1&tab=`,
+  the note that `#<id>` alone does not pick a tab, and the warning that a snap chromium
+  also refuses to write into a hidden directory at the top of `$HOME`. It also points
+  at the recipe library, which `recipes list` cannot show from a project that has not
+  copied a file from it, and notes that `commonProps` (`grow`, `id`) apply to every
+  component.
+- **`decision-wizard-with-live-summary` covers per-item sign-off.** The library recipe
+  gains an approve-and-notes panel (`approve.<id>`, `notes.<id>`), the layout trade
+  between a `row` with `grow` and fields stacked straight in the panel, `table` with
+  bound cells as a third Summary shape on newer binaries, the panel deep link, and one
+  fact that makes the shape safe to adopt: converting an existing tab costs nothing if
+  every bind stays the same, because the human's answers live in `state.data` rather
+  than in the nodes.
+
 ## v0.2.1 — 2026-09-13
 
 One fix to the embedding surface v0.2.0 shipped, found by Moonwatcher the same day

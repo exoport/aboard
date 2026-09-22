@@ -157,6 +157,69 @@ const bridgeScript = `<script>
   // an infinite loop that starves the widget's own rendering. The frame has a
   // generous default height, so fit() is a refinement a widget opts into.
   window.addEventListener('load', function () { try { window.aboard.fit(); } catch (e) {} });
+
+  // What does not fit. The page as a whole against the frame (a 1280px slide in
+  // a 1000px frame), and every box inside it that CUTS its own content — the
+  // overflow: hidden stage whose text runs off the bottom. Boxes that scroll are
+  // left out: inside a widget that is usually the point of them.
+  //
+  // Posted to the board on load and after every resize, which is also how the
+  // parent's own fit() resize is caught: a measurement taken before it would
+  // report a frame that no longer exists. A resize does not call fit(), so this
+  // cannot start the loop the note above is about. Loaded on its own, as
+  // aboard shot does, it writes the report into the page instead, where a
+  // --dump-dom reads it.
+  function describe(el) {
+    var d = el.tagName.toLowerCase();
+    if (el.id) d += '#' + el.id;
+    else if (typeof el.className === 'string' && el.className.trim()) d += '.' + el.className.trim().split(/\s+/)[0];
+    return d.slice(0, 60);
+  }
+  function cuts(value) { return /hidden|clip/.test(value); }
+  function measure() {
+    var de = document.documentElement, body = document.body;
+    if (!de || !body) return;
+    var page = getComputedStyle(body), root = getComputedStyle(de);
+    var out = {
+      __aboard: 'measure',
+      width: de.clientWidth,
+      x: Math.max(de.scrollWidth, body.scrollWidth) - de.clientWidth,
+      y: Math.max(de.scrollHeight, body.scrollHeight) - de.clientHeight,
+      cutX: cuts(page.overflowX) || cuts(root.overflowX),
+      cutY: cuts(page.overflowY) || cuts(root.overflowY),
+      boxes: []
+    };
+    var all = body.getElementsByTagName('*');
+    for (var i = 0; i < all.length && i < 3000 && out.boxes.length < 20; i++) {
+      var el = all[i];
+      if (!el.clientWidth && !el.clientHeight) continue;
+      var ox = el.scrollWidth - el.clientWidth, oy = el.scrollHeight - el.clientHeight;
+      if (ox <= 2 && oy <= 2) continue;
+      var st = getComputedStyle(el);
+      var cx = ox > 2 && cuts(st.overflowX), cy = oy > 2 && cuts(st.overflowY);
+      if (cx || cy) out.boxes.push({ where: describe(el), x: cx ? ox : 0, y: cy ? oy : 0 });
+    }
+    if (parent !== window) { post(out); return; }
+    var clipped = [];
+    if (out.x > 2) clipped.push({ where: 'page', kind: out.cutX ? 'cut' : 'scroll', x: out.x });
+    if (out.y > 2 && out.cutY) clipped.push({ where: 'page', kind: 'cut', y: out.y });
+    for (var j = 0; j < out.boxes.length; j++) {
+      var bx = out.boxes[j];
+      clipped.push({ where: bx.where, kind: 'cut', x: bx.x, y: bx.y });
+    }
+    var report = document.getElementById('aboard-shot-report');
+    if (!report) {
+      report = document.createElement('script');
+      report.type = 'application/json';
+      report.id = 'aboard-shot-report';
+      document.body.appendChild(report);
+    }
+    report.textContent = JSON.stringify({ width: out.width, clipped: clipped }).replace(/</g, '\\u003c');
+  }
+  var measureTimer = null;
+  function measureSoon() { clearTimeout(measureTimer); measureTimer = setTimeout(function () { try { measure(); } catch (e) {} }, 150); }
+  window.addEventListener('load', measureSoon);
+  window.addEventListener('resize', measureSoon);
 })();
 </script>`
 

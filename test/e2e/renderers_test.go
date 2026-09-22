@@ -401,6 +401,40 @@ func TestAUiTabsComponentRemembersItsPanelPerViewer(t *testing.T) {
 	}
 }
 
+// A deep link opens a panel by its label. Before this, a panel could not be
+// addressed at all: an agent could not send the human to one, and a headless
+// screenshot of a panel-per-item tab always showed the first panel, because
+// the open panel lives in the viewer's sessionStorage and a fresh profile has
+// none. `node=` is the parameter that already addresses a node inside a tab;
+// for `ui` it now answers to a panel label as well as a node id.
+func TestADeepLinkOpensAUiPanelByItsLabel(t *testing.T) {
+	covers(t, "ui", "a deep link opens a tabs panel by its label")
+
+	revBefore := readDoc(t)["rev"]
+	s := open(t, "tab=ab133&node=Unknown")
+	if err := expect.Locator(s.view("ab133").Locator(`.uic-tabs button[aria-selected="true"]`)).
+		ToContainText("Unknown"); err != nil {
+		t.Fatalf("?node=Unknown did not open the Unknown panel: %v", err)
+	}
+	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
+		t.Errorf("the panel strip moved and the panel's children were not drawn: %v", err)
+	}
+	// Navigation, not content: opening a panel must never be a write.
+	if got := readDoc(t)["rev"]; got != revBefore {
+		t.Errorf("a deep link into a panel wrote to the board (rev %v -> %v)", revBefore, got)
+	}
+
+	// And a fragment change moves an open page without a reload, as it does for
+	// every other renderer's node.
+	if _, err := s.page.Evaluate(`() => { location.hash = 'tab=ab133&node=Data'; }`); err != nil {
+		t.Fatal(err)
+	}
+	if err := expect.Locator(s.view("ab133").Locator(`.uic-tabs button[aria-selected="true"]`)).
+		ToContainText("Data"); err != nil {
+		t.Errorf("#node=Data did not switch the open panel: %v", err)
+	}
+}
+
 // openGalleryPanel switches the UI gallery's tabs component to the named panel.
 // A helper rather than a line in each test because "the component I want is
 // behind a panel nobody opened" is the commonest way a `ui` assertion fails, and

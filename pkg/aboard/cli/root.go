@@ -97,6 +97,7 @@ Start with:
 		newWatchCmd(opts),
 		newLogCmd(opts),
 		newRenderedCmd(opts),
+		newShotCmd(opts),
 		newUploadsCmd(opts),
 		newExportCmd(opts),
 		newCapabilitiesCmd(opts),

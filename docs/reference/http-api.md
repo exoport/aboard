@@ -26,7 +26,7 @@ prints the same table; the browser suite asserts that every declared path answer
 | GET    | `/journal`          | Recent accepted writes, with the previous state of each changed tab.      |
 | GET    | `/history`          | One tab's recorded prior states, newest first.                            |
 | GET    | `/watch`            | Those writes as JSON lines, as they happen.                               |
-| POST   | `/rendered`         | A mount receipt from the browser: what it drew, and what was pressed.     |
+| POST   | `/rendered`         | A mount receipt from the browser: what it drew, what was pressed, and what did not fit. |
 | POST   | `/log`              | Append output to a tab's sidecar log.                                     |
 | GET    | `/log`              | The tail of one.                                                          |
 | POST   | `/upload`           | An image pasted or dropped by the human.                                  |
@@ -98,16 +98,21 @@ selection, zoom and collapsed blocks out of the document is the same rule.
 
 | in the URL      | what it does                                                                     |
 | --------------- | ---------------------------------------------------------------------------------- |
-| `?tab=<id>`     | Open on that tab. `#tab=<id>&node=<id>` addresses a node inside one, and a fragment change moves the view without reloading the page. |
+| `?tab=<id>`     | Open on that tab. `#tab=<id>&node=<id>` addresses a node inside one, and a fragment change moves the view without reloading the page. On a `ui` tab, `node=` is a node's `id` or a `tabs` panel's label, and every panel on the way to it opens, so `?nosse=1&tab=<id>&node=<label>` is how a headless screenshot reaches a panel that is not the first. |
 | `?chrome=`      | `full` (the default) · `notabs` · `none`. See below.                              |
 | `?embed=top`    | A host runs this page top level and speaks to it on the same window. See [two channels](#two-channels-framed-and-top-level). |
 | `?theme=`       | `dark` · `light`: the variant to paint from the first frame. See [`?theme=`](#theme). |
 | `?nosse=1`      | Do not open the event stream. For headless screenshots, which otherwise never reach network-idle. |
+| `?shot=1`       | A page `aboard shot` loaded. It posts no mount receipt, so `aboard rendered` and `wait --for "rendered <id>"` go on meaning a person had the tab open. It writes the same sweep, including what did not fit, into the page as `<script type="application/json" id="aboard-shot-report">`, which `aboard shot` reads from chromium's `--dump-dom`. If a deep link scrolled the page, the offset moves onto the views as a transform at scroll 0, because chromium's `--screenshot` draws a scrolled document wrongly. |
 | `?probe=1`      | A test seam: exposes the shell's document plumbing on `window.__aboardProbe` for the browser suite. Nothing is exposed without it. |
 
-Two more pieces of per-viewer state live in the browser rather than in the URL, because
+Four more pieces of per-viewer state live in the browser rather than in the URL, because
 nobody would want to type them: which tab you were last on (`localStorage`,
-`aboard.tab`), and where you were on each tab (`sessionStorage`, `aboard.scroll.<tab>`).
+`aboard.tab`), where you were on each tab (`sessionStorage`, `aboard.scroll.<tab>`),
+which panel of a `ui` tab's `tabs` component you had open (`sessionStorage`,
+`aboard.panel.<tab>::<component>`), and whether the note and requests strips are folded
+into one line (`localStorage`, `aboard.context`, one setting for every tab: the content is
+per tab but the preference is about screen space).
 Every tab shares one scrolling document, so without the second one, leaving a long list
 half way down and glancing at another tab lost your place. `sessionStorage` rather than
 `localStorage` because the lifetime that matters is this sitting: it has to survive the
@@ -558,7 +563,8 @@ Server-sent events. Each frame is a JSON object in `data:`, distinguished by its
 | `{"theme": "…"}`       | The project's `.aboard/theme.json` changed on disk; the value is a signature, not the file. The page re-reads `/theme.json` rather than trusting the frame — the same discipline every other ping here follows. |
 
 The stream never closes. That matters for tooling: a headless browser will never reach
-network-idle, so add `?nosse=1` to the page URL when scripting screenshots.
+network-idle, so add `?nosse=1` to the page URL when scripting screenshots, or use
+`aboard shot`, which does.
 
 ## `GET /health`
 
@@ -761,12 +767,16 @@ rides along, and still describes the entry rather than the file it will land in.
 
 ## `POST /rendered`
 
-A **mount receipt**: what the browser drew for one tab, posted after every mount and,
-debounced, after a control is pressed.
+A **mount receipt**: what the browser drew for one tab. It is posted after every mount,
+after a control is pressed (debounced), and when a renderer says its shape changed after
+the mount: a `ui` panel switch, or an `html` frame reporting what did not fit once it has
+loaded.
 
 ```json
 { "tab": "ab133", "type": "ui", "mount": true,
-  "controls": ["fit"], "undeclared": [], "unknown": ["sparkline"], "fired": {"fit": 1} }
+  "controls": ["fit"], "undeclared": [], "unknown": ["sparkline"], "fired": {"fit": 1},
+  "width": 1400,
+  "clipped": [{ "where": "code (panel Data)", "kind": "scroll", "x": 340 }] }
 ```
 
 `controls` are the declared control ids on screen; `undeclared` are ones the renderer
@@ -776,6 +786,25 @@ prop. `fired` is a **delta** since the last post — the server accumulates it �
 distinguishes a mount from a press report, so "mounted 9×" does not come to mean
 "somebody clicked eight times".
 
+`clipped` is what did **not fit** at `width`, the browser window's width in pixels. Each
+entry is one box whose content is larger than the box: `where` names it (`card
+"Proposed" (panel d5)`, `widget div#slide-1`), `x` and `y` are the pixels that do not fit
+across and down, and `kind` says what the human sees:
+
+| `kind`   | the box's overflow | what it means                                                   |
+| -------- | ------------------ | --------------------------------------------------------------- |
+| `cut`    | `hidden` / `clip`  | the rest is not on screen at all                                |
+| `spill`  | `visible`          | it draws past the box, over whatever is beside it               |
+| `scroll` | `auto` / `scroll`  | it can be reached, by scrolling a box inside the tab            |
+
+Only renderers that measure contribute. `ui` measures the components it built, only in
+the open panel, and names the panel. When a spill runs through nested boxes, only the
+innermost is listed. `html` relays what its frame measured from inside: the widget's page
+against the frame, and boxes that cut their own content. Boxes that scroll inside a widget
+are left out, because there scrolling is usually the point. The other renderers draw the
+board's own layouts, which truncate on purpose. `clipped`, like `controls`, is REPLACED
+by each post: a box that was fixed stops being reported. The server keeps at most 40,
+drops any `kind` it does not know, and bounds every label and number.
 `tab` must be a plain id; anything else is `400`, because it becomes a key in a file a
 terminal prints. Everything lands in `.aboard/run/rendered.json` — `rendered.<name>.json`
 on a named board, since tab ids are allocated per board and one file would have held two

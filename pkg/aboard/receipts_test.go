@@ -194,3 +194,54 @@ func TestReceiptIdsAreBounded(t *testing.T) {
 		t.Errorf("blank and over-long ids must be dropped, got %v", got)
 	}
 }
+
+// What did not fit travels with the receipt, with the width it was measured at,
+// and it is REPLACED like the markers: a box that was fixed must stop being
+// reported. Everything in it came from a browser, so it is checked on the way
+// in — an unknown kind is dropped, a label is bounded, a number is clamped.
+func TestAReceiptCarriesWhatDidNotFitAndReplacesIt(t *testing.T) {
+	srv := testServer(t, htmlTabBoard)
+	long := strings.Repeat("w", 300)
+	postReceipt(t, srv, `{"tab":"ab1","type":"ui","mount":true,"width":1400,"clipped":[
+		{"where":"card \"Proposed\" (panel d5)","kind":"spill","x":120},
+		{"where":"code","kind":"scroll","x":340},
+		{"where":"widget div#slide-1","kind":"cut","y":154},
+		{"where":"nonsense","kind":"explode","x":1},
+		{"where":"`+long+`","kind":"cut","x":-5,"y":99999999}]}`)
+
+	got, err := Rendered(t.Context(), srv.root, srv.name, "ab1")
+	if err != nil || len(got) != 1 {
+		t.Fatalf("reading back: %v %+v", err, got)
+	}
+	r := got[0]
+	if r.Width != 1400 {
+		t.Errorf("width = %d, want 1400", r.Width)
+	}
+	if len(r.Clipped) != 4 {
+		t.Fatalf("clipped = %+v, want the four with a known kind", r.Clipped)
+	}
+	last := r.Clipped[3]
+	if len([]rune(last.Where)) > 120 || last.X != 0 || last.Y != 1_000_000 {
+		t.Errorf("an unbounded finding was stored as it came: %+v", last)
+	}
+
+	human := RenderedHuman("ab1", got)
+	for _, want := range []string{
+		"does not fit at 1400px wide", `spill  card "Proposed" (panel d5) — 120px across`,
+		"cut    widget div#slide-1 — 154px down", "measured at the width that browser had",
+	} {
+		if !strings.Contains(human, want) {
+			t.Errorf("rendered does not say %q:\n%s", want, human)
+		}
+	}
+	// Worst first: a cut is listed before a spill, whatever order it came in.
+	if strings.Index(human, "cut    widget") > strings.Index(human, "spill  card") {
+		t.Errorf("findings are not worst-first:\n%s", human)
+	}
+
+	postReceipt(t, srv, `{"tab":"ab1","type":"ui","mount":true,"width":1400}`)
+	got, _ = Rendered(t.Context(), srv.root, srv.name, "ab1")
+	if len(got[0].Clipped) != 0 {
+		t.Errorf("a box that fits now is still reported: %+v", got[0].Clipped)
+	}
+}

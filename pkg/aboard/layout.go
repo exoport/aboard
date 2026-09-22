@@ -20,7 +20,7 @@
 //	.aboard/run/journal.jsonl   the write log
 //	.aboard/run/rendered.json   what a browser reported it drew
 //	.aboard/run/logs/<tab>.log  sidecar command output
-//	.aboard/run/shots/          screenshots from test/shot.sh
+//	.aboard/run/shots/          screenshots from `aboard shot`
 //
 // A project ignores `.aboard/` wholesale and loses nothing it wanted to keep.
 //
@@ -382,10 +382,51 @@ func (r Root) RenderedFile(name string) string {
 	return filepath.Join(r.RunDir(), "rendered."+name+".json")
 }
 
-// ShotsDir is where test/shot.sh writes. Under the run directory because a
-// screenshot is a machine-local artefact, and inside the project because a
-// snap-confined chromium cannot write outside $HOME.
+// ShotsDir is where `aboard shot` writes. Under the run directory because a
+// screenshot is a machine-local artefact, true for this board at this moment.
 func (r Root) ShotsDir() string { return filepath.Join(r.RunDir(), "shots") }
+
+// ShotFile is one screenshot. The caller has already reduced the name to
+// something a filename can hold (shotName in shot.go), exactly like E2ECase.
+func (r Root) ShotFile(name string) string { return filepath.Join(r.ShotsDir(), name+".png") }
+
+// SnapShotStage is where a snap-confined browser renders a screenshot before
+// `aboard shot` moves it into place. A snap may write under $HOME, but not
+// outside it and not inside a hidden directory at its top (~/.cache, ~/.local),
+// so a project in either place got no picture, and the browser's own message
+// for that is "No such file or directory". The snap's own common directory is
+// always writable to it, and it is a real directory the caller can read back.
+func SnapShotStage(home, snap, name string) string {
+	return filepath.Join(home, "snap", snap, "common", "aboard-shots", name)
+}
+
+// BrowserInstallPaths are where a chromium-family browser lives when it is not
+// on $PATH, which on macOS and Windows is the usual case. Here and not in
+// shot.go because building them joins paths, and this is the file that does.
+func BrowserInstallPaths(goos string, getenv func(string) string) []string {
+	switch goos {
+	case "darwin":
+		return []string{
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		}
+	case "windows":
+		var out []string
+		for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
+			base := getenv(env)
+			if base == "" {
+				continue
+			}
+			out = append(out,
+				filepath.Join(base, "Google", "Chrome", "Application", "chrome.exe"),
+				filepath.Join(base, "Chromium", "Application", "chrome.exe"),
+				filepath.Join(base, "Microsoft", "Edge", "Application", "msedge.exe"))
+		}
+		return out
+	}
+	return nil
+}
 
 // E2EDir holds what the browser suite leaves behind when a test fails: the
 // Playwright trace, a screenshot, and the board document as it stood. Beside

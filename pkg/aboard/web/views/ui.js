@@ -52,6 +52,9 @@ const CSS = `
 [data-view="ui"] .uic-caption { margin: 0; font-size: 0.82rem; color: var(--muted); }
 [data-view="ui"] .uic-badge {
   display: inline-block;
+  /* A tag, never a bar: a panel and a card are flex columns, which stretch
+     their children, so a badge put straight into one came out full width. */
+  align-self: flex-start;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem; letter-spacing: 0.05em;
   padding: 2px 7px; border-radius: 2px;
@@ -199,6 +202,12 @@ export function mountUi(root, ctx) {
 
   const data = () => (ctx.state.data && typeof ctx.state.data === 'object' ? ctx.state.data : (ctx.state.data = {}));
 
+  // Every element build() made, with the node it came from and the panels it
+  // sits in, for measure() below. Rebuilt by render(); a panel switch adds its
+  // new children and leaves the old ones detached, which measure() drops.
+  let parts = [];
+  let panelPath = [];
+
   // A bound value: { bind: 'path.to.value' } reads from state.data, so one tree
   // can be re-rendered against changing values without being rewritten.
   function resolve(value) {
@@ -284,10 +293,12 @@ export function mountUi(root, ctx) {
         case 'list': {
           const ul = document.createElement('ul');
           ul.className = 'uic-list';
+          // asText per item, for the same reason as kv and table below: an item
+          // may be a {bind}, and `aboard export` has always resolved one here.
           const items = resolve(node.items);
           for (const item of Array.isArray(items) ? items : []) {
             const li = document.createElement('li');
-            li.textContent = typeof item === 'string' ? item : JSON.stringify(item);
+            li.textContent = asText(item);
             ul.append(li);
           }
           return ul;
@@ -400,13 +411,21 @@ export function mountUi(root, ctx) {
           wrap.className = 'uic-table-wrap';
           const table = document.createElement('table');
           table.className = 'uic-table';
-          const cols = Array.isArray(node.columns) ? node.columns : [];
+          // Every cell, column and header goes through resolve/asText. This drew
+          // String(cell), so a {bind} in a cell came out "[object Object]" — the
+          // defect kv had and lost — while `aboard export` resolved the same cell
+          // and printed the answer. An agent checking its tab through export got
+          // a clean read of a table the human saw as a column of objects.
+          const listed = resolve(node.columns);
+          const cols = Array.isArray(listed) ? listed.map(resolve) : [];
           if (cols.length) {
             const thead = document.createElement('thead');
             const tr = document.createElement('tr');
             for (const col of cols) {
               const th = document.createElement('th');
-              th.textContent = String(col && col.label !== undefined ? col.label : col);
+              th.textContent = col && typeof col === 'object'
+                ? (asText(col.label) || asText(col.id))
+                : asText(col);
               tr.append(th);
             }
             thead.append(tr);
@@ -421,7 +440,7 @@ export function mountUi(root, ctx) {
               : cols.map((col) => row && row[(col && col.id) || col]);
             for (const cell of cells) {
               const td = document.createElement('td');
-              td.textContent = cell === undefined || cell === null ? '' : String(cell);
+              td.textContent = asText(cell);
               tr.append(td);
             }
             tbody.append(tr);
@@ -441,20 +460,26 @@ export function mountUi(root, ctx) {
           const panels = Array.isArray(node.panels) ? node.panels : [];
           const key = panelKey(String((ctx.tab && ctx.tab.id) || ''), node, panels.length);
           let open = Math.min(readPanel(key), Math.max(0, panels.length - 1));
+          // The panels this component sits in, captured now: draw() also runs
+          // from a click, long after render() has unwound panelPath.
+          const outer = panelPath.slice();
           const draw = () => {
             strip.replaceChildren();
             panels.forEach((p, i) => {
               const btn = button(asText(p && p.label) || `panel ${i + 1}`, '',
-                { className: 'uic-tab', onClick: () => { open = i; writePanel(key, i); draw(); } });
+                { className: 'uic-tab', onClick: () => { open = i; writePanel(key, i); draw(); resweep(); } });
               btn.setAttribute('aria-selected', String(i === open));
               strip.append(btn);
             });
             panel.replaceChildren();
             const body = panels[open] && panels[open].children;
+            const saved = panelPath;
+            panelPath = outer.concat(asText(panels[open] && panels[open].label) || `panel ${open + 1}`);
             for (const child of Array.isArray(body) ? body : []) {
               const built = build(child);
               if (built) panel.append(built);
             }
+            panelPath = saved;
           };
           draw();
           box.append(strip, panel);
@@ -585,6 +610,10 @@ export function mountUi(root, ctx) {
 
     if (!el) return null;
     if (node.grow) el.classList.add('uic-grow');
+    // What a deep link's `node=` scrolls to. Only nodes the agent named carry
+    // it; nothing reads it for any other purpose.
+    if (typeof node.id === 'string' && node.id) el.dataset.uiId = node.id;
+    parts.push({ el, node, panel: panelPath.join(' › ') });
     for (const child of kids) {
       const built = build(child);
       if (built) el.append(built);
@@ -595,6 +624,8 @@ export function mountUi(root, ctx) {
   function render() {
     const tree = ctx.state.root;
     host.replaceChildren();
+    parts = [];
+    panelPath = [];
     if (!tree) {
       const p = document.createElement('p');
       p.className = 'uic-caption';
@@ -606,6 +637,34 @@ export function mountUi(root, ctx) {
     if (built) host.append(built);
   }
 
+  // The `tabs` panels between the root and a deep link's target, outermost
+  // first — [{node, index}] — or null when nothing in the tree answers to it.
+  // A target is a panel's LABEL or any node's `id`: a panel has no id of its
+  // own, and its label is the word the human and the agent both already use.
+  function trailTo(target) {
+    const walk = (node, trail) => {
+      if (!node || typeof node !== 'object') return null;
+      if (typeof node.id === 'string' && node.id === target) return trail;
+      if (node.type === 'tabs' && Array.isArray(node.panels)) {
+        for (let i = 0; i < node.panels.length; i++) {
+          const panel = node.panels[i];
+          const here = trail.concat({ node, index: i });
+          if (panel && asText(panel.label) === target) return here;
+          for (const kid of Array.isArray(panel && panel.children) ? panel.children : []) {
+            const found = walk(kid, here);
+            if (found) return found;
+          }
+        }
+      }
+      for (const kid of Array.isArray(node.children) ? node.children : []) {
+        const found = walk(kid, trail);
+        if (found) return found;
+      }
+      return null;
+    };
+    return walk(ctx.state.root, []);
+  }
+
   render();
   return {
     refresh() {
@@ -613,5 +672,96 @@ export function mountUi(root, ctx) {
           /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
       render();
     },
+
+    // Deep links: #tab=ab24&node=d5 opens the panel labelled d5 — and every
+    // panel on the way to it, when `tabs` are nested — then brings it into view.
+    // Before this a panel could not be addressed at all, so an agent could not
+    // send the human to one and a headless screenshot always showed the first.
+    //
+    // Opening a panel this way is the viewer's own navigation, exactly as a
+    // click would be, so it is remembered the same way and never written to the
+    // document. An agent still cannot READ which panel anybody has open.
+    focus(id) {
+      const target = String(id);
+      const trail = trailTo(target);
+      if (!trail) return false;
+      const tabId = String((ctx.tab && ctx.tab.id) || '');
+      for (const { node, index } of trail) writePanel(panelKey(tabId, node, node.panels.length), index);
+      render();
+      // A node named by id is scrolled to, as dag and table do. A PANEL is not:
+      // opening it is the whole of the request, and scrolling to its strip put
+      // the strip underneath the sticky head — measured, 465px down with the
+      // strip at 150 under a 265px head — so the link hid the very thing it
+      // opened. Compared as values, not built into a selector: `CSS` in this
+      // module is the stylesheet string above, not the global one.
+      const named = [...host.querySelectorAll('[data-ui-id]')].find((el) => el.dataset.uiId === target);
+      if (named) named.scrollIntoView({ block: 'center' });
+      return true;
+    },
+
+    // What does not fit, as the browser laid it out at this width: every
+    // component whose content is larger than its own box. Called by the shell's
+    // receipt sweep, so it reaches `aboard rendered` and `aboard shot`. Only the
+    // open panel is built, so only what is on screen can be measured, and each
+    // finding names the panel it is in.
+    measure() {
+      parts = parts.filter((p) => p.el.isConnected);
+      const found = [];
+      for (const p of parts) {
+        const el = p.el;
+        if (!el.clientWidth && !el.clientHeight) continue;
+        const x = el.scrollWidth - el.clientWidth;
+        const y = el.scrollHeight - el.clientHeight;
+        if (x <= CLIP_SLACK && y <= CLIP_SLACK) continue;
+        const style = getComputedStyle(el);
+        const kinds = [];
+        if (x > CLIP_SLACK) kinds.push(clipKind(style.overflowX));
+        if (y > CLIP_SLACK) kinds.push(clipKind(style.overflowY));
+        found.push({
+          el,
+          where: describePart(p),
+          kind: CLIP_KINDS.find((k) => kinds.includes(k)),
+          x: x > CLIP_SLACK ? x : 0,
+          y: y > CLIP_SLACK ? y : 0,
+        });
+      }
+      // A spill makes every box around it spill as well, since overflow that is
+      // visible counts toward each ancestor's scroll size. Only the innermost is
+      // news; the rest would say the same thing once per level of nesting.
+      return found
+        .filter((f) => f.kind !== 'spill'
+          || !found.some((g) => g !== f && g.kind === 'spill' && f.el.contains(g.el)))
+        .map(({ where, kind, x, y }) => ({ where, kind, x, y }));
+    },
   };
+
+  function resweep() {
+    document.dispatchEvent(new CustomEvent('aboard:resweep'));
+  }
+
+  function describePart(p) {
+    const n = p.node;
+    const name = n.id ? `#${n.id}`
+      : [n.title, n.label, n.value, n.text].map((v) => asText(v)).find((v) => v) || '';
+    const short = name.length > 40 ? name.slice(0, 39) + '…' : name;
+    let where = n.type + (short && !short.startsWith('#') ? ` "${short}"` : short ? ` ${short}` : '');
+    if (p.panel) where += ` (panel ${p.panel})`;
+    return where;
+  }
+}
+
+// How far past its box content may reach before it counts. A pixel or two is
+// sub-pixel rounding and a tab button's -1px margin, not anything a person sees.
+const CLIP_SLACK = 2;
+
+// Worst first, which is the order a finding with two axes is named by.
+//   cut    overflow hidden or clip: the rest is not on screen at all
+//   spill  overflow visible: it draws past the box, over whatever is beside it
+//   scroll overflow auto or scroll: reachable, by scrolling a box inside the tab
+const CLIP_KINDS = ['cut', 'spill', 'scroll'];
+
+function clipKind(overflow) {
+  if (/hidden|clip/.test(overflow)) return 'cut';
+  if (/auto|scroll/.test(overflow)) return 'scroll';
+  return 'spill';
 }

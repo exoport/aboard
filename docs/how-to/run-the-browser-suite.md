@@ -224,11 +224,13 @@ a test in `test/e2e/`. See the skill's multi-session reference.
 ## Screenshots of your own board
 
 `make e2e` screenshots only a temporary board that is then deleted. To look at
-the board you are actually working on, that is still `make shot`:
+the board you are actually working on, use `aboard shot`, or `make shot`, which
+runs it with this checkout's binary:
 
 ```bash
-make shot SHOT_TABS="ab133 ab22#help"
+make shot SHOT_TABS="ab133 ab22" SHOT_FLAGS="--help-panel"
 ```
 
-It needs a running server, takes an optional `PROJECT=`, and only reads the board
-— it writes pictures into that project's `.aboard/run/shots/`.
+It needs a running server, takes an optional `PROJECT=`, and only reads the board.
+It writes pictures into that project's `.aboard/run/shots/`. See
+[how to look at a tab](look-at-a-tab.md).

@@ -274,6 +274,36 @@ func TestAKvComponentResolvesABind(t *testing.T) {
 	}
 }
 
+// `table` had kv's defect after kv lost it: String(cell), so a {bind} in a cell
+// drew "[object Object]" — while `aboard export` resolved the same cell and
+// printed the answer. An agent that checked its tab through export, because it
+// could not screenshot one, got a clean read of a table the human saw as a column
+// of objects, and `apply --strict` was silent because the bind was valid.
+func TestAUiTableResolvesABindInACell(t *testing.T) {
+	written := "a table cell, resolved"
+	d := readDoc(t)
+	data, _ := d.state(t, "ab133")["data"].(map[string]any)
+	demo, _ := data["demo"].(map[string]any)
+	demo["text"] = written
+	apply(t, d)
+
+	s := open(t, "tab=ab133")
+	openGalleryPanel(t, s, "Data")
+
+	live := s.view("ab133").Locator(".uic-table").Filter(playwright.LocatorFilterOptions{
+		HasText: "live value",
+	}).First()
+	if err := expect.Locator(live).ToBeVisible(); err != nil {
+		t.Fatalf("the gallery has no table with a bound cell: %v", err)
+	}
+	if err := expect.Locator(live).Not().ToContainText("[object Object]"); err != nil {
+		t.Errorf("a table drew a {bind} as an object: %v", err)
+	}
+	if err := expect.Locator(live).ToContainText(written); err != nil {
+		t.Errorf("a table cell did not resolve demo.text: %v", err)
+	}
+}
+
 // A deliberately-invalid node renders a VISIBLE marker rather than nothing.
 //
 // `ab133`'s "Unknown" panel contains a `sparkline` on purpose, and every write

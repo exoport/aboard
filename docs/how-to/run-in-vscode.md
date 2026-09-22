@@ -187,11 +187,14 @@ including what `GET /health` reports about a board served under a prefix.
 
 ## Screenshots of a docked board
 
-For scripted screenshots, two things bite and both have the same fix — use the repo's
-`test/shot.sh` (`make shot`) rather than a hand-rolled chromium command:
+For scripted screenshots, use `aboard shot <tab>` rather than a hand-rolled chromium
+command. It handles the two things that bite here, among others:
 
 - a headless shot needs `?nosse=1`, because the SSE stream never closes, so the browser never reaches network-idle and writes no file at all;
-- headless chromium does not reliably paint iframe content, so shoot an `html` tab at `/tab/<id>/html` directly instead of shooting the tab that frames it.
+- headless chromium does not reliably paint iframe content, so an `html` tab is shot at `/tab/<id>/html` directly instead of through the tab that frames it.
+
+`--width` narrows the window to the width of a docked panel. See
+[how to look at a tab](look-at-a-tab.md).
 
 ## See also
 

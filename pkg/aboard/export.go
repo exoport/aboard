@@ -734,7 +734,7 @@ func writeUIItems(b *strings.Builder, spec typeSpec, typeName string, obj, data 
 		}
 	case "table":
 		writeUITable(b, obj, data, pad)
-	case "tabs":
+	case uiComponentTabs:
 		for _, panel := range resolvedMaps(obj["panels"], data) {
 			fmt.Fprintf(b, "%s- panel: %s\n", pad, uiText(resolveUI(panel["label"], data)))
 			for _, kid := range asList(panel["children"]) {

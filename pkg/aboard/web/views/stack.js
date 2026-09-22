@@ -270,5 +270,19 @@ export function mountStack(root, ctx) {
     destroy() {
       for (const id of [...mountedBlocks.keys()]) dropBlock(id);
     },
+    // What does not fit, from every open block whose renderer measures (`ui`
+    // and `html`), named by the block it is in. A collapsed block is not drawn,
+    // so it has nothing to report.
+    measure() {
+      const out = [];
+      for (const [id, entry] of mountedBlocks) {
+        let found = [];
+        try { found = entry.handle?.measure?.() || []; } catch { /* a block must not stop the stack */ }
+        const block = blocks().find((b) => b.id === id);
+        const name = (block && (block.title || block.type)) || id;
+        for (const f of found) out.push({ ...f, where: `block "${name}": ${f.where}` });
+      }
+      return out;
+    },
   };
 }
