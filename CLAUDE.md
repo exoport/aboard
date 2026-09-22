@@ -130,8 +130,9 @@ trustworthy run, and nothing above that directory holds an `.aboard/`.
 **2026-09-22 — a review tab in another project, `aboard shot`, and v0.3.0.** A session
 in `able_framework_definition` (running `ape aboard`) built a panel-per-item `ui` review
 tab, hit four things, and passed them on with the human's say-so. It is all under
-**v0.3.0** in the CHANGELOG, **stamped and committed, and not yet pushed or tagged**:
-that waits for the human to run the release. `capsHash` is **`4a958b30`**. In short:
+**v0.3.0**, **released the same day**: CI run 17 green on `453bfc5`, six platform
+archives, checksums, and a cosign bundle verified `Verified OK`. `ape aboard` has it only
+once ape moves its dependency to v0.3.0. `capsHash` is **`4a958b30`**. In short:
 - the `ui` `table` drew a `{bind}` cell as `[object Object]` while `export` resolved it, so
   an agent checking through export got a clean read of a broken table (`list` too);
 - `#tab=<id>&node=<panel label>` opens a `ui` panel, which nothing could address before;
@@ -162,7 +163,8 @@ human.** **Both repositories are PUBLIC and RELEASED as of 2026-08-28**: `aboard
 **v0.1.0** (six platform archives, checksums, a cosign bundle verified `Verified OK`,
 and `go install github.com/exoport/aboard/cmd/aboard@v0.1.0` working from the module
 proxy) and `aboard_vscode` at **v0.1.1** (the `.vsix` attached to its release; not on
-any marketplace, which stays a decision rather than an omission).
+any marketplace, which stays a decision rather than an omission). `aboard` has since
+reached **v0.3.0** (2026-09-22).
 
 **The first push is what Windows CI was for, and it found four rounds of failures —
 two of them real product bugs.** `make ci-local` says it cannot catch Windows runtime
