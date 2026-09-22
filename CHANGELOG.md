@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## v0.3.0 — 2026-09-22
 
 What a session in another project found by using the board hard for a day, passed on
 from its `ui` review tab, and the command it had to rebuild by hand to find it.
@@ -8,6 +8,10 @@ from its `ui` review tab, and the command it had to rebuild by hand to find it.
 fields, and the `ui` spec now documents binds in `table` and `list`, the panel deep link,
 `commonProps` and what it measures. Run `make caps` (or regenerate a copied skill
 reference) after upgrading.
+
+A minor version rather than a patch, for the same reason as v0.2.0: a caller can now
+build on things that did not exist. There is a command, `shot`; two receipt fields,
+`width` and `clipped`; and a URL parameter, `?shot=1`.
 
 - **`aboard shot <tab>` takes a picture of a tab with a headless browser.** The skill
   tells every agent to render what it wrote and look before saying it is ready, and
