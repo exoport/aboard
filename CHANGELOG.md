@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## Unreleased
+
+- **The test-only change summary now counts `requests`**, which the write path always
+  did. A `done` stamp read as "nothing changed" to the byte-level comparison the tests
+  check the journal against. Nothing a user could see was affected.
+
 ## v0.3.0 — 2026-09-22
 
 What a session in another project found by using the board hard for a day, passed on

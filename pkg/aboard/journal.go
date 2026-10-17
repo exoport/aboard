@@ -280,6 +280,12 @@ func changeSummary(currentRaw []byte, next []tab, by, origin string) JournalEntr
 // said nothing, `aboard watch` emitted nothing, and `aboard wait --for "tab ab126"`
 // waited for a change that had already happened. Found by dropping a tab with a
 // bare POST and looking at the journal afterwards.
+//
+// `requests` was missing as well, and only HERE: reconcileDoc has always put the
+// list in its own comparison, so the write path journals a `done` stamp, while
+// this byte-level form — the one the tests state "the marker and the journal
+// agree" against — said a stamp changed nothing. Found when a test of `quiet`
+// asked both questions of a done stamp.
 func changedAgainst(cur *stateDoc, t *docTab) bool {
 	j, existed := cur.byID[t.ID]
 	if !existed {
@@ -291,6 +297,7 @@ func changedAgainst(cur *stateDoc, t *docTab) bool {
 		prev.Type != t.Type ||
 		prev.StateFrom != t.StateFrom ||
 		prev.Note != t.Note ||
+		!sameRequests(prev.Requests, t.Requests) ||
 		!sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval)
 }
 

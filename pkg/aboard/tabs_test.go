@@ -144,6 +144,7 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 	base := tab{
 		ID: "ab1", Name: "Plan", Type: "notes",
 		State: json.RawMessage(`{"text":"one"}`), Note: "n", StateFrom: "",
+		Requests: []requestAsk{{ID: "ab5", At: "T0", By: actorHuman, Text: "fix it"}},
 	}
 	for _, tc := range []struct {
 		what   string
@@ -155,6 +156,10 @@ func TestMarkerAndJournalAgreeOnWhatChanged(t *testing.T) {
 		{"type", func(x tab) tab { x.Type = "markdown"; return x }, true},
 		{"stateFrom", func(x tab) tab { x.StateFrom = "ab9"; return x }, true},
 		{"note", func(x tab) tab { x.Note = "rewritten"; return x }, true},
+		{"done stamp", func(x tab) tab {
+			x.Requests = []requestAsk{{ID: "ab5", At: "T0", By: actorHuman, Text: "fix it", Done: &doneStamp{Note: "fixed"}}}
+			return x
+		}, true},
 		{"nothing", func(x tab) tab { return x }, false},
 	} {
 		current := boardJSON(t, base)
