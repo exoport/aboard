@@ -297,6 +297,7 @@ func changedAgainst(cur *stateDoc, t *docTab) bool {
 		prev.Type != t.Type ||
 		prev.StateFrom != t.StateFrom ||
 		prev.Note != t.Note ||
+		prev.Quiet != t.Quiet ||
 		!sameRequests(prev.Requests, t.Requests) ||
 		!sameRemovalAsk(prev.PendingRemoval, t.PendingRemoval)
 }
@@ -363,6 +364,10 @@ type recordedTab struct {
 	Type      string
 	Note      string
 	StateFrom string
+	// Quiet is false for every record written before the field existed, and
+	// that is the truth rather than a default: a board that did not know the
+	// field dropped it on decode, so no tab it wrote could have been quiet.
+	Quiet bool
 	// Requests is the human's request list as it stood, encoded. Raw rather than
 	// typed because its one reader compares it against the same field decoded
 	// out of a caller's document, and a comparison of two JSON values is the
@@ -395,6 +400,7 @@ func (e *JournalEntry) recorded(id string) (recordedTab, bool) {
 	rec := recordedTab{
 		State: t.State, Fields: true,
 		Name: t.Name, Type: t.Type, Note: t.Note, StateFrom: t.StateFrom,
+		Quiet: t.Quiet,
 		Whole: raw,
 	}
 	// Encoded back out rather than kept as the struct, so the merge compares it

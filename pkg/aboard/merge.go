@@ -280,7 +280,9 @@ func mergeTabs(ours, fresh map[string]any, moved map[string]movedTab) (tabs []an
 // to a DIFFERENT tab disagreed with the fresh copy through no fault of ours, and
 // the merge stopped on a collision that had exactly one side. Now the record
 // holds those four, they are compared against it like the state, and that case
-// merges.
+// merges. `quiet` joined them later, compared the same way: a tab somebody made
+// quiet (or loud) while we wrote is theirs, and one we changed it on too is a
+// collision named by that field.
 //
 // The old comparison survives for a generation-1 entry, and so does its wording:
 // the record genuinely cannot attribute the change, and stopping is the safe half
@@ -290,9 +292,9 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, was recordedTab) er
 		return fmt.Errorf("%w: %s changed on the board while you were changing it — re-read the board, redo the edit, apply again", ErrCollision, id)
 	}
 	// The human's requests, compared like the state and for a sharper reason than
-	// the four fields below. `aboard requests done` is a write whose ENTIRE
+	// the fields below. `aboard requests done` is a write whose ENTIRE
 	// content is a change to this list; without this line the merge would find
-	// our state and our four fields unchanged, take the board's copy of the tab,
+	// our state and our other fields unchanged, take the board's copy of the tab,
 	// and hand back "applied (merged)" having silently dropped the one thing the
 	// write was for. Only for a schema-2 record: an older entry does not carry
 	// the list, and a comparison against the live tab would call the human's own
@@ -300,17 +302,17 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, was recordedTab) er
 	if was.Fields && !sameJSON(mustJSON(ours[keyRequests]), was.Requests) {
 		return fmt.Errorf("%w: %s — its requests changed on the board while you were changing them too — re-read the board, redo the edit, apply again", ErrCollision, id)
 	}
-	for _, field := range []string{keyName, keyType, keyNote, keyStateFrom} {
+	for _, field := range []string{keyName, keyType, keyNote, keyStateFrom, keyQuiet} {
 		if !was.Fields {
 			// Pre-schema-2 record: the best available comparison is against the
 			// live tab, and it cannot tell our edit from theirs.
-			if !sameJSON(mustJSON(ours[field]), mustJSON(live[field])) {
+			if !sameJSON(mustJSON(tabField(ours, field)), mustJSON(tabField(live, field))) {
 				return fmt.Errorf("%w: %s — its %s differs from the board's and this journal entry predates the record that would say which side changed it (schema 1); re-read the board, redo the edit, apply again",
 					ErrCollision, id, field)
 			}
 			continue
 		}
-		if !sameJSON(mustJSON(ours[field]), mustJSON(was.field(field))) {
+		if !sameJSON(mustJSON(tabField(ours, field)), mustJSON(was.field(field))) {
 			return fmt.Errorf("%w: %s — its %s changed on the board while you were changing it too — re-read the board, redo the edit, apply again",
 				ErrCollision, id, field)
 		}
@@ -318,9 +320,9 @@ func ourTabIsUnchanged(id string, ours, live map[string]any, was recordedTab) er
 	return nil
 }
 
-// field reads one of the four the record carries, by the document's own key, so
-// the loop above walks one list of names rather than four branches. Only ever
-// called with Fields true.
+// field reads one of the fields the record carries, by the document's own key, so
+// the loop above walks one list of names rather than a branch apiece. Only ever
+// called with Fields true. `quiet` answers nil when false, matching tabField.
 func (r recordedTab) field(name string) any {
 	switch name {
 	case keyName:
@@ -331,8 +333,29 @@ func (r recordedTab) field(name string) any {
 		return emptyToNil(r.Note)
 	case keyStateFrom:
 		return emptyToNil(r.StateFrom)
+	case keyQuiet:
+		if r.Quiet {
+			return true
+		}
 	}
 	return nil
+}
+
+// tabField reads one field out of a decoded tab for the comparisons above, with
+// `"quiet": false` and an absent `quiet` made the same answer.
+//
+// The server never writes `false` (the field is `omitzero`), but an agent may,
+// and a record round-trips the absence through a Go bool — so without this an
+// agent that spelled out `"quiet": false` on a tab nobody made quiet would have
+// its write called a collision on a field neither side changed. The string
+// fields need no such help here: the record side goes through emptyToNil, and a
+// caller writing `"note": ""` is changing the note.
+func tabField(t map[string]any, name string) any {
+	v := t[name]
+	if b, ok := v.(bool); ok && !b && name == keyQuiet {
+		return nil
+	}
+	return v
 }
 
 // emptyToNil makes an absent field and an empty one compare equal.

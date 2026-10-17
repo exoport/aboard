@@ -1687,6 +1687,10 @@ function buildTabs() {
     // No type chip: the name the agent chose carries the meaning, and the
     // renderer is an implementation detail. Kept as a title for hover.
     btn.title = `${tab.id} · ${tab.name || 'unnamed'} · ${TYPES[tab.type] ? TYPES[tab.type].label : tab.type}`;
+    // A quiet tab says so where the human looks for it and nowhere else: in the
+    // hover title, static, and in the right-click menu that changes it. Not a
+    // glyph on the strip — the flag exists to take noise away from it.
+    if (tab.quiet === true) btn.title += ` · ${QUIET_TITLE}`;
 
     // The unread dot: an agent changed this tab and the human has not dismissed
     // it yet. Cleared by the same gesture that dismisses the banner inside.
@@ -1738,6 +1742,8 @@ function buildTabs() {
           hint: 'note', run: () => { activate(tab.id); editTabNote(); } },
         { label: 'Leave a note for the agent',
           hint: 'request', run: () => { activate(tab.id); unfoldContext(); $tabAsksInput.focus(); } },
+        { label: tab.quiet === true ? 'Announce agent changes again' : 'Quiet: agent changes raise no dot',
+          hint: 'quiet', run: () => toggleQuiet(tab.id) },
         'separator',
         md && { label: 'Copy as markdown', hint: `${md.split('\n').length} lines`,
           run: (ev) => copyText(md, ev) },
@@ -1782,6 +1788,26 @@ async function renameTab(ref) {
   if (!tab) return;                                  // answered while the dialog was open
   if (!trimmed || trimmed === tab.name) return;
   tab.name = trimmed.slice(0, 40);
+  await save({ immediate: true });
+  buildTabs();
+}
+
+// `quiet`: an agent's changes to this tab's contents do not raise the unread
+// dot. Meant for a tab an agent keeps current after every command, where a dot on
+// every write is noise. The server enforces what it means (tabs.go): the write
+// that turns it on is announced once, a marker already up is left alone, and a
+// rename, a new note or a request stamped done still raise the dot. The human may
+// set or clear it freely — this is their write, `__by: 'human'`.
+//
+// Bound by id and re-resolved, like renameTab: an SSE reload may have replaced
+// `doc` between the menu opening and the click.
+const QUIET_TITLE = 'quiet: agent changes to its contents raise no dot';
+
+async function toggleQuiet(id) {
+  const tab = tabById(id);
+  if (!tab) return;
+  if (tab.quiet === true) delete tab.quiet;
+  else tab.quiet = true;
   await save({ immediate: true });
   buildTabs();
 }

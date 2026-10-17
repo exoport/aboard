@@ -23,7 +23,9 @@ import (
 //  2. An agent cannot clear a tab's `touched` marker. That marker is what raises
 //     the dot on the tab and the banner inside it, and only the human dismissing
 //     it takes it down — otherwise a later agent write could hide the fact that
-//     an earlier one changed something.
+//     an earlier one changed something. A `quiet` tab narrows when a NEW marker
+//     is stamped (its state changes raise none), never whether an existing one
+//     survives — and the write that makes a tab quiet is itself stamped.
 //  4. An agent cannot clear another actor's read state (`seen`): it may stamp
 //     its own key and nobody else's.
 //  3. An agent cannot un-read a chat message. Once a session has acked a message
@@ -75,6 +77,24 @@ type tab struct {
 	// way from everything else on a tab, which is why they are the human's alone
 	// to write — see guarantee 5 above and reconcileRequests below.
 	Requests []requestAsk `json:"requests,omitempty"`
+
+	// Quiet says an agent's changes to this tab's STATE do not raise the unread
+	// dot. For a tab an agent rewrites constantly — a status tab kept current
+	// after every command — a dot on every write is noise, and noise trains the
+	// human to ignore the dot everywhere else.
+	//
+	// It narrows when the server STAMPS `touched` and nothing else: an existing
+	// marker is carried forward exactly as guarantee 2 says, the write is
+	// journaled as usual, and the write that turns quiet ON is itself stamped, so
+	// the human is told once that this tab stopped announcing itself. A change to
+	// the name, type, note, stateFrom or the human's requests is still announced
+	// on a quiet tab: those are the rare, meaningful changes the dot is for, and
+	// the churn this flag exists to silence is the state. See reconcileDoc.
+	//
+	// `omitzero` rather than `omitempty`: under encoding/json/v2, `omitempty`
+	// omits a value that ENCODES to empty, and `false` does not, so every tab on
+	// the board would grow `"quiet": false` on its next write.
+	Quiet bool `json:"quiet,omitzero"`
 
 	Touched        *touchMark  `json:"touched,omitempty"`
 	PendingRemoval *removalAsk `json:"pendingRemoval,omitempty"`
@@ -159,6 +179,14 @@ const (
 	tabTypeStack = "stack"
 	tabTypeHTML  = "html"
 	tabTypeUI    = "ui"
+)
+
+// The two `touched` notes a quiet tab is announced with. The banner shows the
+// note under "<agent> changed this tab.", so these are the sentence the human
+// reads on the one occasion the board tells them a tab has gone quiet.
+const (
+	noteWentQuiet   = "quiet from now on: agent changes to this tab's contents will not raise the dot"
+	noteNewQuietTab = "new tab, quiet: agent changes to its contents will not raise the dot"
 )
 
 func isHuman(by string) bool { return by == actorHuman }
@@ -303,18 +331,19 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 		// note was read, so it has to raise the dot and it has to reach the
 		// journal. Without it here, the one write the human is waiting on would
 		// be the one write that left no trace.
+		//
+		// `quiet` is in it so that turning it on or off is itself a change: it is
+		// journaled, and the write that turns it on is stamped — the one dot that
+		// tells the human this tab will not raise any more for its state.
 		meta := prev.Name == t.Name &&
 			prev.Type == t.Type &&
 			prev.StateFrom == t.StateFrom &&
 			prev.Note == t.Note &&
+			prev.Quiet == t.Quiet &&
 			sameRequests(prev.Requests, t.Requests)
 
-		if !human && (!same || !meta) {
-			note := ""
-			if t.Touched != nil {
-				note = t.Touched.Note
-			}
-			t.Touched = &touchMark{By: by, At: now, Note: note}
+		if !human {
+			stampChange(prev, &t, same, meta, by, now)
 		}
 
 		// What the JOURNAL records, which is wider than what raises a dot by
@@ -365,6 +394,32 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 	return &reconcilePlan{tabs: out}
 }
 
+// stampChange stamps `touched` on an existing tab an agent's write changed.
+//
+// A quiet tab silences STATE changes, and only while it was quiet before the
+// write as well as after it. That second condition is what stops quiet being a
+// way for a write to hide itself: a write cannot turn quiet on and change the
+// state silently in one go, because the turning-on is a `meta` change and is
+// stamped, with a note saying what happened. Everything in `meta` is announced
+// on a quiet tab exactly as on any other.
+//
+// Its own function so the rule reads as one sentence. Inlined, it took
+// reconcileDoc past the linter's complexity ceiling.
+func stampChange(prev, t *docTab, same, meta bool, by, now string) {
+	silenced := prev.Quiet && t.Quiet
+	if meta && (same || silenced) {
+		return
+	}
+	note := ""
+	if t.Touched != nil {
+		note = t.Touched.Note
+	}
+	if t.Quiet && !prev.Quiet {
+		note = noteWentQuiet
+	}
+	t.Touched = &touchMark{By: by, At: now, Note: note}
+}
+
 // stampNewTab applies the guarantees to a tab an AGENT is creating.
 //
 // Its own function because CREATION is a separate hole in each of them, and one
@@ -373,9 +428,17 @@ func reconcileDoc(cur, inc *stateDoc, by string, logger *log.Logger) *reconcileP
 // out of the diff. Both guarantees below were missing at first for exactly that
 // reason.
 func stampNewTab(t *docTab, by, now string, logger *log.Logger) {
-	// Mark it so the human sees it arrived.
+	// Mark it so the human sees it arrived — a QUIET tab too. Creating a tab
+	// quiet is turning quiet on, and that write is announced on an existing tab;
+	// exempting creation would let an agent add tabs nobody is ever told about,
+	// which is "the human never finds out that something changed" in its purest
+	// form. One dot, once, saying what kind of tab it is, and then silence.
 	if t.Touched == nil {
-		t.Touched = &touchMark{By: by, At: now, Note: "new tab"}
+		note := "new tab"
+		if t.Quiet {
+			note = noteNewQuietTab
+		}
+		t.Touched = &touchMark{By: by, At: now, Note: note}
 	} else {
 		t.Touched.By, t.Touched.At = by, now
 	}

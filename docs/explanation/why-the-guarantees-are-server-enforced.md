@@ -43,6 +43,29 @@ the human than the sentence you would have written.
 is a fact about the human. Only the human's dismissal can answer it, so only the human's
 dismissal clears it.
 
+**A quiet tab is not a hole in that.** Some tabs change on every command: a status tab an
+agent keeps current is the case that asked for it. A dot that is always up on a tab like
+that carries no information, and it teaches the human that a dot can be ignored, which
+costs the dot on every other tab. So a tab can carry `quiet: true`, and then an agent's
+change to its *state* stamps no new marker. Three rules keep this from becoming the
+failure guarantee 2 exists to prevent, an agent write that hides itself:
+
+- **Quiet changes when a marker is stamped, never whether one survives.** A marker
+  already up is carried forward as before.
+- **Going quiet is announced.** The agent write that turns `quiet` on is stamped, with a
+  note saying so, and so is creating a tab that is already quiet. Without this, an agent
+  could turn the flag on and change the state in one write and never be seen, or add tabs
+  the human is never told about. The human is told once that this tab will stop
+  announcing itself, and can turn it back off from the tab's menu.
+- **Only the churn is silenced.** A new name, type, `stateFrom` or `note`, or a request
+  stamped done, still raises the dot on a quiet tab. Those changes are rare and they are
+  what the dot is for. The `done` stamp in particular is the only sign the human gets
+  that their note was read.
+
+An agent may therefore set `quiet` on any tab. The first rule keeps it from hiding an
+earlier write, and the second keeps it from hiding itself. The human may set or clear it
+without restriction, because whose attention a tab is worth is their call.
+
 **An ack closes a window.** In a `chat` tab the human can edit or delete a message until a
 session has acted on it. Dropping an ack would reopen that window on something already
 acted on — the transcript would then be editable after the fact, which is exactly the

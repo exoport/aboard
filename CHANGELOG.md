@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+A tab an agent rewrites after every command no longer has to raise the dot each time.
+`capsHash` does not move, because the manifest describes renderers, commands, routes, the
+theme and the embed surface, and a tab-level field is none of those.
+
+- **`quiet: true` on a tab: an agent's changes to its state raise no unread dot.** Asked
+  for by ape, which will keep one status tab current after every state-changing command.
+  With a dot on every write, the human learns to ignore the dot on every tab. The field
+  changes when the server stamps `touched` and nothing else. The write is accepted,
+  journaled and broadcast exactly as before, and a marker already on the tab is carried
+  forward, because guarantee 2 is unchanged. Three things keep it from being a way for a
+  write to hide itself. The agent write that turns `quiet` on is stamped once, with a note
+  saying so, and creating a tab with `quiet: true` counts as turning it on. Turning it
+  off is stamped. Only state changes are silenced: a new name, type, `stateFrom` or
+  `note`, or a request stamped done, still raises the dot. An agent may set it on any
+  tab. The human may set or clear it from the tab's right-click menu, and a quiet tab
+  says so in its hover title and nowhere else on the strip. The 409 merge compares it
+  like the other tab fields the journal records. An `aboard history` restore leaves it as
+  the live board has it, because it is a decision about attention and not content.
+  `"quiet": false` is never written, since the field is `omitzero`. A board older than
+  this drops the key on its next write without a warning, and stamps the tab as usual.
 - **The test-only change summary now counts `requests`**, which the write path always
   did. A `done` stamp read as "nothing changed" to the byte-level comparison the tests
   check the journal against. Nothing a user could see was affected.

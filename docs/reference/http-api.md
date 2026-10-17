@@ -510,7 +510,9 @@ schema version by definition), `rev` (the previous revision plus one), `nextId`
 restored as a removal request, a `touched` marker cannot be cleared by an agent, chat
 acknowledgements are carried forward, an actor may stamp only its own `seen` key, and the
 human's `requests` survive an agent write untouched except for a `done` stamp added to one
-that already exists.
+that already exists. A tab marked `quiet` narrows only when a NEW `touched` is stamped: an
+agent's change to its state raises none, while the write is journaled and broadcast as
+usual ([the field](state-file.md)).
 See [why the guarantees are server-enforced](../explanation/why-the-guarantees-are-server-enforced.md).
 
 Success is `200`, and carries the revision this write produced — which is the base for

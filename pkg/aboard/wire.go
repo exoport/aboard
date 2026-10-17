@@ -42,6 +42,7 @@ const (
 	keyNote      = "note"
 	keyStateFrom = "stateFrom"
 	keyRequests  = "requests"
+	keyQuiet     = "quiet"
 	keyBy        = "by"
 	keyAt        = "at"
 	keyReason    = "reason"

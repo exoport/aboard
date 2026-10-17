@@ -112,6 +112,9 @@ still carries a generated `id`.
   "stateFrom": "ab1",         // OPTIONAL: render another tab's state with this type —
                               // a kanban and a dag over one dataset
 
+  "quiet": true,              // OPTIONAL: an agent's changes to this tab's STATE raise
+                              // no unread dot. Omitted when false.
+
   "touched": { "by": "agent-1", "at": "…", "note": "…" },      // server-set
   "pendingRemoval": { "by": "agent-1", "at": "…", "reason": "…" },
   "seen": { "human": "…", "agent-2": "…" }                     // per-actor read state
@@ -123,6 +126,8 @@ convention — see
 [why the guarantees are server-enforced](../explanation/why-the-guarantees-are-server-enforced.md):
 
 - **`touched`** is stamped on any tab an agent's write changed, and cleared only by the human dismissing it. An attempt to remove it in a write is ignored and the previous marker carried forward. It drives the dot on the tab.
+
+  **`quiet`** narrows when that marker is stamped, and nothing else. On a tab that was quiet before an agent's write and is still quiet after it, a change to the `state` stamps no `touched`. Everything else about the write is as usual: it is accepted, journaled, and reaches `lastEditedBy`, `/watch` and the SSE frame. A `touched` already on the tab is carried forward, because quiet never clears one. Four things are still announced on a quiet tab. The agent write that turns `quiet` on is stamped once, with a note saying so, and creating a tab with `quiet: true` counts as turning it on. Turning it off is stamped. A change to `name`, `type`, `stateFrom` or `note` is stamped. A `done` stamp on a request is stamped. The human may set or clear it freely, from the tab's right-click menu; their writes never stamp a marker anyway. An agent may set it on any tab, since the write that does so is the one write the human is shown. `aboard history` restores leave it as the live board has it. It is for a tab an agent rewrites after every command, such as a status tab, where a dot on every write is noise that teaches the human to ignore the dot everywhere. Boards older than the field drop it silently on their next write, with no warning: the key does not survive the decode.
 - **`pendingRemoval`** is how a tab goes away. A write that simply drops a tab has it restored with this set; you may also set it deliberately, with a reason worth reading. Only the human's answer deletes or keeps.
 - **`seen`** is per-actor read state. An actor may stamp its own key and nobody else's.
 - **Chat acknowledgements** inside a `chat` tab's state are carried forward; a write cannot un-ack a message.

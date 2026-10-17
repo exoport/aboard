@@ -681,6 +681,14 @@ reading, and tell the user you have asked.
 and the banner inside it, and only the user dismissing it takes it down. Do not
 try; the server carries it forward regardless.
 
+**A tab you rewrite constantly can be `quiet: true`.** Then your changes to its
+`state` raise no dot. Use it for a status tab you update after every step, where
+a dot on every write would teach the user to ignore the dot everywhere. The
+write that makes a tab quiet is announced once, and so is creating a tab with
+it. Renames, a new `note` and a `done` stamp still raise the dot. Do not use it
+to make a change the user needs to see go unnoticed: a quiet tab is one you have
+told them they can stop watching.
+
 ## Answering their requests
 
 `requests` is the one channel on this board that runs the other way: the human

@@ -346,6 +346,11 @@ func Restore(ctx context.Context, root Root, name, tab string, at int, out io.Wr
 // name, type, note, stateFrom, key and state come back; the markers and the
 // requests stay as the live board has them.
 //
+// `quiet` stays too. It is not content but a statement about whose attention a
+// change is worth — the same family as the markers — and somebody may have set
+// it, or cleared it, after the version being restored. Undoing a tab's contents
+// is not a reason to undo that decision.
+//
 // A generation-1 record carries only a state, and then only the state moves —
 // which is exactly what this command did for every version before the record
 // widened.
