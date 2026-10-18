@@ -152,6 +152,13 @@ it had stripped `grow` itself while copying nodes), and a headless screenshot of
 tab "cannot be taken" (`?nosse=1&tab=` always worked; the skill only said `make shot`,
 which exists nowhere but here).
 
+**2026-10-18 — `quiet` tabs, v0.4.0.** Asked for by ape: `"quiet": true` on a tab means an
+agent's STATE changes stamp no new `touched`, for a status tab rewritten after every
+command. The rules are in `stampChange` (`tabs.go`) and the guarantees explanation: quiet
+never clears an existing marker, turning it on (or creating a tab already quiet) and off
+are both stamped, and name/type/stateFrom/note/done stamps still raise the dot. The field
+is `omitzero`, because v2's `omitempty` keeps a `false`. `capsHash` did not move.
+
 `development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
 count, `BUILD_DATE` and `make install INSTALL_DIR`), each with what it would take, so

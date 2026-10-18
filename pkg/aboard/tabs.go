@@ -414,8 +414,14 @@ func stampChange(prev, t *docTab, same, meta bool, by, now string) {
 	if t.Touched != nil {
 		note = t.Touched.Note
 	}
-	if t.Quiet && !prev.Quiet {
+	switch {
+	case t.Quiet && !prev.Quiet:
 		note = noteWentQuiet
+	case !t.Quiet && (note == noteWentQuiet || note == noteNewQuietTab):
+		// A marker still up from going quiet, carried into the write that turns
+		// it off: kept, it would tell the human the tab is quiet on the very
+		// write that made it loud again.
+		note = ""
 	}
 	t.Touched = &touchMark{By: by, At: now, Note: note}
 }

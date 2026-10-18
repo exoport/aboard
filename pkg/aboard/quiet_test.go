@@ -127,6 +127,32 @@ func TestAnAgentTurningQuietOffIsAnnounced(t *testing.T) {
 	}
 }
 
+// The marker that announced going quiet may still be up when quiet is turned
+// off again, and a restamp carries the note forward. Carried as is, the banner
+// would tell the human the tab is quiet on the write that made it loud.
+func TestTurningQuietOffDropsAStillRaisedQuietNote(t *testing.T) {
+	for _, note := range []string{noteWentQuiet, noteNewQuietTab} {
+		before := quietTab(`{"text":"one"}`)
+		before.Touched = &touchMark{By: "agent-2", At: "T-earlier", Note: note}
+		current := boardJSON(t, before)
+		loud := quietTab(`{"text":"one"}`)
+		loud.Quiet = false
+		incoming := boardJSON(t, loud)
+
+		out, err := reconcileTabs(current, incoming, "agent-1", testLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+		mark := tabByID(t, out, "ab1").Touched
+		if mark == nil {
+			t.Fatal("an agent turning quiet off raised no dot")
+		}
+		if mark.Note != "" || mark.By != "agent-1" {
+			t.Errorf("turning quiet off under %q left %+v, want agent-1 and no note", note, *mark)
+		}
+	}
+}
+
 // Creating a tab quiet IS turning quiet on, and it is announced for the same
 // reason: a tab that arrived with no dot is a tab the human may never notice,
 // and an agent could add them without limit.
