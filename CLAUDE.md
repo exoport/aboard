@@ -82,7 +82,7 @@ artifacts, `recipesReadme` (written to disk), the declared table that feeds `cap
 and `boards`' help, which names both spellings because that is the content of the
 sentence. `capsHash` is unchanged at `207b5d93`, and `TestNoNewHardcodedInvocations`
 guards the tree from here. **Go 1.27 left that list on 2026-08-27**,
-answered by the human: the toolchain moved on this machine, so `go.mod` says `go 1.27.0`,
+answered by the human: the toolchain moved on this machine, so `go.mod` said `go 1.27.0` (`1.27.2` since 2026-10-18, below),
 `github.com/go-json-experiment/json` is gone in favour of the stdlib `encoding/json/v2`,
 and the goreleaser pin it was blocking reached v2.18.0 — see the dependency decision
 below. Four
@@ -270,13 +270,20 @@ zero-dependency gate (`go vet` + stdlib `gofmt`) for a bare checkout that has fe
 nothing. One pin moves with a second file: `goreleaser`'s version is written into
 `.github/workflows/release.yml` as well, and the comment on that line says so.
 
-Pinned versions live in `.bingo/*.mod`: golangci-lint **v2.13.1**, gofumpt **v0.11.0**,
-govulncheck **v1.7.0**, goreleaser **v2.18.0**. The first three were already the latest
-release when the toolchain moved to Go 1.27 on 2026-08-27 and did not need to move;
-goreleaser did, because v2.18.0 requires Go 1.27 and the pin had been held at v2.17.1
-waiting for exactly that. All four run against a Go 1.27 module unchanged — golangci-lint
-v2.13.1 in particular reports 0 issues on it, so no pin had to be moved to keep a gate
-green.
+Pinned versions live in `.bingo/*.mod`: golangci-lint **v2.14.0**, gofumpt **v0.11.0**,
+govulncheck **v1.7.0**, goreleaser **v2.18.0**. goreleaser moved to v2.18.0 with Go 1.27
+on 2026-08-27, because it requires it. **golangci-lint and `go.mod` moved together on
+2026-10-18, for the v0.4.0 release, and the order matters**: govulncheck found nine
+stdlib vulnerabilities (net/http, crypto/tls, net/textproto) in go1.27.0 and three still
+in go1.27.1, so `go.mod` says `go 1.27.2`, which CI's `setup-go` reads through
+`go-version-file`. But go1.27.2 writes export data version 5, which golangci-lint v2.13.1
+and v2.13.2 cannot read: every package fails `typecheck` on `import "embed"`, and
+rebuilding the pinned binary with the new toolchain does not help. v2.14.0 reads it and
+brought four findings: three gocritic `sprintfQuotedString`, fixed with `%#q` (the
+generated reference did not change), and a gosec G703 in `FindRoot`, suppressed with its
+reason. The symptom to recognise is `could not load export data … version N is greater
+than maximum supported`. It means the toolchain moved past the linter, not that the
+code is broken.
 
 ### Commits
 

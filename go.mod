@@ -1,6 +1,6 @@
 module github.com/exoport/aboard
 
-go 1.27.0
+go 1.27.2
 
 require (
 	github.com/mxschmitt/playwright-go v0.6201.1

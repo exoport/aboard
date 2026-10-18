@@ -527,7 +527,7 @@ func manifestMarkdown(m manifest) string {
 			parts := make([]string, 0, len(t.Keys))
 			for _, k := range t.Keys {
 				if len(k) == 2 {
-					parts = append(parts, fmt.Sprintf("`%s` %s", k[0], k[1]))
+					parts = append(parts, fmt.Sprintf("%#q %s", k[0], k[1]))
 				}
 			}
 			fmt.Fprintf(&b, "%s.\n\n", strings.Join(parts, " · "))

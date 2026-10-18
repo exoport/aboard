@@ -441,7 +441,7 @@ func parseRecipe(data []byte, reportPath, scope string, inv Invocation) Recipe {
 
 	tmpl, blocks := extractTemplate(string(body))
 	if blocks > 1 {
-		r.Err = fmt.Sprintf("%d `%s` blocks — a recipe carries at most one", blocks, TemplateFence)
+		r.Err = fmt.Sprintf("%d %#q blocks — a recipe carries at most one", blocks, TemplateFence)
 		return r
 	}
 	if blocks == 1 {
@@ -452,7 +452,7 @@ func parseRecipe(data []byte, reportPath, scope string, inv Invocation) Recipe {
 		// shape against the tab schema — a template is a SKELETON, edited before
 		// it is applied, and half of them are deliberately partial.
 		if !json.Valid([]byte(tmpl)) {
-			r.Err = fmt.Sprintf("the `%s` block is not valid JSON", TemplateFence)
+			r.Err = fmt.Sprintf("the %#q block is not valid JSON", TemplateFence)
 			return r
 		}
 		r.Template, r.HasTemplate = tmpl, true

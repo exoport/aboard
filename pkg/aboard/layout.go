@@ -80,6 +80,7 @@ func FindRoot(start string) (Root, error) {
 		return "", fmt.Errorf("resolve %s: %w", start, err)
 	}
 	for dir := abs; ; {
+		//nolint:gosec // G703: walking up from a caller-supplied directory is what discovery is; nothing is read but a stat of `.aboard/`
 		if info, statErr := os.Stat(filepath.Join(dir, DirName)); statErr == nil && info.IsDir() {
 			// Resolved, so ONE project is ONE root. The port is derived from this
 			// string, so a symlinked path and its target hashed to two different

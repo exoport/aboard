@@ -26,6 +26,11 @@ build on something that did not exist, a tab-level field, `quiet`.
   the live board has it, because it is a decision about attention and not content.
   `"quiet": false` is never written, since the field is `omitzero`. A board older than
   this drops the key on its next write without a warning, and stamps the tab as usual.
+- **Built with Go 1.27.2**, so the binaries no longer carry the nine standard-library
+  vulnerabilities govulncheck reports in go1.27.0. They are in `net/http`, `crypto/tls`
+  and `net/textproto`, and three are still present in go1.27.1. The board serves
+  loopback only, but it serves HTTP. golangci-lint moved to v2.14.0 with it, because
+  v2.13.x cannot read go1.27.2's export data.
 - **The test-only change summary now counts `requests`**, which the write path always
   did. A `done` stamp read as "nothing changed" to the byte-level comparison the tests
   check the journal against. Nothing a user could see was affected.
