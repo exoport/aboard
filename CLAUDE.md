@@ -159,6 +159,14 @@ never clears an existing marker, turning it on (or creating a tab already quiet)
 are both stamped, and name/type/stateFrom/note/done stamps still raise the dot. The field
 is `omitzero`, because v2's `omitempty` keeps a `false`. `capsHash` did not move.
 
+**2026-10-23 — v0.4.1, four asks from ape (D435) before it pins.** Go **1.27.3**
+(GO-2026-6809 in go1.27.2's `crypto/x509`); `status` names the portable remedy for a stale
+skill instead of `make caps`; `apply --help` stopped naming a `trace` command; and the
+example board applies with **zero warnings** — its gallery's deliberate `sparkline` moved
+to the browser suite's fixture as `ab203`. Writing the replacement detector case found
+that a warning inside a `tabs` panel named a node that does not exist
+(`root.panels.children[N]`, counted across panels). `capsHash` did not move from `4a958b30`.
+
 `development/README.md` carries a separate list — findings that are real,
 are nobody's blocker and are nobody's question (`--dev` symlinks, the sidecar log file
 count, `BUILD_DATE` and `make install INSTALL_DIR`), each with what it would take, so
