@@ -248,6 +248,24 @@ func TestTheStaleMessagesNameARemedyThatRunsAnywhere(t *testing.T) {
 	}
 }
 
+// `status` is the third place that says so, and the first command a resuming
+// session runs. It said "run `make caps`" and nothing else until v0.4.1 — in a
+// project with no such target — and it speaks through the host's invocation,
+// because under `ape aboard` there is no `aboard` on the reader's PATH.
+func TestStatusNamesARemedyThatRunsAnywhereForAStaleSkill(t *testing.T) {
+	root := Root(t.TempDir())
+	out := StatusReport{
+		Project: root.String(), CapsHash: "aaaaaaaa", Skill: SkillStale, SkillCapsHash: "bbbbbbbb",
+	}.Human(Invocation("ape aboard"))
+	want := "ape aboard capabilities --format md > " + root.SkillReference()
+	if !strings.Contains(out, want) {
+		t.Errorf("a stale skill reference names no remedy that runs outside aboard's checkout; want %q in:\n%s", want, out)
+	}
+	if strings.Contains(out, "run `make caps`") {
+		t.Errorf("status still offers `make caps` as the only remedy:\n%s", out)
+	}
+}
+
 // The committed skill reference must still match the binary.
 //
 // `capabilities --check` says so, `make caps` runs it, and test/smoke.sh used to

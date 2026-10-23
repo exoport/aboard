@@ -500,7 +500,12 @@ func (r StatusReport) Human(inv Invocation) string {
 	case SkillCurrent:
 		fmt.Fprintf(&b, "  caps    %s   (skill reference current)\n", r.CapsHash)
 	case SkillStale:
-		fmt.Fprintf(&b, "  caps    %s   ⚠ skill reference generated for %s — run `make caps`\n", r.CapsHash, r.SkillCapsHash)
+		// The portable remedy, as `capabilities --check` gives it: `make caps` is
+		// a target in aboard's own checkout, and the reader of this line is almost
+		// always in a project that only copied the skill.
+		fmt.Fprintf(&b, "  caps    %s   ⚠ skill reference generated for %s\n", r.CapsHash, r.SkillCapsHash)
+		fmt.Fprintf(&b, "          regenerate it with `%s > %s`, or `make caps` in aboard's own checkout\n",
+			inv.Cmd("capabilities --format md"), Root(r.Project).SkillReference())
 	default:
 		fmt.Fprintf(&b, "  caps    %s\n", r.CapsHash)
 	}
