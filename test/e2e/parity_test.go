@@ -306,20 +306,20 @@ func TestAUiTableResolvesABindInACell(t *testing.T) {
 
 // A deliberately-invalid node renders a VISIBLE marker rather than nothing.
 //
-// `ab133`'s "Unknown" panel contains a `sparkline` on purpose, and every write
-// touching that tab warns about it — that is the checker working, not a defect
+// The fixture's `ab203` has a `sparkline` in its "Unknown" panel on purpose, and
+// every write touching that tab warns about it — that is the checker working, not a defect
 // to fix by deleting the demonstration. What the browser has to do with it is
 // show something: an unknown component type shows a marker, and an unknown PROP
 // shows nothing at all, which is why `apply` succeeding is not evidence that
 // anything rendered.
 func TestAnUnknownUiComponentRendersAMarker(t *testing.T) {
-	s := open(t, "tab=ab133")
-	openGalleryPanel(t, s, "Unknown")
+	s := open(t, "tab=ab203")
+	openPanel(t, s, "ab203", "Unknown")
 
-	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab203").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
 		t.Fatalf("an unknown component drew nothing at all: %v", err)
 	}
-	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToContainText("sparkline"); err != nil {
+	if err := expect.Locator(s.view("ab203").Locator(".uic-unknown").First()).ToContainText("sparkline"); err != nil {
 		t.Errorf("the marker does not name the component nobody implemented: %v", err)
 	}
 }

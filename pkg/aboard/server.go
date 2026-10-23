@@ -1356,10 +1356,11 @@ func (s *server) commitState(incoming *stateDoc, base, by, origin, label string)
 	// because the caller submitted everything, but here the write is one edit, and
 	// a whole-board scan would re-report every pre-existing mistake on the board
 	// as though this write had made it. The example board's deliberately invalid
-	// `sparkline` is the case that settles it — unscoped, it would ride along on
-	// every write anyone ever made, and a warning that always fires is one people
-	// learn to skip. It still warns on a write that touches ITS tab, which is
-	// correct and is not to be suppressed.
+	// `sparkline` (gone since v0.4.1) was the case that settled it — unscoped, it
+	// would have ridden along on every write anyone ever made, and a warning that
+	// always fires is one people learn to skip. A board's pre-existing mistake
+	// still warns on a write that touches ITS tab, which is correct and is not to
+	// be suppressed.
 	//
 	// Computed inside the lock so the journal entry is complete before it is
 	// appended: the record of a write and the warnings about it are one fact.

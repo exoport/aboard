@@ -79,10 +79,11 @@ func TestAWriteThatCannotRenderSaysSoToTheWriterAndInTheJournal(t *testing.T) {
 	}
 }
 
-// The scoping, which is the hazard the handoff names: the example board ships a
-// deliberately invalid `sparkline`, so an unscoped walk would attach that warning
-// to every write anyone ever made — and a warning that always fires is one people
-// learn to skip.
+// The scoping, which is the hazard the handoff named: the example board shipped a
+// deliberately invalid `sparkline` until v0.4.1, so an unscoped walk would have
+// attached that warning to every write anyone ever made — and a warning that
+// always fires is one people learn to skip. Any board with one old mistake on it
+// is the same case.
 //
 // Fails before if postState is given writeWarnings(assets, wholeBody): ab1 warns
 // on a write that only touched ab2.

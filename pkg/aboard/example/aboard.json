@@ -1726,23 +1726,6 @@
                     }
                   ],
                   "label": "Input"
-                },
-                {
-                  "children": [
-                    {
-                      "type": "text",
-                      "value": "A component the catalog does not have renders as a visible marker, never as nothing — an agent must not be able to believe it showed something it did not:"
-                    },
-                    {
-                      "type": "sparkline",
-                      "value": "not in the catalog"
-                    },
-                    {
-                      "type": "caption",
-                      "value": "That is the cost of the approach, stated honestly: the catalog is a closed vocabulary. When a shape is not in it, use an html tab."
-                    }
-                  ],
-                  "label": "Unknown"
                 }
               ],
               "type": "tabs"

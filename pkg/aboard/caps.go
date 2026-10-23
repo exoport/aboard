@@ -798,12 +798,12 @@ func specsByType(assets fs.FS) (map[string]typeSpec, error) {
 // this feature could most easily get wrong. `writeWarnings` walks a whole
 // document, which is right for `apply` — the caller submitted the whole thing —
 // and wrong on the server, where the write is one edit and the board may be
-// thousands of tabs. Worse than the cost: the example board ships a deliberately
-// invalid `sparkline` in its gallery, so a whole-document scan would attach that
-// warning to EVERY write, on every tab, for ever. A warning that fires
-// unconditionally is not a warning, and no suppression mechanism may be added for
-// that node (it is a demonstration). Scoping is what keeps it honest, and this
-// counter is what proves the scoping.
+// thousands of tabs. Worse than the cost: one old mistake anywhere on a board —
+// the example shipped a deliberately invalid `sparkline` until v0.4.1 — and a
+// whole-document scan would attach that warning to EVERY write, on every tab,
+// for ever. A warning that fires unconditionally is not a warning, and no
+// suppression mechanism may be added for one node. Scoping is what keeps it
+// honest, and this counter is what proves the scoping.
 var warningScans atomic.Int64
 
 // changedTabWarnings runs the same checks over only the tabs a write actually

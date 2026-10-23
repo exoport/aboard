@@ -318,23 +318,22 @@ func TestInitExampleSeedsTheBoard(t *testing.T) {
 // The example board must APPLY, not merely parse: it is the first board most
 // people see, and a write-time warning on it is a warning nobody can act on.
 //
-// Exactly one warning is expected, and it is a TRUE POSITIVE: the UI gallery
-// carries a `sparkline` component on purpose, to demonstrate the
-// unknown-component marker. Asserting zero would be asserting the wrong thing —
-// it would mean the demonstration had been deleted or the checker had stopped
-// descending into ui trees.
-func TestExampleBoardWarnsOnlyAboutItsDemonstration(t *testing.T) {
+// ZERO warnings, since v0.4.1. Until then the UI gallery carried a `sparkline`
+// on purpose, to demonstrate the unknown-component marker, and this test pinned
+// exactly that one warning. It cost more than it showed: every agent that ran
+// `apply --strict` or `--check` against a board seeded from the example had to
+// learn to read past a warning on the tab most likely to be copied from. The
+// demonstration moved to the browser suite's fixture (test/e2e/testdata), and
+// the checker descending into a nested ui tree is pinned in
+// write_warnings_test.go rather than by a mistake shipped to every new project.
+func TestExampleBoardAppliesWithNoWarnings(t *testing.T) {
 	raw, err := exampleFS.ReadFile(exampleFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	warnings := writeWarnings(WebFS(), raw)
-	if len(warnings) != 1 {
-		t.Fatalf("the example board produced %d warnings, want exactly the sparkline demonstration:\n%s",
+	if warnings := writeWarnings(WebFS(), raw); len(warnings) != 0 {
+		t.Fatalf("the example board produced %d warnings, want none:\n%s",
 			len(warnings), strings.Join(warnings, "\n"))
-	}
-	if !strings.Contains(warnings[0], "sparkline") {
-		t.Errorf("the one warning is not the demonstration: %s", warnings[0])
 	}
 	if w := wrongVersion(raw); w != "" {
 		t.Errorf("the example board declares a version this board does not write: %s", w)

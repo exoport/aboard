@@ -66,22 +66,23 @@ func TestTheBrowserReportsWhatItRendered(t *testing.T) {
 	})
 }
 
-// The gallery's "Unknown" panel holds a `sparkline` on purpose, to demonstrate
-// the unknown-component marker. It is a TRUE POSITIVE and must keep being
-// reported — "fixing" it by deleting the demonstration is the temptation this
-// pins against.
+// The fixture's unknown-component tab (`ab203`) holds a `sparkline` on purpose,
+// in its "Unknown" panel. It is a TRUE POSITIVE and must keep being reported.
+// It lived in the example gallery until v0.4.1, and moved here rather than being
+// deleted: what left the example was the warning on every new project's board,
+// not the demonstration.
 //
 // It is also the reason a receipt is swept on ACTIVATION and not only on mount:
 // `ui`'s `tabs` component builds only the open panel, so until the human reveals
-// the fifth one the component is genuinely not drawn, and a mount-only sweep
+// the second one the component is genuinely not drawn, and a mount-only sweep
 // would report the board as clean forever. Reveal it, come back to the tab, and
 // the marker reaches the agent.
 func TestAnUnknownComponentTheHumanRevealedReachesTheAgent(t *testing.T) {
 	s := open(t, "")
-	view := s.tab("ab133")
+	view := s.tab("ab203")
 
 	if err := view.Locator(`.uic-tab:has-text("Unknown")`).Click(); err != nil {
-		t.Fatalf("opening the gallery's Unknown panel: %v", err)
+		t.Fatalf("opening the Unknown panel: %v", err)
 	}
 	if err := expect.Locator(view.Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
 		t.Fatalf("the unknown-component marker is not on screen: %v", err)
@@ -89,10 +90,10 @@ func TestAnUnknownComponentTheHumanRevealedReachesTheAgent(t *testing.T) {
 
 	// Away and back: the re-sweep happens when a tab becomes active.
 	s.tab("ab1")
-	s.tab("ab133")
+	s.tab("ab203")
 
 	eventually(t, "the unknown-component marker to be reported", func() bool {
-		return containsID(receiptFor(t, "ab133").Unknown, "sparkline")
+		return containsID(receiptFor(t, "ab203").Unknown, "sparkline")
 	})
 }
 

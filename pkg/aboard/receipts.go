@@ -72,8 +72,9 @@ type Receipt struct {
 	// marker reaching the agent instead of only the human.
 	Undeclared []string `json:"undeclared,omitempty" yaml:"undeclared,omitempty"`
 	// Unknown are the `ui` markers: a component type the catalog does not hold,
-	// or a prop the renderer refused. The gallery's deliberate `sparkline` is
-	// expected to appear here forever; that is the marker working.
+	// or a prop the renderer refused. The browser suite's fixture keeps a
+	// deliberate `sparkline` (`ab203`) that is expected to appear here forever;
+	// that is the marker working.
 	Unknown []string `json:"unknown,omitempty" yaml:"unknown,omitempty"`
 	// Fired counts control ids somebody actually invoked, id -> times.
 	Fired map[string]int `json:"fired,omitempty" yaml:"fired,omitempty"`

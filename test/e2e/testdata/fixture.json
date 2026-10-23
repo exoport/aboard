@@ -12,6 +12,8 @@
     "replace whole \u2014 so `ab128.state.pending` arrives without erasing the decided",
     "row the `undo` control lives on. `add` appends new tabs.",
     "",
+    "`ab203` is the unknown-component demonstration the example gallery carried until v0.4.1: a true positive the checker must keep reporting, which is exactly why it does not belong on the board every new project starts from.",
+    "",
     "`ab132` gains options because the example ships the vote tab with an empty ballot \u2014 a vote with nothing to score renders its empty state, and every scoring gesture would be untestable against it."
   ],
   "patch": {
@@ -122,6 +124,34 @@
       "state": {
         "text": "First line.\nSecond line.\n",
         "markdown": false
+      }
+    },
+    {
+      "id": "ab203",
+      "key": "unknown-component",
+      "name": "Unknown component",
+      "type": "ui",
+      "note": "A component the catalog does not have, behind a panel nobody has opened: the marker must draw, and must reach the agent once the human reveals it.",
+      "state": {
+        "root": {
+          "type": "tabs",
+          "id": "panels",
+          "panels": [
+            {
+              "label": "Known",
+              "children": [
+                { "type": "text", "value": "Every component here is in the catalog." }
+              ]
+            },
+            {
+              "label": "Unknown",
+              "children": [
+                { "type": "text", "value": "A component the catalog does not have renders as a visible marker, never as nothing:" },
+                { "type": "sparkline", "value": "not in the catalog" }
+              ]
+            }
+          ]
+        }
       }
     }
   ],

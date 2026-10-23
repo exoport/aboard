@@ -119,7 +119,7 @@ func TestTheUIGalleryExportsSomethingRatherThanNothing(t *testing.T) {
 		"- field: select · medium", // a field's answer, out of state.data
 		"- panel: Layout",          // a tabs panel, and its children under it
 		"- [ ] tick these — they persist",
-		"_unknown component `sparkline`_", // the deliberate one, reported not hidden
+		"- panel: Input", // the last panel, so the walk reached the end
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the gallery outline is missing %q", want)

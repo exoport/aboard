@@ -411,12 +411,12 @@ func TestADeepLinkOpensAUiPanelByItsLabel(t *testing.T) {
 	covers(t, "ui", "a deep link opens a tabs panel by its label")
 
 	revBefore := readDoc(t)["rev"]
-	s := open(t, "tab=ab133&node=Unknown")
+	s := open(t, "tab=ab133&node=Input")
 	if err := expect.Locator(s.view("ab133").Locator(`.uic-tabs button[aria-selected="true"]`)).
-		ToContainText("Unknown"); err != nil {
-		t.Fatalf("?node=Unknown did not open the Unknown panel: %v", err)
+		ToContainText("Input"); err != nil {
+		t.Fatalf("?node=Input did not open the Input panel: %v", err)
 	}
-	if err := expect.Locator(s.view("ab133").Locator(".uic-unknown").First()).ToBeVisible(); err != nil {
+	if err := expect.Locator(s.view("ab133").Locator(".uic-field").First()).ToBeVisible(); err != nil {
 		t.Errorf("the panel strip moved and the panel's children were not drawn: %v", err)
 	}
 	// Navigation, not content: opening a panel must never be a write.
@@ -441,7 +441,13 @@ func TestADeepLinkOpensAUiPanelByItsLabel(t *testing.T) {
 // it fails as "no such element" rather than as "wrong panel".
 func openGalleryPanel(t *testing.T, s *session, label string) {
 	t.Helper()
-	btn := s.view("ab133").Locator(".uic-tabs button").Filter(playwright.LocatorFilterOptions{
+	openPanel(t, s, "ab133", label)
+}
+
+// openPanel is the same for any `ui` tab whose tree has a tabs component.
+func openPanel(t *testing.T, s *session, tab, label string) {
+	t.Helper()
+	btn := s.view(tab).Locator(".uic-tabs button").Filter(playwright.LocatorFilterOptions{
 		HasText: label,
 	}).First()
 	if err := btn.Click(); err != nil {
