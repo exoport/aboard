@@ -28,6 +28,18 @@ func TestWriteWarningsPerDetector(t *testing.T) {
 			want: `ab1 (ui): root.children[0].type = "sparkline" is not in the catalog`,
 		},
 		{
+			// The shape the example gallery used to carry: behind a panel nobody
+			// opened, two levels down. The checker has to descend into it, and
+			// the path has to name the panel — it said `root.panels.children[1]`
+			// until v0.4.1, counting children across panels.
+			name: "unknown component inside a tabs panel",
+			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
+				"root":{"type":"tabs","panels":[
+					{"label":"Known","children":[{"type":"text","value":"hi"}]},
+					{"label":"Unknown","children":[{"type":"sparkline","value":"x"}]}]}}}]}`,
+			want: `ab1 (ui): root.panels[1].children[0].type = "sparkline" is not in the catalog`,
+		},
+		{
 			name: "unknown prop on a known component",
 			doc: `{"tabs":[{"id":"ab1","type":"ui","state":{
 				"root":{"type":"stat","value":"3","caption":"widgets"}}}]}`,

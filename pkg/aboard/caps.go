@@ -1005,8 +1005,8 @@ func checkUITree(spec typeSpec, where string, node any, data map[string]any, nod
 		out = append(out, checkItemShape(where, obj, key, typeName, propPath, component, data)...)
 	}
 
-	for i, child := range childNodes(obj) {
-		out = append(out, checkUITree(spec, where, child.node, data, fmt.Sprintf("%s.%s[%d]", nodePath, child.prop, i))...)
+	for _, child := range childNodes(obj) {
+		out = append(out, checkUITree(spec, where, child.node, data, nodePath+"."+child.path)...)
 	}
 	return out
 }
@@ -1090,8 +1090,12 @@ func shownItemType(item map[string]any) string {
 	return fmt.Sprintf("%v", v)
 }
 
+// uiChild is one component below a node, with the path to it from that node.
+// The path carries the panel index as well as the child's: a single counter
+// across every panel's children named the second panel's first child
+// `panels.children[1]`, which is a node that does not exist.
 type uiChild struct {
-	prop string
+	path string
 	node any
 }
 
@@ -1101,19 +1105,19 @@ type uiChild struct {
 func childNodes(obj map[string]any) []uiChild {
 	out := []uiChild{}
 	if kids, ok := obj["children"].([]any); ok {
-		for _, kid := range kids {
-			out = append(out, uiChild{"children", kid})
+		for i, kid := range kids {
+			out = append(out, uiChild{fmt.Sprintf("children[%d]", i), kid})
 		}
 	}
 	if panels, ok := obj["panels"].([]any); ok {
-		for _, raw := range panels {
+		for p, raw := range panels {
 			panel, ok := raw.(map[string]any)
 			if !ok {
 				continue
 			}
 			if kids, ok := panel["children"].([]any); ok {
-				for _, kid := range kids {
-					out = append(out, uiChild{"panels.children", kid})
+				for i, kid := range kids {
+					out = append(out, uiChild{fmt.Sprintf("panels[%d].children[%d]", p, i), kid})
 				}
 			}
 		}
