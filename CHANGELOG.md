@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## v0.4.1 — 2026-10-23
+
+Four corrections asked for by ape before it pins this board, and one found on the way.
+`capsHash` does not move from `4a958b30`: nothing here touches a renderer, a command's
+declaration, a route, the theme or the embed surface.
+
+- **Built with Go 1.27.3.** go1.27.2 carries GO-2026-6809 in `crypto/x509`. `go.mod`
+  says `go 1.27.3`, which CI and the release workflow read through `go-version-file`, and
+  govulncheck reports nothing called.
+- **`aboard status` names a remedy for a stale skill that runs anywhere.** It said "run
+  `make caps`", a target that exists only in aboard's own checkout, to a reader who is
+  almost always in a project that copied the skill. It now prints
+  `aboard capabilities --format md > <the reference>` (or `ape aboard …` under ape), as
+  `capabilities --check` already did, and mentions `make caps` only as the in-checkout
+  form.
+- **The example board applies with zero warnings.** The UI gallery carried a `sparkline`
+  on purpose, to demonstrate the unknown-component marker, so every board seeded with
+  `init --example` warned on the tab most likely to be copied from, and `apply --strict`
+  refused it. The "Unknown" panel is gone from the gallery. The demonstration moved to
+  the browser suite's fixture (`ab203`), where the marker is still drawn and still
+  reported, and the example's test now asserts no warnings at all.
+- **A warning inside a `tabs` panel names the right node.** The checker counted children
+  across every panel and left out the panel's index, so the second panel's first child
+  was reported as `root.panels.children[1]`, a node that does not exist. It is
+  `root.panels[1].children[0]` now.
+- **`apply --help` no longer mentions a `trace` command.** There is none: `--label` is
+  printed by `journal` and `watch` and shown by a trace tab on the board.
+
 ## v0.4.0 — 2026-10-18
 
 A tab an agent rewrites after every command no longer has to raise the dot each time.
